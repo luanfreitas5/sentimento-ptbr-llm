@@ -1,0 +1,323 @@
+# =============================================================================
+# pyproject.toml — fonte única de verdade para dependências e configuração de
+# ferramentas. Alinhado ao CLAUDE.md (Data Science Projects).
+# Gerenciador recomendado: uv. Lock file (uv.lock) DEVE ser commitado.
+# =============================================================================
+
+[project]
+name = "sentimento-ptbr-llm"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.10,<3.14"  # numba (dependência transitiva do shap) ainda não suporta 3.14
+license = { text = "MIT" }
+authors = [{ name = "Luan Freitas", email = "luan.mgf@gmail.com" }]
+keywords = [
+]
+classifiers = [ # https://pypi.org/classifiers/
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Environment :: GPU :: NVIDIA CUDA :: 12",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+]
+
+# --- Dependências de runtime (instale apenas o que o projeto precisar) -------
+dependencies = [
+]
+
+[tool.uv]
+# O projeto não é instalado como pacote: `src/` é a raiz de importação (ver
+# CLAUDE.md, "Import style"). Instalar `src` no site-packages exigiria imports
+# com o prefixo `src.`, contrariando o padrão adotado. O pytest resolve os
+# imports por `pythonpath = ["src"]` e `src/main.py` insere o diretório em
+# `sys.path` ao ser executado diretamente.
+package = false
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+# Restrições em dependências transitivas por segurança (pip-audit).
+# gitpython < 3.1.58 (puxado pelo mlflow) tem CVEs corrigidos na 3.1.58:
+# GHSA-9rj7-rf2p-w77r, GHSA-4gmw-gg2m-w46p, GHSA-hh9p-6wh2-4mfc,
+# GHSA-wvpp-8hx9-p66j e GHSA-jm78-9fvv-mhgr.
+# numba < 0.57.1 (puxado por alguns pacotes) tem CVE-2024-28292.
+constraint-dependencies = ["gitpython>=3.1.58", "numba>=0.57.1"]
+
+# diskcache (puxado por dvc -> dvc-data) tem PYSEC-2026-2447 / CVE-2025-69872
+# (deserialização insegura via pickle para quem tiver acesso de escrita ao
+# diretório de cache). Não há versão corrigida publicada até o momento — a
+# 5.6.3 é a mais recente no PyPI e ainda está na faixa afetada. É usado
+# apenas como cache local do próprio DVC (não expõe entrada de rede nem
+# recebe dados de terceiros), então o risco é aceito e ignorado
+# explicitamente no pip-audit (ver `make security` / `.github/workflows/ci.yml`)
+# até que o projeto publique uma correção.
+
+# cryptography < 50.0.0 tem PYSEC-2026-3552 (oráculo Bleichenbacher via erros/
+# tempo distinguíveis na decriptação de PKCS#7 EnvelopedData). É dependência
+# transitiva do mlflow, que fixa `cryptography>=43.0.0,<50` — não há como
+# subir a versão sem quebrar o mlflow 3.15.1 (a mais recente publicada). O
+# projeto não decripta PKCS#7 diretamente, então o risco é aceito e ignorado
+# explicitamente no pip-audit até que o mlflow eleve o teto da dependência.
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }
+
+# --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
+[project.optional-dependencies]
+
+
+# --- Dependências de desenvolvimento (não publicadas; PEP 735) --------------
+[dependency-groups]
+dev = [
+    # Lint + format
+    "ruff>=0.5",                    # Um linter e formatador de código Python extremamente rápido - substitui flake8/isort/black
+    # Type checking (roda no CI, não no pre-commit)
+    "basedpyright>=1.13",           # Um type checker estático para Python, baseado no Pyright da Microsoft - substitui mypy
+    # Segurança (roda no CI)
+    "bandit>=1.7",                  # Um analisador de segurança para código Python
+    "pip-audit>=2.7",               # Um auditor de segurança para dependências Python (substitui o safety, que arrastava nltk vulnerável)
+    "detect-secrets>=1.5",          # Um detector de segredos em código Python
+    # Qualidade / complexidade / docstrings
+    "vulture>=2.11",                # Um verificador de código morto para Python
+    "refurb>=2.0",                  # Um utilitário para refatoração de código Python
+    "xenon>=0.9",                   # Um analisador de complexidade para Python
+    "radon>=6.0",                   # Um analisador de complexidade para Python
+    "interrogate>=1.7",             # Um verificador de docstrings para Python
+    # Testes
+    "pytest>=8.2",                  # Um framework de teste para Python
+    "pytest-cov>=5.0",              # Um plugin para pytest que fornece cobertura de código
+    "hypothesis>=6.165.0",            # Um framework de teste property-based para Python
+    # Notebooks
+    "nbqa>=1.8",                    # Um utilitário para aplicar linters a notebooks do Jupyter
+    "nbstripout>=0.7",              # Um utilitário para remover saídas e metadados de notebooks do Jupyter
+    # Workflow
+    "pre-commit>=3.7",              # Um framework para gerenciar hooks de commit no Git
+    "commitizen>=4.16.5",             # Um utilitário para manter o histórico de commits consistente
+    # Documentação
+    "mkdocs-material>=9.7.7",         # Um tema para MkDocs
+    "mkdocstrings[python]>=1.0.6",   # Um plugin para MkDocs que gera documentação a partir de docstrings
+    # Profiling (use sob demanda)
+    "scalene>=1.5",                 # Um profiler de performance para Python
+    # Ferramentas para rodar Data Wrangler no Vscode
+    "pip>=26.1.2",                  # Um gerenciador de pacotes para Python
+    "ipykernel>=7.3.0",             # Um kernel para Jupyter que executa código Python
+    "ipywidgets>=8.1.8"             # Um conjunto de widgets interativos para Jupyter
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.urls]
+Homepage = "https://github.com/luanfreitas5/sentimento-ptbr-llm"
+Documentation = "https://luanfreitas5.github.io/sentimento-ptbr-llm"
+Repository = "https://github.com/luanfreitas5/sentimento-ptbr-llm"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+
+# =============================================================================
+# RUFF — lint + format (substitui flake8/isort/black)
+# =============================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort (organização de imports)
+    "N",      # pep8-naming
+    "UP",     # pyupgrade (sintaxe moderna)
+    "B",      # flake8-bugbear (bugs comuns e más práticas)
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "RET",    # flake8-return
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib (usar Path em vez de os.path)
+    "PD",     # pandas-vet — antipadrões específicos de pandas
+    "NPY",    # NumPy-specific rules
+    "PERF",   # perflint — antipadrões de performance
+    "RUF",    # regras específicas do próprio Ruff
+    "PL",     # pylint (subconjunto)
+    "TRY",    # tryceratops — boas práticas de exception handling
+]
+ignore = [
+    "PLR0913", # muitos argumentos em função — comum em pipelines de ML
+    "PLR2004", # "magic value" em comparação — comum em thresholds de modelo
+    "TRY003",  # mensagem longa em exceção customizada
+    "PLR0917", # muitos parâmetros em função — comum em pipelines de ML
+    "PLC0415", # import fora do topo — usado de propósito para dependências
+               # opcionais sob demanda (torch, transformers, shap, mlflow,
+               # ollama, xgboost, lightgbm, twscrape), para evitar ciclos de
+               # import (config.logging -> config.paths) e, nos testes, para
+               # isolar imports por caso de teste
+    "RUF001",  # caractere ambíguo em string — tipografia pt-BR intencional
+               # (x, –) em mensagens e docstrings
+    "RUF002",  # idem, em docstrings
+    "PERF203", # try/except em loop — usado de propósito para isolar falhas
+               # por item (modelo, etapa, tentativa) em loops pequenos; o
+               # custo de reexecutar tudo é maior que o overhead do try
+]
+
+[tool.ruff.lint.isort]
+# `src/` é a raiz de importação, então os pacotes de primeira parte são os
+# diretórios dentro dele — não "src" em si.
+known-first-party = [
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"  # docstrings no formato NumPy
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ARG", "PLR2004", "S101"]  # fixtures, valores fixos e asserts em testes
+# Notebooks: imports após células de código (E402), imports só para efeito
+# colateral (F401), builtins do IPython como `display` (F821) e a semente
+# global do cabeçalho padrão de notebook (NPY002).
+"notebooks/*" = ["E402", "F401", "F821", "NPY002"]
+"app/*" = ["E402"]                      # sys.path precisa ser ajustado antes dos imports
+"src/main.py" = ["E402"]                # idem: `src/` entra no path antes de importar
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# =============================================================================
+# BASEDPYRIGHT — type checking estático (roda no CI)
+# =============================================================================
+[tool.basedpyright]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+include = ["src", "tests"]
+# `src/` é a raiz de importação: sem isto, `from config.settings import ...`
+# não resolveria para o type checker.
+extraPaths = ["src"]
+exclude = ["**/__pycache__", "notebooks", "data", "models", "reports", "logs"]
+reportMissingTypeStubs = false
+# Dependências opcionais (torch, transformers, twscrape, spacy, shap, umap,
+# wordcloud, networkx, ollama) são importadas sob demanda e podem não estar
+# instaladas no ambiente de checagem.
+reportMissingImports = "warning"
+
+# =============================================================================
+# BANDIT — análise de segurança (roda no CI)
+# =============================================================================
+[tool.bandit]
+exclude_dirs = ["tests", "notebooks", ".venv"]
+# B101 (uso de `assert`): os asserts do projeto são exclusivamente estreitamento
+# de tipo para o type checker, sempre precedidos de uma validação real que
+# levanta exceção própria (ex.: `validate_dataset` antes de
+# `assert dataset.labels is not None`). Não há verificação de segurança que
+# dependa de assert, então desativá-los com -O não altera o comportamento.
+skips = ["B101"]
+
+# =============================================================================
+# VULTURE — detecção de código morto
+# =============================================================================
+[tool.vulture]
+min_confidence = 80
+paths = ["src"]
+exclude = ["notebooks/"]
+# `cls` de validators Pydantic e parâmetros exigidos pela API do
+# scikit-learn/protocolo de context manager (`y`, `input_features`,
+# `exc_info`) são posicionalmente obrigatórios mas nunca usados no corpo.
+ignore_decorators = ["@field_validator", "@model_validator"]
+ignore_names = ["cls", "y", "input_features", "exc_info"]
+
+# =============================================================================
+# REFURB — sugestões de modernização
+# =============================================================================
+[tool.refurb]
+# Códigos ignorados: ajuste conforme o estilo do projeto
+ignore = [
+    "FURB105",  # print() sem parênteses vazios — inofensivo, pode ignorar
+    "FURB126",  # return implícito — às vezes reduz clareza em funções longas
+]
+
+# =============================================================================
+# PYTEST — testes (unit, integração, property-based, comportamentais)
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "--strict-markers",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+]
+filterwarnings = [
+    # Avisos internos de bibliotecas de terceiros, fora do nosso controle.
+    "ignore:.*set_(bad|over|under) function will be deprecated.*:PendingDeprecationWarning:shap.*",
+    "ignore:.*default behavior of `how='horizontal'`.*:DeprecationWarning:pandera.*",
+    "ignore:.*`outer_coalesce`.*:DeprecationWarning:polars.*",
+    # `matthews_corrcoef` avisa em casos degenerados gerados pelo hypothesis.
+    "ignore:.*invalid value encountered in.*:RuntimeWarning",
+]
+markers = [
+    "smoke: testes rápidos rodados no pre-commit",
+    "integration: testes de pipeline ponta a ponta",
+    "ml: testes comportamentais / de regressão de métrica",
+    "slow: testes lentos (pulados por padrão localmente)",
+]
+
+# =============================================================================
+# COVERAGE — meta de cobertura ≥ 80%
+# =============================================================================
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "src/main.py",           # orquestração fina, coberta pelos testes de etapa
+    "*/__init__.py",
+    "src/data/collector.py", # exige rede e contas do twscrape
+    "src/labeling/llm.py",   # exige um servidor Ollama em execução
+]
+
+[tool.coverage.report]
+fail_under = 50
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+# =============================================================================
+# INTERROGATE — cobertura de docstrings
+# =============================================================================
+[tool.interrogate]
+fail-under = 50
+ignore-init-method = true
+ignore-magic = true
+exclude = ["tests", "notebooks", "docs"]
+
+# =============================================================================
+# COMMITIZEN — Conventional Commits + SemVer + CHANGELOG
+# =============================================================================
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+version_files = [
+    "pyproject.toml:version",
+    "src/__init__.py:__version__"
+]
+tag_format = "v$version"
+update_changelog_on_bump = true
+major_version_zero = true  # remove quando sair do 0.x
