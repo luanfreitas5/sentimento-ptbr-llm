@@ -94,8 +94,7 @@ update-hooks:  ## Atualiza os hooks do pre-commit
 	$(UV) run pre-commit autoupdate
 
 release:  ## Cria uma nova release (versão + changelog + tag)
-	$(UV) run cz changelog
-	$(UV) run cz bump --changelog --yes
+	$(UV) run cz bump --changelog
 
 # --- Limpeza de saídas do pipeline ------------------------------------------
 clean-processed:  ## Remove os artefatos de dados processados
