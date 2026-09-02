@@ -10,7 +10,7 @@ restante do lote (consistente com a ressalva de ``PERF203`` documentada em
 
 import logging
 from collections.abc import Callable, Iterable
-from concurrent.futures import Executor, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Generic, TypeVar
@@ -20,6 +20,7 @@ from rich.progress import (
     MofNCompleteColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
@@ -114,11 +115,46 @@ def _build_progress_bar() -> Progress:
     )
 
 
+def _collect_results(
+    futures: dict[Future[ResultType], ItemType],
+    result: ParallelExecutionResult[ItemType, ResultType],
+    progress: Progress | None,
+    task_id: TaskID | None,
+    task_description: str,
+) -> None:
+    """Aguarda a conclusão das tarefas e agrega sucessos e falhas por item.
+
+    Parameters
+    ----------
+    futures : dict[Future[ResultType], ItemType]
+        Mapeamento de cada ``Future`` submetida ao item de origem correspondente.
+    result : ParallelExecutionResult[ItemType, ResultType]
+        Objeto de resultado, atualizado in-place com cada sucesso ou falha.
+    progress : Progress | None
+        Barra de progresso a ser atualizada a cada item concluído, ou ``None``
+        se a exibição de progresso estiver desabilitada.
+    task_id : TaskID | None
+        Identificador da tarefa na barra de progresso, ou ``None`` se a
+        exibição de progresso estiver desabilitada.
+    task_description : str
+        Descrição da tarefa, usada nas mensagens de log de falha.
+    """
+    for future in as_completed(futures):
+        item = futures[future]
+        try:
+            result.successes.append(future.result())
+        except Exception as exception:  # captura ampla e proposital: isola a falha de um único item
+            logger.exception("Falha ao processar item em '%s'", task_description)
+            result.failures.append(ParallelTaskFailure(item=item, error=exception))
+        if progress is not None and task_id is not None:
+            progress.update(task_id, advance=1)
+
+
 def execute_parallel_tasks(
     func: Callable[[ItemType], ResultType],
     items: Iterable[ItemType],
     *,
-    executor_class: type[Executor] = ThreadPoolExecutor,
+    executor_class: type[ThreadPoolExecutor] | type[ProcessPoolExecutor] = ThreadPoolExecutor,
     max_workers: int | None = None,
     task_description: str = "Processando itens em paralelo",
     show_progress: bool = True,
@@ -140,7 +176,7 @@ def execute_parallel_tasks(
         Itens a serem processados. É consumido integralmente (materializado
         em lista) antes do início da execução, para permitir o cálculo do
         total de itens exibido na barra de progresso.
-    executor_class : type[Executor], optional
+    executor_class : type[ThreadPoolExecutor] | type[ProcessPoolExecutor], optional
         Classe do executor usada para paralelizar o trabalho —
         ``ThreadPoolExecutor`` para tarefas ligadas a I/O ou
         ``ProcessPoolExecutor`` para tarefas ligadas a CPU, by default
@@ -193,19 +229,7 @@ def execute_parallel_tasks(
             task_id = (
                 progress.add_task(task_description, total=len(items_list)) if progress else None
             )
-            for future in as_completed(futures):
-                item = futures[future]
-                try:
-                    result.successes.append(future.result())
-                except (
-                    Exception
-                ) as exception:  # captura ampla e proposital: isola a falha de um único item
-                    logger.exception(
-                        "Falha ao processar item em '%s'", task_description
-                    )
-                    result.failures.append(ParallelTaskFailure(item=item, error=exception))
-                if progress:
-                    progress.update(task_id, advance=1)
+            _collect_results(futures, result, progress, task_id, task_description)
 
     result.elapsed_seconds = tempo.elapsed_seconds
     logger.info(
