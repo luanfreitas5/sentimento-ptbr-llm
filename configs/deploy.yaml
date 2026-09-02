@@ -1,0 +1,27 @@
+# Configurações de deploy (API/dashboard) — opcional, não obrigatório para o
+# escopo acadêmico. Decisão final entre API FastAPI e/ou dashboard Streamlit
+# em aberto (ver PLANO-ELABORACAO.md, Fase 21). Ambos desabilitados por padrão.
+
+api:
+  enabled: false
+  framework: "fastapi"
+  host: "0.0.0.0"
+  port: 8000
+  default_model_stage: "Production"
+  default_approach: "transformer" # classical | deep_learning | transformer | llm
+
+dashboard:
+  enabled: false
+  framework: "streamlit"
+  port: 8501
+  comparative_view: true
+
+mlflow_serving:
+  enabled: false
+  registry_uri: "mlruns"
+  model_name: "sentimento-ptbr-llm"
+  stage: "Production"
+
+docker:
+  image_name: "sentimento-ptbr-llm"
+  non_root_user: "appuser"

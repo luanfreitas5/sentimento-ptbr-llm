@@ -1,0 +1,48 @@
+# Métricas principais, testes estatísticos e thresholds de avaliação.
+# Implementa as Seções 4.8 (Métricas) e 4.9 (Análises Estatísticas) do
+# documento mestre.
+
+metrics:
+  primary: "f1_macro" # justificativa: robusto ao desbalanceamento típico entre classes
+  secondary: ["mcc", "f1_weighted", "accuracy", "precision_macro", "recall_macro"]
+  ranking: ["roc_auc_ovr", "pr_auc_ovr"] # one-vs-rest, cenário multiclasse
+  operational: ["inference_time_ms", "computational_cost"]
+
+cross_validation:
+  n_splits: 5
+  strategy: "stratified_k_fold"
+  random_state: 42
+
+uncertainty:
+  method: "bootstrap"
+  n_bootstrap: 1000
+  confidence_level: 0.95
+
+significance_tests:
+  pairwise: "mcnemar" # comparação par a par entre classificadores
+  paired_multi_fold: "wilcoxon" # comparação pareada ao longo de múltiplos folds
+  multi_model: "friedman" # comparação simultânea entre mais de dois modelos
+  post_hoc: "nemenyi"
+  alpha: 0.05
+
+calibration:
+  enabled: true
+  method: "reliability_curve"
+  n_bins: 10
+  metric: "brier_score"
+
+slice_evaluation:
+  enabled: true
+  slices: ["fonte_dados", "classe", "comprimento_texto"]
+
+# Falha o build/pipeline se a métrica principal cair abaixo do limiar acordado.
+regression_thresholds:
+  f1_macro_minimum: 0.65
+  mcc_minimum: 0.45
+
+ablation:
+  components:
+    - "sem_embeddings_contextuais"
+    - "sem_autoencoder"
+    - "sem_preprocessamento_emojis"
+    - "sem_chain_of_thought"

@@ -1,0 +1,62 @@
+# Configuração dos LLMs locais (Ollama/Hugging Face) e estratégias de
+# engenharia de prompts, orquestradas via LangChain.
+# Implementa a Seção 4.6 do documento mestre.
+# Nomes de modelos devem ser revalidados quanto à disponibilidade local
+# (download prévio via `ollama pull` / Hugging Face Hub) antes da execução.
+
+backends:
+  ollama:
+    enabled: true
+    base_url: "http://localhost:11434"
+    models:
+      - name: "llama3.1:8b"
+        role: "classifier"
+      - name: "gemma2:9b"
+        role: "classifier"
+    request_timeout_seconds: 120
+    max_concurrent_requests: 4
+
+  huggingface:
+    enabled: true
+    models:
+      - name: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+        role: "classifier"
+      - name: "google/gemma-2-9b-it"
+        role: "classifier"
+    device: "auto"
+    max_concurrent_requests: 2
+
+prompting:
+  strategies: ["zero_shot", "few_shot", "chain_of_thought"]
+  default_strategy: "few_shot"
+
+  few_shot:
+    n_examples_per_class: 2
+    example_selection: "balanced_random"
+    random_state: 42
+
+  chain_of_thought:
+    max_reasoning_tokens: 256
+
+  output_format:
+    type: "json"
+    schema_fields: ["sentimento", "confianca", "justificativa"]
+    allowed_labels: ["negativo", "neutro", "positivo"]
+
+# O LLM realiza apenas classificação/explicação; toda agregação e cálculo
+# estatístico é feito em código Python determinístico (src/evaluation/).
+parsing:
+  parser: "pydantic_output_parser"
+  max_retries: 3
+  retry_on_invalid_json: true
+  fallback_label: "neutro"
+
+generation:
+  temperature: 0.0
+  top_p: 1.0
+  max_new_tokens: 300
+  seed: 42
+
+orchestration:
+  framework: "langchain"
+  prompt_template_version: "v1"

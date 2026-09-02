@@ -1,0 +1,48 @@
+# Parâmetros do pipeline de rotulagem semiautomática em cascata.
+# Implementa a Seção 4.3 do documento mestre (rotulagem em cascata + diagnóstico
+# via HypotheSAEs e erro de reconstrução do autoencoder).
+
+cascade:
+  labelers:
+    - name: "heuristica_lexica"
+      type: "heuristic"
+      weight: 1.0
+    - name: "llm_zero_shot"
+      type: "llm"
+      weight: 2.0
+    - name: "modelo_referencia"
+      type: "model"
+      weight: 2.0
+  aggregation_strategy: "weighted_majority_vote"
+
+confidence:
+  agreement_threshold: 0.7 # acima disso, rótulo aceito automaticamente
+  low_confidence_threshold: 0.5 # abaixo disso, candidato à validação humana
+  discordance_threshold: 0.3 # discordância máxima tolerada entre rotuladores
+
+gold_sets:
+  tweetsentbr:
+    enabled: true
+    path: "data/external/tweetsentbr.parquet"
+  repro:
+    enabled: true
+    path: "data/external/repro.parquet"
+
+validation:
+  metric: "cohen_kappa"
+  minimum_agreement: 0.6
+  krippendorff_alpha_minimum: 0.6
+
+human_validation:
+  sample_size: 500
+  sampling_strategy: "stratified_by_confidence"
+  random_state: 42
+
+diagnostics:
+  hypothesaes:
+    enabled: true
+    n_hypotheses: 20
+    target: "low_confidence_samples"
+  autoencoder_reconstruction_error:
+    enabled: true
+    anomaly_percentile: 95

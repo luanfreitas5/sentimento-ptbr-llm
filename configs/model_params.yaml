@@ -1,0 +1,130 @@
+# Hiperparâmetros de treinamento e avaliação por família de modelo.
+# Consumido por src/models/factory.py a partir de Settings validado via Pydantic.
+# Nomes de modelos do Hugging Face Hub devem ser revalidados antes da execução
+# (disponibilidade e licença podem mudar).
+
+classical:
+  tfidf:
+    max_features: 20000
+    ngram_range: [1, 2]
+    min_df: 3
+    max_df: 0.95
+    sublinear_tf: true
+
+  naive_bayes:
+    alpha: 1.0
+
+  logistic_regression:
+    C: 1.0
+    penalty: "l2"
+    solver: "lbfgs"
+    max_iter: 1000
+    class_weight: "balanced"
+    random_state: 42
+
+  svm:
+    kernel: "linear"
+    C: 1.0
+    class_weight: "balanced"
+    probability: true
+    random_state: 42
+
+  random_forest:
+    n_estimators: 300
+    max_depth: 20
+    min_samples_leaf: 2
+    class_weight: "balanced"
+    n_jobs: -1
+    random_state: 42
+
+  gradient_boosting:
+    n_estimators: 300
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+    random_state: 42
+
+embeddings:
+  static:
+    method: "fasttext"
+    model_name: "cc.pt.300.bin" # FastText pré-treinado em pt-BR (Common Crawl)
+    dimensions: 300
+    pretrained: true
+
+  contextual:
+    model_name: "neuralmind/bert-base-portuguese-cased" # BERTimbau base
+    pooling_strategy: "mean"
+    max_length: 128
+    batch_size: 32
+
+autoencoder:
+  input_dim: 768 # dimensão do embedding contextual de entrada (BERTimbau base)
+  latent_dim: 128
+  hidden_layers: [512, 256]
+  activation: "relu"
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 64
+  epochs: 50
+  early_stopping_patience: 5
+  reconstruction_loss: "mse"
+  random_state: 42
+
+deep_learning:
+  recurrent:
+    architecture: "bilstm"
+    embedding_dim: 300
+    hidden_dim: 128
+    num_layers: 2
+    bidirectional: true
+    dropout: 0.3
+    batch_size: 32
+    epochs: 30
+    learning_rate: 0.001
+    early_stopping_patience: 5
+    random_state: 42
+
+  convolutional:
+    embedding_dim: 300
+    num_filters: 128
+    filter_sizes: [3, 4, 5]
+    dropout: 0.3
+    batch_size: 32
+    epochs: 30
+    learning_rate: 0.001
+    early_stopping_patience: 5
+    random_state: 42
+
+transformers:
+  bertimbau:
+    model_name: "neuralmind/bert-base-portuguese-cased"
+    max_length: 128
+    batch_size: 16
+    learning_rate: 0.00002
+    epochs: 4
+    warmup_ratio: 0.1
+    weight_decay: 0.01
+    early_stopping_patience: 2
+    random_state: 42
+
+  roberta:
+    model_name: "rdenadai/BR_BERTo" # RoBERTa treinado em português brasileiro
+    max_length: 128
+    batch_size: 16
+    learning_rate: 0.00002
+    epochs: 4
+    warmup_ratio: 0.1
+    weight_decay: 0.01
+    early_stopping_patience: 2
+    random_state: 42
+
+  distilbert:
+    model_name: "adalbertojunior/distilbert-portuguese-cased"
+    max_length: 128
+    batch_size: 32
+    learning_rate: 0.00003
+    epochs: 4
+    warmup_ratio: 0.1
+    weight_decay: 0.01
+    early_stopping_patience: 2
+    random_state: 42

@@ -1,0 +1,43 @@
+# Configurações gerais do projeto sentimento-ptbr-llm.
+# Análise comparativa de sentimentos (positivo/negativo/neutro) em tweets pt-BR
+# entre ML clássico, Deep Learning/Transformers e LLMs locais.
+
+project:
+  name: "sentimento-ptbr-llm"
+  description: >
+    Estudo comparativo entre algoritmos clássicos de Machine Learning, arquiteturas
+    de Deep Learning/Transformers e LLMs locais para análise de sentimentos em
+    tweets em português brasileiro.
+  version: "0.2.0"
+  language: "pt-BR"
+
+reproducibility:
+  random_seed: 42
+  pythonhashseed: 42
+  deterministic_algorithms: true
+
+experiment:
+  name: "sentimento-ptbr-llm"
+  tracking_uri: "mlruns" # sobrescrito por MLFLOW_TRACKING_URI no .env, se definido
+  registry_stage_default: "Staging"
+
+labels:
+  classes: ["negativo", "neutro", "positivo"]
+  target_column: "sentimento"
+
+data_split:
+  test_size: 0.2
+  validation_size: 0.1
+  stratify: true
+  random_state: 42
+
+# Estágios executáveis via `python -m src.main --stage <nome>` (src/pipelines/workflow.py)
+stages:
+  - ingestion
+  - preprocessing
+  - labeling
+  - features
+  - training_classical
+  - training_deep_learning
+  - llm_evaluation
+  - comparative_evaluation

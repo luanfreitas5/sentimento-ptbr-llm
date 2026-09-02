@@ -1,0 +1,29 @@
+# Configuração de logging do projeto — nível, formato e rotação de arquivos.
+# Consumido por src/config/logging.py (RichHandler + FileHandler diário).
+
+level: "INFO"
+
+console:
+  enabled: true
+  rich_tracebacks: true
+  show_path: true
+  markup: true
+
+file:
+  enabled: true
+  dir: "logs"
+  filename_pattern: "log_{date}.log" # {date} = YYYY-MM-DD
+  rotation: "daily"
+  backup_count: 30
+  encoding: "utf-8"
+
+format:
+  file: "%(asctime)s \t %(levelname)s \t %(name)s \t %(message)s"
+  console: "%(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+loggers:
+  root_level: "WARNING"
+  project_level: "INFO"
+  # Bibliotecas de terceiros costumam ser verbosas — mantidas em WARNING por padrão.
+  third_party_level: "WARNING"

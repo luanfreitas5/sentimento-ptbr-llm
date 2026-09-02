@@ -1,0 +1,45 @@
+# Caminhos de dados, modelos, relatórios e logs do projeto.
+# Todos os caminhos são relativos à raiz do repositório; resolvidos para
+# pathlib.Path absolutos em src/config/paths.py.
+
+data:
+  raw: "data/raw"
+  external: "data/external"
+  interim: "data/interim"
+  processed: "data/processed"
+
+data_files:
+  raw_tweets: "data/raw/tweets_coletados.parquet"
+  tweetsentbr: "data/external/tweetsentbr.parquet"
+  repro: "data/external/repro.parquet"
+  corpus_normalizado: "data/interim/corpus_normalizado.parquet"
+  corpus_rotulado: "data/processed/corpus_rotulado.parquet"
+  corpus_treino: "data/processed/treino.parquet"
+  corpus_validacao: "data/processed/validacao.parquet"
+  corpus_teste: "data/processed/teste.parquet"
+
+models:
+  checkpoints: "models/checkpoints"
+  artifacts: "models/artifacts"
+  registry: "models/registry"
+
+mlflow:
+  tracking_dir: "mlruns"
+
+logs:
+  dir: "logs"
+
+reports:
+  figures: "reports/figures"
+  tables: "reports/tables"
+  metrics: "reports/metrics"
+  statistics: "reports/statistics"
+  ablation: "reports/ablation"
+  interpretability: "reports/interpretability"
+  model_cards: "reports/model_cards"
+  datasheets: "reports/datasheets"
+
+docs:
+  root: "docs"
+  guides: "docs/guides"
+  assets: "docs/assets"
