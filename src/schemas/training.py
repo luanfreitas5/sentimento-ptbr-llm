@@ -68,4 +68,3 @@ def validate_training_example(dataframe: pl.DataFrame) -> pl.DataFrame:
         raise DataValidationError(
             schema_name="TrainingExampleSchema", detail=str(exception)
         ) from exception
-

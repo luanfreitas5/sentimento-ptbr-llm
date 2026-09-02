@@ -43,7 +43,9 @@ class TestLogExecutionTime:
 
         with log_capture_fixture.at_level(logging.INFO, logger="utils.decorators"):
             example_func()
-        assert any("funcao_exemplo" in log_record.message for log_record in log_capture_fixture.records)
+        assert any(
+            "funcao_exemplo" in log_record.message for log_record in log_capture_fixture.records
+        )
 
 
 class TestRetryOnException:

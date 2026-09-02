@@ -16,7 +16,7 @@ from exceptions.data import DataValidationError
 
 
 class RawTweetSchema(pa.DataFrameModel):
-    """Contrato de dados para tweets recém-coletados/importados (``data/raw``, ``data/external``)."""
+    """Contrato de dados para tweets recém-coletados (``data/raw``, ``data/external``)."""
 
     id: Series[str] = pa.Field(unique=True)
     text: Series[str]
