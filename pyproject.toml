@@ -29,6 +29,20 @@ classifiers = [ # https://pypi.org/classifiers/
 
 # --- Dependências de runtime (instale apenas o que o projeto precisar) -------
 dependencies = [
+    # Configuração e validação (src/config, src/schemas)
+    "pydantic>=2.7",                # Validação de dados e configurações em tempo de execução
+    "pydantic-settings>=2.3",       # Configurações a partir de variáveis de ambiente e .env
+    "pyyaml>=6.0",                  # Leitura/escrita dos arquivos de configuração em configs/
+    "python-dotenv>=1.0",           # Carregamento de variáveis de ambiente a partir de .env
+    "tomli>=2.0.1; python_version < '3.11'",  # tomllib só existe na stdlib a partir do Python 3.11
+    # Logging (src/logging_utils, src/config/logging.py)
+    "rich>=13.7",                   # RichHandler (console) e formatação de tracebacks
+    # Dados (src/io_utils, src/schemas)
+    "polars>=1.0",                  # Manipulação de dados (preferida, ver CLAUDE.md "Core Stack")
+    "pandera[polars]>=0.20",        # Contratos de dados (schemas) sobre DataFrames Polars
+    "numpy>=1.26",                  # Computação numérica; usado na fixação de sementes (src/utils/seed.py)
+    # Persistência de modelos (src/io_utils/model.py)
+    "joblib>=1.4",                  # Serialização de modelos treinados
 ]
 
 [tool.uv]
