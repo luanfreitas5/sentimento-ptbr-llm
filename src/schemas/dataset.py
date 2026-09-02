@@ -7,6 +7,7 @@ aceitos nas fronteiras entre as etapas ``raw -> interim -> processed``.
 
 import pandera.polars as pa
 import polars as pl
+from pandera.api.polars.model_config import BaseConfig
 from pandera.errors import SchemaError
 from pandera.typing.polars import Series
 
@@ -18,11 +19,11 @@ class RawTweetSchema(pa.DataFrameModel):
     """Contrato de dados para tweets recém-coletados/importados (``data/raw``, ``data/external``)."""
 
     id: Series[str] = pa.Field(unique=True)
-    texto: Series[str]
-    fonte_dados: Series[str]
-    data_coleta: Series[str]
+    text: Series[str]
+    data_source: Series[str]
+    data_collected: Series[str]
 
-    class Config:
+    class Config(BaseConfig):
         """Configuração do schema: rejeita colunas não declaradas."""
 
         strict = True
@@ -32,10 +33,10 @@ class LabeledCorpusSchema(pa.DataFrameModel):
     """Contrato de dados para o corpus rotulado, pronto para modelagem (``data/processed``)."""
 
     id: Series[str] = pa.Field(unique=True)
-    texto: Series[str]
-    sentimento: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
+    text: Series[str]
+    sentiment_label: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
 
-    class Config:
+    class Config(BaseConfig):
         """Configuração do schema: permite colunas extras (ex.: metadados de rotulagem)."""
 
         strict = False
@@ -64,9 +65,9 @@ def validate_raw_tweet_dataset(dataframe: pl.DataFrame) -> pl.DataFrame:
     >>> df = pl.DataFrame(
     ...     {
     ...         "id": ["1"],
-    ...         "texto": ["ótimo produto"],
-    ...         "fonte_dados": ["scraping"],
-    ...         "data_coleta": ["2026-01-01"],
+    ...         "text": ["ótimo produto"],
+    ...         "data_source": ["scraping"],
+    ...         "data_collected": ["2026-01-01"],
     ...     }
     ... )
     >>> validate_raw_tweet_dataset(df).height
@@ -74,8 +75,10 @@ def validate_raw_tweet_dataset(dataframe: pl.DataFrame) -> pl.DataFrame:
     """
     try:
         return RawTweetSchema.validate(dataframe)
-    except SchemaError as excecao:
-        raise DataValidationError(schema_name="RawTweetSchema", detail=str(excecao)) from excecao
+    except SchemaError as exception:
+        raise DataValidationError(
+            schema_name="RawTweetSchema", detail=str(exception)
+        ) from exception
 
 
 def validate_labeled_corpus(dataframe: pl.DataFrame) -> pl.DataFrame:
@@ -98,13 +101,13 @@ def validate_labeled_corpus(dataframe: pl.DataFrame) -> pl.DataFrame:
 
     Examples
     --------
-    >>> df = pl.DataFrame({"id": ["1"], "texto": ["ótimo produto"], "sentimento": ["positivo"]})
+    >>> df = pl.DataFrame({"id": ["1"], "text": ["ótimo produto"], "sentiment_label": ["positivo"]})
     >>> validate_labeled_corpus(df).height
     1
     """
     try:
         return LabeledCorpusSchema.validate(dataframe)
-    except SchemaError as excecao:
+    except SchemaError as exception:
         raise DataValidationError(
-            schema_name="LabeledCorpusSchema", detail=str(excecao)
-        ) from excecao
+            schema_name="LabeledCorpusSchema", detail=str(exception)
+        ) from exception

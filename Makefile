@@ -1,7 +1,6 @@
 # --- Configuração ----------------------------------------------------------
 PYTHON := python
-UV := uv
-RUN := $(UV) run python src/main.py    # 'src' vira raiz do path ao rodar o script
+RUN := uv run python src/main.py    # 'src' vira raiz do path ao rodar o script
 
 # PYTHONHASHSEED precisa ser exportado ANTES do interpretador iniciar: definido
 # dentro do processo, não afeta a ordem de iteração de conjuntos já criada.
@@ -22,79 +21,79 @@ init:  ## Inicializa o projeto (instala dependências + hooks)
 	$(MAKE) hooks
 
 venv:  ## Cria o ambiente virtual (requer: uv)
-	$(UV) venv
+	uv venv
 
 install:  ## Instala dependências (runtime + dev)
-	$(UV) sync --dev
+	uv sync --dev
 
 install-all:  ## Instala tudo (todos os extras + dev)
-	$(UV) sync --all-extras --dev
+	uv sync --all-extras --dev
 
 
 
 update:  ## Atualiza todas as dependências e sincroniza
-	$(UV) lock --upgrade
-	$(UV) sync --all-groups
+	uv lock --upgrade
+	uv sync --all-groups
 
 lock:
-	$(UV) lock
+	uv lock
 
 export:
-	$(UV) export --no-hashes -o requirements.txt
+	uv export --no-hashes -o requirements.txt
 
 # --- Qualidade -------------------------------------------------------------
 lint: ## Lint com ruff (Format + Check)
-	$(UV) run ruff format .
-	$(UV) run ruff check --fix .
+	uv run ruff format .
+	uv run ruff check --fix .
 
 typecheck:  ## Type checking estático (basedPyright)
-	$(UV) run basedpyright
+	uv run basedpyright
 
 security:  ## Análise de segurança (bandit + pip-audit)
-	$(UV) run bandit -r src -c pyproject.toml
-	$(UV) run pip-audit --ignore-vuln PYSEC-2026-2447 --ignore-vuln PYSEC-2026-3552
+	uv run bandit -r src -c pyproject.toml
+	uv run pip-audit --ignore-vuln PYSEC-2026-2447 --ignore-vuln PYSEC-2026-3552
 
 deadcode:  ## Detecta código morto (vulture)
-	$(UV) run vulture src
+	uv run vulture src
 
 complexity:  ## Limites de complexidade (xenon)
-	$(UV) run xenon --max-absolute B --max-modules A --max-average A src
+	uv run xenon --max-absolute B --max-modules A --max-average A src
 
 docstrings:  ## Cobertura de docstrings (interrogate)
-	$(UV) run interrogate -v src
+	uv run interrogate -v src
 
 modernize:  ## Detecta código redundante (refurb)
-	$(UV) run refurb src
+	uv run refurb src
 
 quality: lint typecheck security deadcode complexity docstrings modernize   ## Roda toda a suíte de qualidade (espelha o CI)
 
 # --- Testes ----------------------------------------------------------------
 test:  ## Roda os testes com cobertura
-	$(UV) run pytest -m "not slow"
+	uv run pytest -m "not slow"
 
 smoke:  ## Roda apenas os smoke tests
-	$(UV) run pytest -m smoke -q
+	uv run pytest -m smoke -q
 
 test-all:  ## Roda a suíte completa, inclusive os testes lentos
-	$(UV) run pytest
+	uv run pytest
 
 coverage:  ## Gera o relatório de cobertura em HTML
-	$(UV) run pytest -m "not slow" --cov-report=html
+	uv run pytest -m "not slow" --cov-report=html
 	@echo "Relatório disponível em htmlcov/index.html"
 
 hooks:  ## Instala os hooks do pre-commit
-	$(UV) run pre-commit install
-	$(UV) run pre-commit install --hook-type commit-msg
-	$(UV) run detect-secrets scan > .secrets.baseline
+	uv run pre-commit install
+	uv run pre-commit install --hook-type commit-msg
+	uv run detect-secrets scan > .secrets.baseline
 
 pre-commit:  ## Roda todos os hooks do pre-commit em todos os arquivos
-	$(UV) run pre-commit run --all-files
+	uv run pre-commit run --all-files
 
 update-hooks:  ## Atualiza os hooks do pre-commit
-	$(UV) run pre-commit autoupdate
+	uv run pre-commit autoupdate
 
 release:  ## Cria uma nova release (versão + changelog + tag)
-	$(UV) run cz bump --changelog
+	uv run cz bump --changelog
 
 # --- Limpeza de saídas do pipeline ------------------------------------------
 clean-processed:  ## Remove os artefatos de dados processados
@@ -106,45 +105,45 @@ clean-reports:  ## Remove os relatórios gerados (pastas por modelo + comparaç�
 clean-outputs: clean-processed clean-reports  ## Remove todas as saídas do pipeline
 
 clean-notebooks:  ## Remove os notebooks com células vazias
-	$(UV) run nbstripout notebooks
+	uv run nbstripout notebooks
 
 # --- Documentação ----------------------------------------------------------
 docs:  ## Constrói a documentação (modo estrito)
-	$(UV) run mkdocs build --strict
+	uv run mkdocs build --strict
 
 docs-serve:  ## Servidor local da documentação
-	$(UV) run mkdocs serve
+	uv run mkdocs serve
 
 docs-deploy:  ## Publica a documentação no GitHub Pages
-	$(UV) run mkdocs gh-deploy --force
+	uv run mkdocs gh-deploy --force
 
 # --- Utilitários -----------------------------------------------------------
 profile:  ## Exemplo de profiling com scalene (ajuste o alvo)
-	$(UV) run scalene src/main.py
+	uv run scalene src/main.py
 
 clean:  ## Remove caches e artefatos temporários
 	rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov coverage.xml site
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
 cache:
-	$(UV) cache clean
+	uv cache clean
 
 # --- Jupyter ----------------------------------------------------------------
 jupyter:
-	$(UV) run jupyter lab
+	uv run jupyter lab
 
 notebook:
-	$(UV) run jupyter notebook
+	uv run jupyter notebook
 
 # --- Gerenciamento de pacotes -----------------------------------------------
 add:
-	$(UV) add $(PKG)
+	uv add $(PKG)
 
 remove:
-	$(UV) remove $(PKG)
+	uv remove $(PKG)
 
 tree:
-	$(UV) tree
+	uv tree
 
 # --- Pipeline ---------------------------------------------------------------
 # Cada alvo executa uma etapa isolada; o acoplamento entre elas é o sistema de
@@ -153,7 +152,7 @@ tree:
 
 # --- Serviços auxiliares ----------------------------------------------------
 mlflow:  ## Sobe a interface do MLflow para inspecionar os experimentos
-	$(UV) run mlflow ui --backend-store-uri mlruns
+	uv run mlflow ui --backend-store-uri mlruns
 
 app:  ## Sobe o dashboard Streamlit de resultados
-	$(UV) run streamlit run app/dashboard.py
+	uv run streamlit run app/dashboard.py

@@ -6,7 +6,7 @@ rastreamento de modelos é feito via DVC/MLflow Model Registry.
 """
 
 import logging
-import pickle
+import pickle  # nosec B403 # usado apenas para o tipo de exceção; ver justificativa em load_model
 from pathlib import Path
 from typing import Any
 
@@ -44,8 +44,8 @@ def save_model(model: Any, file_path: Path) -> None:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         joblib.dump(model, file_path)
-    except (OSError, TypeError, ValueError) as excecao:
-        raise ModelPersistenceError(str(file_path), str(excecao)) from excecao
+    except (OSError, TypeError, ValueError) as exception:
+        raise ModelPersistenceError(str(file_path), str(exception)) from exception
     logger.info("Modelo salvo em: %s", file_path)
 
 
@@ -80,8 +80,8 @@ def load_model(file_path: Path) -> Any:
     # não confiável.
     validate_file_exists(file_path)
     try:
-        modelo = joblib.load(file_path)
-    except (OSError, EOFError, ValueError, pickle.UnpicklingError) as excecao:
-        raise ModelPersistenceError(str(file_path), str(excecao)) from excecao
+        model = joblib.load(file_path)
+    except (OSError, EOFError, ValueError, pickle.UnpicklingError) as exception:
+        raise ModelPersistenceError(str(file_path), str(exception)) from exception
     logger.info("Modelo carregado de: %s", file_path)
-    return modelo
+    return model

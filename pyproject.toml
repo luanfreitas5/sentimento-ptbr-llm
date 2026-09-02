@@ -239,7 +239,10 @@ exclude_dirs = ["tests", "notebooks", ".venv"]
 # levanta exceção própria (ex.: `validate_dataset` antes de
 # `assert dataset.labels is not None`). Não há verificação de segurança que
 # dependa de assert, então desativá-los com -O não altera o comportamento.
-skips = ["B101"]
+# B105 (possível senha hardcoded): falso positivo em `src/constants/tokens.py`,
+# onde os nomes terminam em `_TOKEN` por serem tokens especiais de NLP
+# (ex.: `[URL]`, `[PAD]`) usados na normalização textual, não credenciais.
+skips = ["B101", "B105"]
 
 # =============================================================================
 # VULTURE — detecção de código morto

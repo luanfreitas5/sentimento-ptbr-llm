@@ -41,12 +41,12 @@ def measure_execution_time() -> Iterator[ExecutionTiming]:
     >>> tempo.elapsed_seconds >= 0
     True
     """
-    resultado = ExecutionTiming()
-    inicio = perf_counter()
+    measured_time = ExecutionTiming()
+    start_time = perf_counter()
     try:
-        yield resultado
+        yield measured_time
     finally:
-        resultado.elapsed_seconds = perf_counter() - inicio
+        measured_time.elapsed_seconds = perf_counter() - start_time
 
 
 def format_duration(seconds: float) -> str:
@@ -77,11 +77,11 @@ def format_duration(seconds: float) -> str:
     if seconds < 0:
         raise ValueError(f"Duração não pode ser negativa: {seconds}")
 
-    horas, resto = divmod(seconds, 3600)
-    minutos, segundos = divmod(resto, 60)
+    hours, remaining_seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(remaining_seconds, 60)
 
-    if horas >= 1:
-        return f"{int(horas)}h {int(minutos):02d}min {segundos:05.2f}s"
-    if minutos >= 1:
-        return f"{int(minutos)}min {segundos:05.2f}s"
-    return f"{segundos:.2f}s"
+    if hours >= 1:
+        return f"{int(hours)}h {int(minutes):02d}min {seconds:05.2f}s"
+    if minutes >= 1:
+        return f"{int(minutes)}min {seconds:05.2f}s"
+    return f"{seconds:.2f}s"

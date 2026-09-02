@@ -82,9 +82,9 @@ def build_daily_log_file_path(
     >>> build_daily_log_file_path(Path("logs"), reference_date=date(2026, 1, 5)).name
     'log_2026-01-05.log'
     """
-    data_referencia = reference_date or date.today()
-    nome_arquivo = filename_pattern.format(date=data_referencia.isoformat())
-    return log_directory / nome_arquivo
+    log_date = reference_date or date.today()
+    filename = filename_pattern.format(date=log_date.isoformat())
+    return log_directory / filename
 
 
 def create_file_handler(
@@ -118,8 +118,8 @@ def create_file_handler(
     >>> handler = create_file_handler(Path("logs"))  # doctest: +SKIP
     """
     log_directory.mkdir(parents=True, exist_ok=True)
-    caminho_arquivo = build_daily_log_file_path(log_directory, filename_pattern=filename_pattern)
-    handler = logging.FileHandler(caminho_arquivo, encoding=encoding)
+    file_path = build_daily_log_file_path(log_directory, filename_pattern=filename_pattern)
+    handler = logging.FileHandler(file_path, encoding=encoding)
     handler.setLevel(level)
     handler.setFormatter(build_file_log_formatter())
     return handler
@@ -157,12 +157,12 @@ def remove_old_log_files(
     if not log_directory.is_dir():
         return 0
 
-    arquivos = sorted(
+    files = sorted(
         log_directory.glob(filename_glob),
-        key=lambda arquivo: arquivo.stat().st_mtime,
+        key=lambda file: file.stat().st_mtime,
         reverse=True,
     )
-    arquivos_a_remover = arquivos[backup_count:]
-    for arquivo in arquivos_a_remover:
-        arquivo.unlink()
-    return len(arquivos_a_remover)
+    files_to_remove = files[backup_count:]
+    for file in files_to_remove:
+        file.unlink()
+    return len(files_to_remove)

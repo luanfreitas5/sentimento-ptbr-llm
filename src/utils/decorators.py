@@ -44,11 +44,11 @@ def log_execution_time(func: Callable[_P, _R]) -> Callable[_P, _R]:
     @functools.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         with measure_execution_time() as tempo:
-            resultado = func(*args, **kwargs)
+            result = func(*args, **kwargs)
         logger.info(
             "Função '%s' executada em %s", func.__qualname__, format_duration(tempo.elapsed_seconds)
         )
-        return resultado
+        return result
 
     return wrapper
 
@@ -100,23 +100,23 @@ def retry_on_exception(
     def decorator(func: Callable[_P, _R]) -> Callable[_P, _R]:
         @functools.wraps(func)
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
-            ultima_excecao: Exception | None = None
-            for tentativa in range(1, max_attempts + 1):
+            last_exception: Exception | None = None
+            for attempt in range(1, max_attempts + 1):
                 try:
                     return func(*args, **kwargs)
-                except exceptions as excecao:
-                    ultima_excecao = excecao
+                except exceptions as exception:
+                    last_exception = exception
                     logger.warning(
                         "Tentativa %d/%d de '%s' falhou: %s",
-                        tentativa,
+                        attempt,
                         max_attempts,
                         func.__qualname__,
-                        excecao,
+                        exception,
                     )
-                    if tentativa < max_attempts:
+                    if attempt < max_attempts:
                         time.sleep(delay_seconds)
-            assert ultima_excecao is not None
-            raise ultima_excecao
+            assert last_exception is not None
+            raise last_exception
 
         return wrapper
 

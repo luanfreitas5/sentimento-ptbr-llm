@@ -7,6 +7,7 @@ posteriormente em ``src/labeling/consensus.py``.
 
 import pandera.polars as pa
 import polars as pl
+from pandera.api.polars.model_config import BaseConfig
 from pandera.errors import SchemaError
 from pandera.typing.polars import Series
 
@@ -18,12 +19,12 @@ class LabelingResultSchema(pa.DataFrameModel):
     """Contrato de dados para um resultado individual de rotulagem candidata."""
 
     id: Series[str]
-    rotulador: Series[str]
-    sentimento_predito: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
-    confianca: Series[float] = pa.Field(ge=0.0, le=1.0)
-    peso: Series[float] = pa.Field(gt=0.0)
+    tagger: Series[str]
+    sentiment_label: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
+    confidence: Series[float] = pa.Field(ge=0.0, le=1.0)
+    weight: Series[float] = pa.Field(gt=0.0)
 
-    class Config:
+    class Config(BaseConfig):
         """Configuração do schema: rejeita colunas não declaradas."""
 
         strict = True
@@ -52,10 +53,10 @@ def validate_labeling_result(dataframe: pl.DataFrame) -> pl.DataFrame:
     >>> df = pl.DataFrame(
     ...     {
     ...         "id": ["1"],
-    ...         "rotulador": ["heuristica_lexica"],
-    ...         "sentimento_predito": ["positivo"],
-    ...         "confianca": [0.9],
-    ...         "peso": [1.0],
+    ...         "tagger": ["heuristica_lexica"],
+    ...         "sentiment_label": ["positivo"],
+    ...         "confidence": [0.9],
+    ...         "weight": [1.0],
     ...     }
     ... )
     >>> validate_labeling_result(df).height
@@ -63,7 +64,7 @@ def validate_labeling_result(dataframe: pl.DataFrame) -> pl.DataFrame:
     """
     try:
         return LabelingResultSchema.validate(dataframe)
-    except SchemaError as excecao:
+    except SchemaError as exception:
         raise DataValidationError(
-            schema_name="LabelingResultSchema", detail=str(excecao)
-        ) from excecao
+            schema_name="LabelingResultSchema", detail=str(exception)
+        ) from exception

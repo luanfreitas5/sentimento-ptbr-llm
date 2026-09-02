@@ -122,9 +122,9 @@ def load_general_config(config_file_path: Path = DEFAULT_GENERAL_CONFIG_FILE) ->
     >>> load_general_config().labels.target_column
     'sentimento'
     """
-    dados = read_yaml(config_file_path)
+    config_data = read_yaml(config_file_path)
     try:
-        return GeneralConfig.model_validate(dados)
+        return GeneralConfig.model_validate(config_data)
     except pydantic.ValidationError as excecao:
         raise InvalidConfigurationError(str(excecao)) from excecao
 

@@ -7,6 +7,7 @@ treino e serviço (train-serve skew).
 
 import pandera.polars as pa
 import polars as pl
+from pandera.api.polars.model_config import BaseConfig
 from pandera.errors import SchemaError
 from pandera.typing.polars import Series
 
@@ -18,11 +19,11 @@ class PredictionSchema(pa.DataFrameModel):
     """Contrato de dados para uma predição individual de sentimento."""
 
     id: Series[str]
-    texto: Series[str]
-    sentimento_predito: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
-    confianca: Series[float] = pa.Field(ge=0.0, le=1.0)
+    text: Series[str]
+    sentiment_label: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
+    confidence: Series[float] = pa.Field(ge=0.0, le=1.0)
 
-    class Config:
+    class Config(BaseConfig):
         """Configuração do schema: permite colunas extras (ex.: probabilidades por classe)."""
 
         strict = False
@@ -51,9 +52,9 @@ def validate_prediction(dataframe: pl.DataFrame) -> pl.DataFrame:
     >>> df = pl.DataFrame(
     ...     {
     ...         "id": ["1"],
-    ...         "texto": ["ótimo produto"],
-    ...         "sentimento_predito": ["positivo"],
-    ...         "confianca": [0.95],
+    ...         "text": ["ótimo produto"],
+    ...         "sentiment_label": ["positivo"],
+    ...         "confidence": [0.95],
     ...     }
     ... )
     >>> validate_prediction(df).height
@@ -61,5 +62,7 @@ def validate_prediction(dataframe: pl.DataFrame) -> pl.DataFrame:
     """
     try:
         return PredictionSchema.validate(dataframe)
-    except SchemaError as excecao:
-        raise DataValidationError(schema_name="PredictionSchema", detail=str(excecao)) from excecao
+    except SchemaError as exception:
+        raise DataValidationError(
+            schema_name="PredictionSchema", detail=str(exception)
+        ) from exception

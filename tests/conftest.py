@@ -1,6 +1,7 @@
 """Fixtures compartilhadas entre os testes do projeto."""
 
 import logging
+from collections.abc import Generator
 from typing import Any
 
 import polars as pl
@@ -13,8 +14,8 @@ def sample_labeled_corpus() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "id": ["1", "2", "3"],
-            "texto": ["ótimo produto", "péssimo atendimento", "chegou no prazo"],
-            "sentimento": ["positivo", "negativo", "neutro"],
+            "text": ["ótimo produto", "péssimo atendimento", "chegou no prazo"],
+            "sentiment_label": ["positivo", "negativo", "neutro"],
         }
     )
 
@@ -119,7 +120,7 @@ def minimal_logging_config_dict() -> dict[str, Any]:
 
 
 @pytest.fixture
-def reset_root_logger() -> logging.Logger:
+def reset_root_logger() -> Generator[logging.Logger, Any, None]:
     """Restaura os handlers e o nível do logger raiz após o teste, evitando vazamento de estado."""
     root = logging.getLogger()
     handlers_originais = list(root.handlers)

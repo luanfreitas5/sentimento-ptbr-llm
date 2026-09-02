@@ -39,10 +39,10 @@ def read_json(file_path: Path) -> Any:
     >>> read_json(Path("reports/metrics/exemplo.json"))  # doctest: +SKIP
     """
     validate_file_exists(file_path)
-    with file_path.open("r", encoding="utf-8") as arquivo:
-        conteudo = json.load(arquivo)
+    with file_path.open("r", encoding="utf-8") as file:
+        content = json.load(file)
     logger.debug("Arquivo JSON lido: %s", file_path)
-    return conteudo
+    return content
 
 
 def write_json(data: Any, file_path: Path, *, indent: int = 2) -> None:
@@ -66,6 +66,6 @@ def write_json(data: Any, file_path: Path, *, indent: int = 2) -> None:
     >>> write_json({"f1_macro": 0.82}, Path("reports/metrics/exemplo.json"))  # doctest: +SKIP
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    with file_path.open("w", encoding="utf-8") as arquivo:
-        json.dump(data, arquivo, indent=indent, ensure_ascii=False, sort_keys=False)
+    with file_path.open("w", encoding="utf-8") as file:
+        json.dump(data, file, indent=indent, ensure_ascii=False, sort_keys=False)
     logger.debug("Arquivo JSON escrito: %s", file_path)

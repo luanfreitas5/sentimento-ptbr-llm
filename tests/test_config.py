@@ -35,14 +35,14 @@ class TestPaths:
         self, tmp_path: Path, minimal_paths_config_dict: dict[str, Any]
     ) -> None:
         """Todos os campos de ProjectPaths devem ser resolvidos como caminhos absolutos."""
-        caminho_config = tmp_path / "paths.yaml"
-        write_yaml(minimal_paths_config_dict, caminho_config)
+        config_file_path = tmp_path / "paths.yaml"
+        write_yaml(minimal_paths_config_dict, config_file_path)
 
-        caminhos = load_project_paths(caminho_config)
+        paths = load_project_paths(config_file_path)
 
-        assert caminhos.data_raw_dir == PROJECT_ROOT / "data/raw"
-        assert caminhos.logs_dir == PROJECT_ROOT / "logs"
-        assert caminhos.models_registry_dir == PROJECT_ROOT / "models/registry"
+        assert paths.data_raw_dir == PROJECT_ROOT / "data/raw"
+        assert paths.logs_dir == PROJECT_ROOT / "logs"
+        assert paths.models_registry_dir == PROJECT_ROOT / "models/registry"
 
 
 class TestEnvironment:
@@ -53,11 +53,11 @@ class TestEnvironment:
     ) -> None:
         """Deve carregar variáveis definidas em um arquivo .env customizado."""
         monkeypatch.delenv("VARIAVEL_DE_TESTE_ENV", raising=False)
-        arquivo_env = tmp_path / ".env"
-        arquivo_env.write_text("VARIAVEL_DE_TESTE_ENV=valor_do_arquivo\n")
+        env_file_path = tmp_path / ".env"
+        env_file_path.write_text("VARIAVEL_DE_TESTE_ENV=valor_do_arquivo\n")
 
         try:
-            configure_environment_variables(arquivo_env)
+            configure_environment_variables(env_file_path)
             assert get_required_environment_variable("VARIAVEL_DE_TESTE_ENV") == "valor_do_arquivo"
         finally:
             # load_dotenv escreve diretamente em os.environ, fora do rastreamento
@@ -65,12 +65,14 @@ class TestEnvironment:
             os.environ.pop("VARIAVEL_DE_TESTE_ENV", None)
 
     def test_configure_environment_variables_warns_when_file_missing(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+        self, tmp_path: Path, log_capture_fixture: pytest.LogCaptureFixture
     ) -> None:
         """Deve registrar um aviso, sem levantar exceção, quando o .env não existe."""
-        with caplog.at_level(logging.WARNING, logger="config.environment"):
+        with log_capture_fixture.at_level(logging.WARNING, logger="config.environment"):
             configure_environment_variables(tmp_path / "inexistente.env")
-        assert any("não encontrado" in registro.message for registro in caplog.records)
+        assert any(
+            "não encontrado" in log_record.message for log_record in log_capture_fixture.records
+        )
 
     def test_get_required_environment_variable_raises_when_missing(
         self, monkeypatch: pytest.MonkeyPatch
@@ -85,12 +87,12 @@ class TestEnvironment:
         import random
 
         configure_reproducibility(7)
-        primeira_sequencia = [random.random() for _ in range(3)]
+        init_random_sequence = [random.random() for _ in range(3)]
 
         configure_reproducibility(7)
-        segunda_sequencia = [random.random() for _ in range(3)]
+        second_random_sequence = [random.random() for _ in range(3)]
 
-        assert primeira_sequencia == segunda_sequencia
+        assert init_random_sequence == second_random_sequence
 
 
 class TestLoggingConfig:
@@ -112,15 +114,15 @@ class TestLoggingConfig:
         reset_root_logger: logging.Logger,
     ) -> None:
         """Deve anexar handlers de console e arquivo ao logger raiz e definir seu nível."""
-        caminho_config = tmp_path / "logging.yaml"
-        write_yaml(minimal_logging_config_dict, caminho_config)
-        diretorio_logs = tmp_path / "logs"
+        config_file_path = tmp_path / "logging.yaml"
+        write_yaml(minimal_logging_config_dict, config_file_path)
+        logs_directory = tmp_path / "logs"
 
-        configure_logging(caminho_config, logs_directory=diretorio_logs)
+        configure_logging(config_file_path, logs_directory=logs_directory)
 
         assert len(reset_root_logger.handlers) == 2
         assert reset_root_logger.level == logging.WARNING
-        assert any(diretorio_logs.glob("log_*.log"))
+        assert any(logs_directory.glob("log_*.log"))
 
     def test_configure_logging_respects_disabled_handlers(
         self,
@@ -131,10 +133,10 @@ class TestLoggingConfig:
         """Quando console e arquivo estão desabilitados, nenhum handler deve ser anexado."""
         minimal_logging_config_dict["console"]["enabled"] = False
         minimal_logging_config_dict["file"]["enabled"] = False
-        caminho_config = tmp_path / "logging.yaml"
-        write_yaml(minimal_logging_config_dict, caminho_config)
+        config_file_path = tmp_path / "logging.yaml"
+        write_yaml(minimal_logging_config_dict, config_file_path)
 
-        configure_logging(caminho_config, logs_directory=tmp_path / "logs")
+        configure_logging(config_file_path, logs_directory=tmp_path / "logs")
 
         assert reset_root_logger.handlers == []
 
@@ -146,63 +148,63 @@ class TestSettings:
         self, tmp_path: Path, minimal_general_config_dict: dict[str, Any]
     ) -> None:
         """Um config.yaml válido deve ser carregado como GeneralConfig."""
-        caminho_config = tmp_path / "config.yaml"
-        write_yaml(minimal_general_config_dict, caminho_config)
+        config_file_path = tmp_path / "config.yaml"
+        write_yaml(minimal_general_config_dict, config_file_path)
 
-        configuracao = load_general_config(caminho_config)
+        general_config = load_general_config(config_file_path)
 
-        assert configuracao.labels.target_column == "sentimento"
-        assert configuracao.reproducibility.random_seed == 42
+        assert general_config.labels.target_column == "sentimento"
+        assert general_config.reproducibility.random_seed == 42
 
     def test_load_general_config_rejects_unknown_sentiment_classes(
         self, tmp_path: Path, minimal_general_config_dict: dict[str, Any]
     ) -> None:
         """Classes de sentimento divergentes das conhecidas devem ser rejeitadas."""
         minimal_general_config_dict["labels"]["classes"] = ["ruim", "bom"]
-        caminho_config = tmp_path / "config.yaml"
-        write_yaml(minimal_general_config_dict, caminho_config)
+        config_file_path = tmp_path / "config.yaml"
+        write_yaml(minimal_general_config_dict, config_file_path)
 
         with pytest.raises(InvalidConfigurationError):
-            load_general_config(caminho_config)
+            load_general_config(config_file_path)
 
     def test_load_general_config_rejects_out_of_range_test_size(
         self, tmp_path: Path, minimal_general_config_dict: dict[str, Any]
     ) -> None:
         """test_size fora do intervalo (0, 1) deve ser rejeitado."""
         minimal_general_config_dict["data_split"]["test_size"] = 1.5
-        caminho_config = tmp_path / "config.yaml"
-        write_yaml(minimal_general_config_dict, caminho_config)
+        config_file_path = tmp_path / "config.yaml"
+        write_yaml(minimal_general_config_dict, config_file_path)
 
         with pytest.raises(InvalidConfigurationError):
-            load_general_config(caminho_config)
+            load_general_config(config_file_path)
 
     def test_load_general_config_rejects_unexpected_extra_field(
         self, tmp_path: Path, minimal_general_config_dict: dict[str, Any]
     ) -> None:
         """Um campo de nível raiz não declarado deve ser rejeitado (extra='forbid')."""
         minimal_general_config_dict["campo_desconhecido"] = "valor"
-        caminho_config = tmp_path / "config.yaml"
-        write_yaml(minimal_general_config_dict, caminho_config)
+        config_file_path = tmp_path / "config.yaml"
+        write_yaml(minimal_general_config_dict, config_file_path)
 
         with pytest.raises(InvalidConfigurationError):
-            load_general_config(caminho_config)
+            load_general_config(config_file_path)
 
     def test_create_settings_reads_values_from_custom_env_file(self, tmp_path: Path) -> None:
         """Settings deve ler variáveis de um arquivo .env customizado, com o prefixo do projeto."""
-        arquivo_env = tmp_path / ".env"
-        arquivo_env.write_text("SENTIMENTO_ENVIRONMENT=production\nSENTIMENTO_LOG_LEVEL=DEBUG\n")
+        env_file = tmp_path / ".env"
+        env_file.write_text("SENTIMENTO_ENVIRONMENT=production\nSENTIMENTO_LOG_LEVEL=DEBUG\n")
 
-        configuracoes = create_settings(arquivo_env)
+        settings = create_settings(env_file)
 
-        assert isinstance(configuracoes, Settings)
-        assert configuracoes.environment == "production"
-        assert configuracoes.log_level == "DEBUG"
+        assert isinstance(settings, Settings)
+        assert settings.environment == "production"
+        assert settings.log_level == "DEBUG"
 
     def test_create_settings_uses_defaults_when_env_file_absent(self, tmp_path: Path) -> None:
         """Sem um .env, Settings deve usar os valores padrão sem levantar exceção."""
-        configuracoes = create_settings(tmp_path / "inexistente.env")
-        assert configuracoes.environment == "development"
-        assert configuracoes.mlflow_tracking_uri is None
+        settings = create_settings(tmp_path / "inexistente.env")
+        assert settings.environment == "development"
+        assert settings.mlflow_tracking_uri is None
 
 
 class TestVersion:
@@ -218,22 +220,22 @@ class TestVersion:
 
     def test_get_project_version_raises_for_missing_version_key(self, tmp_path: Path) -> None:
         """Deve levantar InvalidConfigurationError se a chave project.version estiver ausente."""
-        pyproject_incompleto = tmp_path / "pyproject.toml"
-        pyproject_incompleto.write_text('[project]\nname = "exemplo"\n')
+        incomplete_pyproject = tmp_path / "pyproject.toml"
+        incomplete_pyproject.write_text('[project]\nname = "exemplo"\n')
 
         with pytest.raises(InvalidConfigurationError):
-            get_project_version(pyproject_incompleto)
+            get_project_version(incomplete_pyproject)
 
     def test_read_latest_changelog_entry_returns_most_recent_section(self) -> None:
         """Deve retornar a primeira seção '## ...' do CHANGELOG.md real do projeto."""
-        entrada = read_latest_changelog_entry()
-        assert entrada.startswith("## v0.2.0")
+        latest_changelog_entry = read_latest_changelog_entry()
+        assert latest_changelog_entry.startswith("## v0.2.0")
 
     def test_read_latest_changelog_entry_returns_empty_string_when_no_entries(
         self, tmp_path: Path
     ) -> None:
         """Deve retornar string vazia se o changelog não tiver nenhuma seção '## '."""
-        changelog_vazio = tmp_path / "CHANGELOG.md"
-        changelog_vazio.write_text("# Changelog\n\nNenhuma entrada ainda.\n")
+        empty_changelog_path = tmp_path / "CHANGELOG.md"
+        empty_changelog_path.write_text("# Changelog\n\nNenhuma entrada ainda.\n")
 
-        assert read_latest_changelog_entry(changelog_vazio) == ""
+        assert read_latest_changelog_entry(empty_changelog_path) == ""

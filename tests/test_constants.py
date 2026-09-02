@@ -59,13 +59,13 @@ class TestLabels:
 
     def test_label_to_id_and_back_are_consistent(self) -> None:
         """Converter um rótulo para id e de volta deve retornar o rótulo original."""
-        for rotulo in SENTIMENT_CLASSES:
-            assert ID_TO_LABEL[LABEL_TO_ID[rotulo]] == rotulo
+        for label in SENTIMENT_CLASSES:
+            assert ID_TO_LABEL[LABEL_TO_ID[label]] == label
 
-    @pytest.mark.parametrize("rotulo", ["negativo", "neutro", "positivo"])
-    def test_validate_label_accepts_known_labels(self, rotulo: str) -> None:
+    @pytest.mark.parametrize("label", ["negativo", "neutro", "positivo"])
+    def test_validate_label_accepts_known_labels(self, label: str) -> None:
         """validate_label deve aceitar todas as classes conhecidas."""
-        assert validate_label(rotulo) == rotulo
+        assert validate_label(label) == label
 
     def test_validate_label_rejects_unknown_label(self) -> None:
         """validate_label deve levantar DataValidationError para rótulo desconhecido."""
@@ -74,8 +74,8 @@ class TestLabels:
 
     def test_transform_label_to_id_roundtrip(self) -> None:
         """transform_label_to_id e transform_id_to_label devem ser inversas."""
-        for rotulo in SENTIMENT_CLASSES:
-            assert transform_id_to_label(transform_label_to_id(rotulo)) == rotulo
+        for label in SENTIMENT_CLASSES:
+            assert transform_id_to_label(transform_label_to_id(label)) == label
 
     def test_transform_id_to_label_rejects_unknown_id(self) -> None:
         """transform_id_to_label deve levantar DataValidationError para id desconhecido."""
@@ -122,9 +122,9 @@ class TestRegexPatterns:
     def test_retweet_pattern_matches_prefix_only(self) -> None:
         """RETWEET_PATTERN deve casar apenas o prefixo 'RT @usuario:' no início do texto."""
         texto = "RT @usuario: ótimo produto"
-        correspondencia = RETWEET_PATTERN.match(texto)
-        assert correspondencia is not None
-        assert texto[correspondencia.end() :] == "ótimo produto"
+        match_result = RETWEET_PATTERN.match(texto)
+        assert match_result is not None
+        assert texto[match_result.end() :] == "ótimo produto"
 
     def test_emoji_pattern_matches_emoji(self) -> None:
         """EMOJI_PATTERN deve casar com um emoji comum."""

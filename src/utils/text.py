@@ -49,9 +49,9 @@ def remove_accents(text: str) -> str:
     >>> remove_accents("análise de sentimentos")
     'analise de sentimentos'
     """
-    texto_normalizado = unicodedata.normalize("NFKD", text)
+    normalized_text = unicodedata.normalize("NFKD", text)
     return "".join(
-        caractere for caractere in texto_normalizado if not unicodedata.combining(caractere)
+        character for character in normalized_text if not unicodedata.combining(character)
     )
 
 

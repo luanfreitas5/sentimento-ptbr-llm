@@ -20,10 +20,10 @@ class TestYamlIO:
 
     def test_write_then_read_roundtrip(self, tmp_path: Path) -> None:
         """Escrever e reler um YAML deve preservar os dados originais."""
-        caminho = tmp_path / "exemplo.yaml"
-        dados = {"chave": "valor", "lista": [1, 2, 3]}
-        write_yaml(dados, caminho)
-        assert read_yaml(caminho) == dados
+        file_path = tmp_path / "exemplo.yaml"
+        data = {"chave": "valor", "lista": [1, 2, 3]}
+        write_yaml(data, file_path)
+        assert read_yaml(file_path) == data
 
     def test_read_yaml_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError se o arquivo não existir."""
@@ -32,15 +32,15 @@ class TestYamlIO:
 
     def test_read_yaml_returns_empty_dict_for_empty_file(self, tmp_path: Path) -> None:
         """Um arquivo YAML vazio deve retornar um dicionário vazio, não None."""
-        caminho = tmp_path / "vazio.yaml"
-        caminho.write_text("")
-        assert read_yaml(caminho) == {}
+        file_path = tmp_path / "vazio.yaml"
+        file_path.write_text("")
+        assert read_yaml(file_path) == {}
 
     def test_write_yaml_creates_parent_directories(self, tmp_path: Path) -> None:
         """Deve criar diretórios pais ausentes automaticamente."""
-        caminho = tmp_path / "subdir" / "exemplo.yaml"
-        write_yaml({"a": 1}, caminho)
-        assert caminho.is_file()
+        file_path = tmp_path / "subdir" / "exemplo.yaml"
+        write_yaml({"a": 1}, file_path)
+        assert file_path.is_file()
 
 
 class TestJsonIO:
@@ -48,16 +48,16 @@ class TestJsonIO:
 
     def test_write_then_read_roundtrip(self, tmp_path: Path) -> None:
         """Escrever e reler um JSON deve preservar os dados originais."""
-        caminho = tmp_path / "exemplo.json"
-        dados: dict[str, Any] = {"f1_macro": 0.82, "classes": ["negativo", "neutro", "positivo"]}
-        write_json(dados, caminho)
-        assert read_json(caminho) == dados
+        file_path = tmp_path / "exemplo.json"
+        data: dict[str, Any] = {"f1_macro": 0.82, "classes": ["negativo", "neutro", "positivo"]}
+        write_json(data, file_path)
+        assert read_json(file_path) == data
 
     def test_write_json_preserves_non_ascii_characters(self, tmp_path: Path) -> None:
         """Caracteres acentuados em pt-BR devem ser preservados (ensure_ascii=False)."""
-        caminho = tmp_path / "exemplo.json"
-        write_json({"texto": "análise de sentimentos"}, caminho)
-        assert "análise" in caminho.read_text(encoding="utf-8")
+        file_path = tmp_path / "exemplo.json"
+        write_json({"texto": "análise de sentimentos"}, file_path)
+        assert "análise" in file_path.read_text(encoding="utf-8")
 
     def test_read_json_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError se o arquivo não existir."""
@@ -70,11 +70,11 @@ class TestCsvIO:
 
     def test_write_then_read_roundtrip(self, tmp_path: Path) -> None:
         """Escrever e reler um CSV deve preservar os dados originais."""
-        caminho = tmp_path / "exemplo.csv"
-        dataframe = pl.DataFrame({"id": ["1", "2"], "sentimento": ["positivo", "negativo"]})
-        write_csv(dataframe, caminho)
-        resultado = read_csv(caminho)
-        assert resultado.to_dicts() == dataframe.to_dicts()
+        file_path = tmp_path / "exemplo.csv"
+        df = pl.DataFrame({"id": ["1", "2"], "sentimento": ["positivo", "negativo"]})
+        write_csv(df, file_path)
+        result = read_csv(file_path)
+        assert result.to_dicts() == df.to_dicts()
 
     def test_read_csv_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError se o arquivo não existir."""
@@ -87,11 +87,11 @@ class TestParquetIO:
 
     def test_write_then_read_roundtrip(self, tmp_path: Path) -> None:
         """Escrever e reler um Parquet deve preservar os dados originais."""
-        caminho = tmp_path / "exemplo.parquet"
-        dataframe = pl.DataFrame({"id": ["1", "2"], "confianca": [0.9, 0.8]})
-        write_parquet(dataframe, caminho)
-        resultado = read_parquet(caminho)
-        assert resultado.to_dicts() == dataframe.to_dicts()
+        file_path = tmp_path / "exemplo.parquet"
+        df = pl.DataFrame({"id": ["1", "2"], "confianca": [0.9, 0.8]})
+        write_parquet(df, file_path)
+        result = read_parquet(file_path)
+        assert result.to_dicts() == df.to_dicts()
 
     def test_read_parquet_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError se o arquivo não existir."""
@@ -104,16 +104,16 @@ class TestModelIO:
 
     def test_save_then_load_roundtrip(self, tmp_path: Path) -> None:
         """Salvar e carregar um objeto simples deve preservar seu conteúdo."""
-        caminho = tmp_path / "modelo.joblib"
-        modelo_original = {"coeficientes": [0.1, 0.2, 0.3], "intercepto": 0.5}
-        save_model(modelo_original, caminho)
-        assert load_model(caminho) == modelo_original
+        file_path = tmp_path / "modelo.joblib"
+        model = {"coeficientes": [0.1, 0.2, 0.3], "intercepto": 0.5}
+        save_model(model, file_path)
+        assert load_model(file_path) == model
 
     def test_save_model_creates_parent_directories(self, tmp_path: Path) -> None:
         """Deve criar diretórios pais ausentes automaticamente."""
-        caminho = tmp_path / "subdir" / "modelo.joblib"
-        save_model([1, 2, 3], caminho)
-        assert caminho.is_file()
+        file_path = tmp_path / "subdir" / "modelo.joblib"
+        save_model([1, 2, 3], file_path)
+        assert file_path.is_file()
 
     def test_load_model_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError se o arquivo não existir."""
@@ -129,7 +129,7 @@ class TestModelIO:
         (0xFF não é um opcode definido em nenhum protocolo), garantindo uma
         falha de desserialização determinística.
         """
-        caminho = tmp_path / "corrompido.joblib"
-        caminho.write_bytes(b"\xff\xff\xff\xff")
+        file_path = tmp_path / "corrompido.joblib"
+        file_path.write_bytes(b"\xff\xff\xff\xff")
         with pytest.raises(ModelPersistenceError):
-            load_model(caminho)
+            load_model(file_path)

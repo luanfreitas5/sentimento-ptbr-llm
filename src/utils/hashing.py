@@ -40,9 +40,9 @@ def calculate_file_hash(file_path: Path, *, algorithm: str = "sha256") -> str:
     """
     validate_file_exists(file_path)
     hasher = hashlib.new(algorithm)
-    with file_path.open("rb") as arquivo:
-        for bloco in iter(lambda: arquivo.read(_DEFAULT_CHUNK_SIZE_BYTES), b""):
-            hasher.update(bloco)
+    with file_path.open("rb") as file:
+        for chunk in iter(lambda: file.read(_DEFAULT_CHUNK_SIZE_BYTES), b""):
+            hasher.update(chunk)
     return hasher.hexdigest()
 
 

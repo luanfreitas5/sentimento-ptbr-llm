@@ -29,21 +29,21 @@ class TestLogExecutionTime:
         """A função decorada deve retornar o mesmo valor da função original."""
 
         @log_execution_time
-        def somar(a: int, b: int) -> int:
+        def add(a: int, b: int) -> int:
             return a + b
 
-        assert somar(2, 3) == 5
+        assert add(2, 3) == 5
 
-    def test_logs_execution_message(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_logs_execution_message(self, log_capture_fixture: pytest.LogCaptureFixture) -> None:
         """Deve registrar uma mensagem de log informando o tempo de execução."""
 
         @log_execution_time
-        def funcao_exemplo() -> None:
+        def example_func() -> None:
             return None
 
-        with caplog.at_level(logging.INFO, logger="utils.decorators"):
-            funcao_exemplo()
-        assert any("funcao_exemplo" in registro.message for registro in caplog.records)
+        with log_capture_fixture.at_level(logging.INFO, logger="utils.decorators"):
+            example_func()
+        assert any("funcao_exemplo" in log_record.message for log_record in log_capture_fixture.records)
 
 
 class TestRetryOnException:
@@ -51,27 +51,27 @@ class TestRetryOnException:
 
     def test_succeeds_after_transient_failures(self) -> None:
         """Deve reexecutar a função até obter sucesso, dentro do limite de tentativas."""
-        contador = {"tentativas": 0}
+        count = {"tentativas": 0}
 
         @retry_on_exception(exceptions=(ValueError,), max_attempts=3, delay_seconds=0)
-        def funcao_instavel() -> str:
-            contador["tentativas"] += 1
-            if contador["tentativas"] < 2:
+        def attempt_with_retry() -> str:
+            count["tentativas"] += 1
+            if count["tentativas"] < 2:
                 raise ValueError("falha transitória")
             return "sucesso"
 
-        assert funcao_instavel() == "sucesso"
-        assert contador["tentativas"] == 2
+        assert attempt_with_retry() == "sucesso"
+        assert count["tentativas"] == 2
 
     def test_raises_after_exhausting_attempts(self) -> None:
         """Deve levantar a última exceção após esgotar as tentativas."""
 
         @retry_on_exception(exceptions=(ValueError,), max_attempts=2, delay_seconds=0)
-        def sempre_falha() -> None:
+        def always_fails() -> None:
             raise ValueError("falha proposital")
 
         with pytest.raises(ValueError, match="falha proposital"):
-            sempre_falha()
+            always_fails()
 
     def test_rejects_invalid_max_attempts(self) -> None:
         """max_attempts menor que 1 deve levantar ValueError na configuração do decorador."""
@@ -84,10 +84,10 @@ class TestHashing:
 
     def test_calculate_file_hash_matches_hashlib(self, tmp_path: Path) -> None:
         """O hash calculado deve coincidir com o cálculo direto via hashlib."""
-        arquivo = tmp_path / "exemplo.txt"
-        arquivo.write_bytes(b"conteudo de exemplo")
-        esperado = hashlib.sha256(b"conteudo de exemplo").hexdigest()
-        assert calculate_file_hash(arquivo) == esperado
+        file_path = tmp_path / "exemplo.txt"
+        file_path.write_bytes(b"conteudo de exemplo")
+        expected_hash = hashlib.sha256(b"conteudo de exemplo").hexdigest()
+        assert calculate_file_hash(file_path) == expected_hash
 
     def test_calculate_file_hash_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError se o arquivo não existir."""
@@ -109,15 +109,17 @@ class TestSeedEverything:
     def test_same_seed_produces_same_random_sequence(self) -> None:
         """A mesma semente deve produzir a mesma sequência em random e NumPy."""
         seed_everything(123)
-        sequencia_random_1 = [random.random() for _ in range(5)]
-        sequencia_numpy_1 = np.random.rand(5).tolist()
+        random_sequence_first = [random.random() for _ in range(5)]
+        rng = np.random.default_rng(123)
+        rng.normal()  # Inicializa o gerador de números aleatórios do NumPy
+        numpy_random_sequence_init = rng.random(5).tolist()
 
         seed_everything(123)
-        sequencia_random_2 = [random.random() for _ in range(5)]
-        sequencia_numpy_2 = np.random.rand(5).tolist()
+        random_sequence_second = [random.random() for _ in range(5)]
+        numpy_random_sequence_second = rng.random(5).tolist()
 
-        assert sequencia_random_1 == sequencia_random_2
-        assert sequencia_numpy_1 == sequencia_numpy_2
+        assert random_sequence_first == random_sequence_second
+        assert numpy_random_sequence_init == numpy_random_sequence_second
 
 
 class TestText:
@@ -174,9 +176,9 @@ class TestValidation:
 
     def test_validate_file_exists_returns_path_when_valid(self, tmp_path: Path) -> None:
         """Deve retornar o mesmo caminho quando o arquivo existe."""
-        arquivo = tmp_path / "exemplo.txt"
-        arquivo.write_text("conteudo")
-        assert validate_file_exists(arquivo) == arquivo
+        file_path = tmp_path / "exemplo.txt"
+        file_path.write_text("conteudo")
+        assert validate_file_exists(file_path) == file_path
 
     def test_validate_file_exists_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError quando o arquivo não existe."""
@@ -185,14 +187,14 @@ class TestValidation:
 
     def test_validate_directory_exists_creates_when_requested(self, tmp_path: Path) -> None:
         """Deve criar o diretório quando create_if_missing=True."""
-        diretorio = tmp_path / "novo_diretorio"
-        resultado = validate_directory_exists(diretorio, create_if_missing=True)
-        assert resultado.is_dir()
+        temp_directory = tmp_path / "novo_diretorio"
+        result = validate_directory_exists(temp_directory, create_if_missing=True)
+        assert result.is_dir()
 
     def test_validate_directory_exists_raises_when_missing_and_not_created(
         self, tmp_path: Path
     ) -> None:
-        """Deve levantar DataNotFoundError quando o diretório não existe e create_if_missing=False."""
+        """Deve levantar DataNotFoundError quando o caminho não existe e create_if_missing=False."""
         with pytest.raises(DataNotFoundError):
             validate_directory_exists(tmp_path / "inexistente", create_if_missing=False)
 

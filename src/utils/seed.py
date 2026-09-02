@@ -39,10 +39,11 @@ def seed_everything(seed: int = DEFAULT_RANDOM_SEED) -> None:
     """
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
+    rng.normal()  # Inicializa o gerador de números aleatórios do NumPy
 
     try:
-        import torch
+        import torch  # type: ignore[reportMissingImports]
     except ImportError:
         logger.debug("PyTorch não está instalado; semente aplicada apenas a random e NumPy.")
         return

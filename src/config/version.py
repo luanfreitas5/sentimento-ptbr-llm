@@ -46,14 +46,14 @@ def get_project_version(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> s
     >>> get_project_version()
     '0.2.0'
     """
-    with pyproject_file_path.open("rb") as arquivo:
-        dados = tomllib.load(arquivo)
+    with pyproject_file_path.open("rb") as file:
+        dados = tomllib.load(file)
     try:
         return dados["project"]["version"]
-    except KeyError as excecao:
+    except KeyError as exception:
         raise InvalidConfigurationError(
             f"chave 'project.version' não encontrada em {pyproject_file_path}"
-        ) from excecao
+        ) from exception
 
 
 def get_project_name(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> str:
@@ -80,14 +80,14 @@ def get_project_name(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> str:
     >>> get_project_name()
     'sentimento-ptbr-llm'
     """
-    with pyproject_file_path.open("rb") as arquivo:
-        dados = tomllib.load(arquivo)
+    with pyproject_file_path.open("rb") as file:
+        dados = tomllib.load(file)
     try:
         return dados["project"]["name"]
-    except KeyError as excecao:
+    except KeyError as exception:
         raise InvalidConfigurationError(
             f"chave 'project.name' não encontrada em {pyproject_file_path}"
-        ) from excecao
+        ) from exception
 
 
 def read_latest_changelog_entry(changelog_file_path: Path = DEFAULT_CHANGELOG_FILE) -> str:
@@ -109,6 +109,6 @@ def read_latest_changelog_entry(changelog_file_path: Path = DEFAULT_CHANGELOG_FI
     >>> read_latest_changelog_entry().startswith("## v0.2.0")
     True
     """
-    conteudo = changelog_file_path.read_text(encoding="utf-8")
-    correspondencia = _CHANGELOG_ENTRY_PATTERN.search(conteudo)
-    return correspondencia.group(1).strip() if correspondencia else ""
+    content = changelog_file_path.read_text(encoding="utf-8")
+    recent_changelog_entry = _CHANGELOG_ENTRY_PATTERN.search(content)
+    return recent_changelog_entry.group(1).strip() if recent_changelog_entry else ""

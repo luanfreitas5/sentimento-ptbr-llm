@@ -19,23 +19,23 @@ class TestDatasetSchemas:
         df = pl.DataFrame(
             {
                 "id": ["1", "2"],
-                "texto": ["ótimo produto", "não gostei"],
-                "fonte_dados": ["scraping", "scraping"],
-                "data_coleta": ["2026-01-01", "2026-01-02"],
+                "text": ["ótimo produto", "não gostei"],
+                "data_source": ["scraping", "scraping"],
+                "data_collected": ["2026-01-01", "2026-01-02"],
             }
         )
-        resultado = validate_raw_tweet_dataset(df)
-        assert resultado.height == 2
+        result = validate_raw_tweet_dataset(df)
+        assert result.height == 2
 
     def test_validate_raw_tweet_dataset_rejects_extra_column(self) -> None:
         """Uma coluna extra não declarada deve ser rejeitada (schema strict)."""
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "texto": ["ótimo produto"],
-                "fonte_dados": ["scraping"],
-                "data_coleta": ["2026-01-01"],
-                "coluna_extra": ["valor"],
+                "text": ["ótimo produto"],
+                "data_source": ["scraping"],
+                "data_collected": ["2026-01-01"],
+                "extra_column": ["valor"],
             }
         )
         with pytest.raises(DataValidationError):
@@ -46,9 +46,9 @@ class TestDatasetSchemas:
         df = pl.DataFrame(
             {
                 "id": ["1", "1"],
-                "texto": ["a", "b"],
-                "fonte_dados": ["scraping", "scraping"],
-                "data_coleta": ["2026-01-01", "2026-01-02"],
+                "text": ["a", "b"],
+                "data_source": ["scraping", "scraping"],
+                "data_collected": ["2026-01-01", "2026-01-02"],
             }
         )
         with pytest.raises(DataValidationError):
@@ -58,23 +58,23 @@ class TestDatasetSchemas:
         self, sample_labeled_corpus: pl.DataFrame
     ) -> None:
         """Um corpus rotulado válido deve ser aceito."""
-        resultado = validate_labeled_corpus(sample_labeled_corpus)
-        assert resultado.height == 3
+        result = validate_labeled_corpus(sample_labeled_corpus)
+        assert result.height == 3
 
     def test_validate_labeled_corpus_allows_extra_column(
         self, sample_labeled_corpus: pl.DataFrame
     ) -> None:
         """Colunas extras (ex.: metadados) devem ser permitidas (schema não estrito)."""
-        df = sample_labeled_corpus.with_columns(pl.lit("scraping").alias("fonte_dados"))
-        resultado = validate_labeled_corpus(df)
-        assert "fonte_dados" in resultado.columns
+        df = sample_labeled_corpus.with_columns(pl.lit("scraping").alias("data_source"))
+        result = validate_labeled_corpus(df)
+        assert "data_source" in result.columns
 
     def test_validate_labeled_corpus_rejects_invalid_label(
         self, sample_labeled_corpus: pl.DataFrame
     ) -> None:
         """Um rótulo fora das classes conhecidas deve ser rejeitado."""
         df = sample_labeled_corpus.with_columns(
-            pl.Series("sentimento", ["muito_positivo", "negativo", "neutro"])
+            pl.Series("sentiment_label", ["muito_positivo", "negativo", "neutro"])
         )
         with pytest.raises(DataValidationError):
             validate_labeled_corpus(df)
@@ -88,10 +88,10 @@ class TestLabelingResultSchema:
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "rotulador": ["heuristica_lexica"],
-                "sentimento_predito": ["positivo"],
-                "confianca": [0.9],
-                "peso": [1.0],
+                "tagger": ["heuristica_lexica"],
+                "sentiment_label": ["positivo"],
+                "confidence": [0.9],
+                "weight": [1.0],
             }
         )
         assert validate_labeling_result(df).height == 1
@@ -101,10 +101,10 @@ class TestLabelingResultSchema:
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "rotulador": ["heuristica_lexica"],
-                "sentimento_predito": ["positivo"],
-                "confianca": [1.5],
-                "peso": [1.0],
+                "tagger": ["heuristica_lexica"],
+                "sentiment_label": ["positivo"],
+                "confidence": [1.5],
+                "weight": [1.0],
             }
         )
         with pytest.raises(DataValidationError):
@@ -115,10 +115,10 @@ class TestLabelingResultSchema:
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "rotulador": ["heuristica_lexica"],
-                "sentimento_predito": ["positivo"],
-                "confianca": [0.9],
-                "peso": [0.0],
+                "tagger": ["heuristica_lexica"],
+                "sentiment_label": ["positivo"],
+                "confidence": [0.9],
+                "weight": [0.0],
             }
         )
         with pytest.raises(DataValidationError):
@@ -133,9 +133,9 @@ class TestPredictionSchema:
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "texto": ["ótimo produto"],
-                "sentimento_predito": ["positivo"],
-                "confianca": [0.95],
+                "text": ["ótimo produto"],
+                "sentiment_label": ["positivo"],
+                "confidence": [0.95],
             }
         )
         assert validate_prediction(df).height == 1
@@ -145,9 +145,9 @@ class TestPredictionSchema:
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "texto": ["ótimo produto"],
-                "sentimento_predito": ["desconhecido"],
-                "confianca": [0.95],
+                "text": ["ótimo produto"],
+                "sentiment_label": ["desconhecido"],
+                "confidence": [0.95],
             }
         )
         with pytest.raises(DataValidationError):
@@ -162,8 +162,8 @@ class TestTrainingExampleSchema:
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "texto": ["ótimo produto"],
-                "sentimento": ["positivo"],
+                "text": ["ótimo produto"],
+                "sentiment_label": ["positivo"],
                 "split": ["treino"],
             }
         )
@@ -174,8 +174,8 @@ class TestTrainingExampleSchema:
         df = pl.DataFrame(
             {
                 "id": ["1"],
-                "texto": ["ótimo produto"],
-                "sentimento": ["positivo"],
+                "text": ["ótimo produto"],
+                "sentiment_label": ["positivo"],
                 "split": ["outro"],
             }
         )
@@ -192,6 +192,7 @@ class TestExperimentRunMetricSchema:
             {
                 "run_id": ["abc123"],
                 "model_name": ["logistic_regression"],
+                "sentiment_label": ["positivo"],
                 "metric_name": ["f1_macro"],
                 "metric_value": [0.82],
                 "git_sha": ["deadbeef"],
@@ -206,6 +207,7 @@ class TestExperimentRunMetricSchema:
             {
                 "run_id": ["abc123"],
                 "model_name": ["logistic_regression"],
+                "sentiment_label": ["positivo"],
                 "metric_name": ["metrica_inexistente"],
                 "metric_value": [0.82],
                 "git_sha": ["deadbeef"],

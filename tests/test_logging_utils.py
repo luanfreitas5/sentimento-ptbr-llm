@@ -31,8 +31,10 @@ class TestFormatter:
 
     def test_build_file_log_formatter_uses_expected_format(self) -> None:
         """O formatador de arquivo deve usar o formato tabular padrão do projeto."""
-        formatador = build_file_log_formatter()
-        assert formatador._fmt == DEFAULT_FILE_LOG_FORMAT  # atributo interno do logging.Formatter
+        file_log_formatter = build_file_log_formatter()
+        assert (
+            file_log_formatter._fmt == DEFAULT_FILE_LOG_FORMAT
+        )  # atributo interno do logging.Formatter
 
     def test_build_console_log_formatter_returns_formatter_instance(self) -> None:
         """Deve retornar uma instância válida de logging.Formatter."""
@@ -50,28 +52,28 @@ class TestHandlers:
 
     def test_build_daily_log_file_path_formats_date_correctly(self) -> None:
         """O nome do arquivo deve conter a data no formato YYYY-MM-DD."""
-        caminho = build_daily_log_file_path(Path("logs"), reference_date=date(2026, 1, 5))
-        assert caminho.name == "log_2026-01-05.log"
+        log_file_path = build_daily_log_file_path(Path("logs"), reference_date=date(2026, 1, 5))
+        assert log_file_path.name == "log_2026-01-05.log"
 
     def test_create_file_handler_creates_directory_and_file(self, tmp_path: Path) -> None:
         """Deve criar o diretório de logs e o arquivo de log do dia."""
-        diretorio_logs = tmp_path / "logs"
-        handler = create_file_handler(diretorio_logs)
+        log_directory = tmp_path / "logs"
+        handler = create_file_handler(log_directory)
         try:
-            assert diretorio_logs.is_dir()
+            assert log_directory.is_dir()
             assert Path(handler.baseFilename).is_file()
         finally:
             handler.close()
 
     def test_remove_old_log_files_keeps_only_recent_files(self, tmp_path: Path) -> None:
         """Deve manter apenas os arquivos mais recentes, respeitando backup_count."""
-        for indice in range(5):
-            arquivo = tmp_path / f"log_2026-01-0{indice}.log"
-            arquivo.write_text("linha de log")
+        for index in range(5):
+            log_file = tmp_path / f"log_2026-01-0{index}.log"
+            log_file.write_text("linha de log")
 
-        removidos = remove_old_log_files(tmp_path, backup_count=2)
+        removed_file_count = remove_old_log_files(tmp_path, backup_count=2)
 
-        assert removidos == 3
+        assert removed_file_count == 3
         assert len(list(tmp_path.glob("log_*.log"))) == 2
 
     def test_remove_old_log_files_returns_zero_for_missing_directory(self, tmp_path: Path) -> None:
@@ -91,10 +93,10 @@ class TestLogger:
         logger = logging.getLogger("sentimento_ptbr_llm.teste_configure")
         logger.addHandler(logging.NullHandler())
 
-        novo_handler = logging.NullHandler()
-        configure_logger_handlers(logger, [novo_handler], level=logging.DEBUG, propagate=True)
+        new_handler = logging.NullHandler()
+        configure_logger_handlers(logger, [new_handler], level=logging.DEBUG, propagate=True)
 
-        assert logger.handlers == [novo_handler]
+        assert logger.handlers == [new_handler]
         assert logger.level == logging.DEBUG
         assert logger.propagate is True
 
@@ -111,16 +113,16 @@ class TestTimeBlock:
     """Testes do gerenciador de contexto que loga a duração de um bloco."""
 
     def test_time_block_logs_start_and_completion_messages(
-        self, caplog: pytest.LogCaptureFixture
+        self, log_capture_fixture: pytest.LogCaptureFixture
     ) -> None:
         """Deve registrar uma mensagem de início e uma de conclusão com a duração."""
         logger = logging.getLogger("sentimento_ptbr_llm.teste_time_block")
         with (
-            caplog.at_level(logging.INFO, logger=logger.name),
+            log_capture_fixture.at_level(logging.INFO, logger=logger.name),
             time_block(logger, "bloco de teste"),
         ):
             _ = sum(range(100))
 
-        mensagens = [registro.message for registro in caplog.records]
-        assert any("bloco de teste: iniciado" in mensagem for mensagem in mensagens)
-        assert any("bloco de teste: concluído em" in mensagem for mensagem in mensagens)
+        log_messages = [log_record.message for log_record in log_capture_fixture.records]
+        assert any("bloco de teste: iniciado" in log_message for log_message in log_messages)
+        assert any("bloco de teste: concluído em" in log_message for log_message in log_messages)

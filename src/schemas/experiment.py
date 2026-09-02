@@ -7,6 +7,7 @@ comparativos, garantindo rastreabilidade (SHA do Git + hash do dataset).
 
 import pandera.polars as pa
 import polars as pl
+from pandera.api.polars.model_config import BaseConfig
 from pandera.errors import SchemaError
 from pandera.typing.polars import Series
 
@@ -24,7 +25,7 @@ class ExperimentRunMetricSchema(pa.DataFrameModel):
     git_sha: Series[str]
     dataset_hash: Series[str]
 
-    class Config:
+    class Config(BaseConfig):
         """Configuração do schema: rejeita colunas não declaradas."""
 
         strict = True
@@ -65,7 +66,7 @@ def validate_experiment_run_metric(dataframe: pl.DataFrame) -> pl.DataFrame:
     """
     try:
         return ExperimentRunMetricSchema.validate(dataframe)
-    except SchemaError as excecao:
+    except SchemaError as exception:
         raise DataValidationError(
-            schema_name="ExperimentRunMetricSchema", detail=str(excecao)
-        ) from excecao
+            schema_name="ExperimentRunMetricSchema", detail=str(exception)
+        ) from exception

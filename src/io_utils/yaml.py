@@ -41,10 +41,10 @@ def read_yaml(file_path: Path) -> dict[str, Any]:
     >>> read_yaml(Path("configs/config.yaml"))  # doctest: +SKIP
     """
     validate_file_exists(file_path)
-    with file_path.open("r", encoding="utf-8") as arquivo:
-        conteudo = yaml.safe_load(arquivo)
+    with file_path.open("r", encoding="utf-8") as file:
+        content = yaml.safe_load(file)
     logger.debug("Arquivo YAML lido: %s", file_path)
-    return conteudo or {}
+    return content or {}
 
 
 def write_yaml(data: dict[str, Any], file_path: Path) -> None:
@@ -66,6 +66,6 @@ def write_yaml(data: dict[str, Any], file_path: Path) -> None:
     >>> write_yaml({"chave": "valor"}, Path("reports/exemplo.yaml"))  # doctest: +SKIP
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    with file_path.open("w", encoding="utf-8") as arquivo:
-        yaml.safe_dump(data, arquivo, allow_unicode=True, sort_keys=False)
+    with file_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(data, file, allow_unicode=True, sort_keys=False)
     logger.debug("Arquivo YAML escrito: %s", file_path)

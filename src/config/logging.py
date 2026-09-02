@@ -43,10 +43,10 @@ def _resolve_log_level(level_name: str) -> int:
     >>> _resolve_log_level("INFO") == logging.INFO
     True
     """
-    nivel = logging.getLevelName(level_name.upper())
-    if not isinstance(nivel, int):
+    level = logging.getLevelName(level_name.upper())
+    if not isinstance(level, int):
         raise InvalidConfigurationError(f"nível de log desconhecido: '{level_name}'")
-    return nivel
+    return level
 
 
 def configure_logging(
@@ -81,15 +81,15 @@ def configure_logging(
     """
     config = read_yaml(config_file_path)
 
-    nivel_global = _resolve_log_level(config["level"])
-    diretorio_logs = logs_directory or (PROJECT_ROOT / config["file"]["dir"])
+    global_level = _resolve_log_level(config["level"])
+    logs_path = logs_directory or (PROJECT_ROOT / config["file"]["dir"])
 
     handlers: list[logging.Handler] = []
 
     if config["console"]["enabled"]:
         handlers.append(
             create_console_handler(
-                level=nivel_global,
+                level=global_level,
                 rich_tracebacks=config["console"]["rich_tracebacks"],
                 show_path=config["console"]["show_path"],
             )
@@ -98,13 +98,13 @@ def configure_logging(
     if config["file"]["enabled"]:
         handlers.append(
             create_file_handler(
-                diretorio_logs,
+                logs_path,
                 filename_pattern=config["file"]["filename_pattern"],
-                level=nivel_global,
+                level=global_level,
                 encoding=config["file"]["encoding"],
             )
         )
-        remove_old_log_files(diretorio_logs, backup_count=config["file"]["backup_count"])
+        remove_old_log_files(logs_path, backup_count=config["file"]["backup_count"])
 
     configure_logger_handlers(
         logging.getLogger(),

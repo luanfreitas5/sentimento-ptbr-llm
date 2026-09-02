@@ -42,6 +42,6 @@ class UnknownPipelineStageError(PipelineError):
 
     def __init__(self, stage_name: str, available_stages: list[str]) -> None:
         super().__init__(
-            f"Etapa de pipeline '{stage_name}' desconhecida. Etapas disponíveis: {available_stages}",
+            f"Nome da etapa '{stage_name}' desconhecida. Etapas disponíveis: {available_stages}",
             context={"stage_name": stage_name},
         )
