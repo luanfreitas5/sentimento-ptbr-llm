@@ -66,4 +66,6 @@ def validate_experiment_run_metric(dataframe: pl.DataFrame) -> pl.DataFrame:
     try:
         return ExperimentRunMetricSchema.validate(dataframe)
     except SchemaError as excecao:
-        raise DataValidationError(schema_name="ExperimentRunMetricSchema", detail=str(excecao)) from excecao
+        raise DataValidationError(
+            schema_name="ExperimentRunMetricSchema", detail=str(excecao)
+        ) from excecao

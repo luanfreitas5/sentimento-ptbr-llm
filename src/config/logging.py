@@ -113,4 +113,6 @@ def configure_logging(
         propagate=False,
     )
 
-    set_third_party_loggers_level(_resolve_log_level(config["loggers"]["project_level"]), PROJECT_PACKAGE_NAMES)
+    set_third_party_loggers_level(
+        _resolve_log_level(config["loggers"]["project_level"]), PROJECT_PACKAGE_NAMES
+    )

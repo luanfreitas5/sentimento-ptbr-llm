@@ -23,11 +23,29 @@ def sample_labeled_corpus() -> pl.DataFrame:
 def minimal_general_config_dict() -> dict[str, Any]:
     """Dicionário mínimo válido contra ``GeneralConfig`` (espelha ``configs/config.yaml``)."""
     return {
-        "project": {"name": "exemplo", "description": "desc", "version": "0.1.0", "language": "pt-BR"},
-        "reproducibility": {"random_seed": 42, "pythonhashseed": 42, "deterministic_algorithms": True},
-        "experiment": {"name": "exemplo", "tracking_uri": "mlruns", "registry_stage_default": "Staging"},
+        "project": {
+            "name": "exemplo",
+            "description": "desc",
+            "version": "0.1.0",
+            "language": "pt-BR",
+        },
+        "reproducibility": {
+            "random_seed": 42,
+            "pythonhashseed": 42,
+            "deterministic_algorithms": True,
+        },
+        "experiment": {
+            "name": "exemplo",
+            "tracking_uri": "mlruns",
+            "registry_stage_default": "Staging",
+        },
         "labels": {"classes": ["negativo", "neutro", "positivo"], "target_column": "sentimento"},
-        "data_split": {"test_size": 0.2, "validation_size": 0.1, "stratify": True, "random_state": 42},
+        "data_split": {
+            "test_size": 0.2,
+            "validation_size": 0.1,
+            "stratify": True,
+            "random_state": 42,
+        },
         "stages": ["ingestion"],
     }
 
@@ -92,7 +110,11 @@ def minimal_logging_config_dict() -> dict[str, Any]:
             "console": "%(message)s",
             "date_format": "%Y-%m-%d %H:%M:%S",
         },
-        "loggers": {"root_level": "WARNING", "project_level": "INFO", "third_party_level": "WARNING"},
+        "loggers": {
+            "root_level": "WARNING",
+            "project_level": "INFO",
+            "third_party_level": "WARNING",
+        },
     }
 
 

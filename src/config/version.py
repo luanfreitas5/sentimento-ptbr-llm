@@ -85,7 +85,9 @@ def get_project_name(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> str:
     try:
         return dados["project"]["name"]
     except KeyError as excecao:
-        raise InvalidConfigurationError(f"chave 'project.name' não encontrada em {pyproject_file_path}") from excecao
+        raise InvalidConfigurationError(
+            f"chave 'project.name' não encontrada em {pyproject_file_path}"
+        ) from excecao
 
 
 def read_latest_changelog_entry(changelog_file_path: Path = DEFAULT_CHANGELOG_FILE) -> str:

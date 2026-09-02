@@ -64,4 +64,6 @@ def validate_labeling_result(dataframe: pl.DataFrame) -> pl.DataFrame:
     try:
         return LabelingResultSchema.validate(dataframe)
     except SchemaError as excecao:
-        raise DataValidationError(schema_name="LabelingResultSchema", detail=str(excecao)) from excecao
+        raise DataValidationError(
+            schema_name="LabelingResultSchema", detail=str(excecao)
+        ) from excecao

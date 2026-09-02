@@ -25,7 +25,12 @@ COLLECTION_DATE_COLUMN = "data_coleta"
 SPLIT_COLUMN = "split"
 
 # Colunas obrigatórias no corpus bruto recém-coletado/importado
-RAW_CORPUS_REQUIRED_COLUMNS: tuple[str, ...] = (ID_COLUMN, TEXT_COLUMN, SOURCE_COLUMN, COLLECTION_DATE_COLUMN)
+RAW_CORPUS_REQUIRED_COLUMNS: tuple[str, ...] = (
+    ID_COLUMN,
+    TEXT_COLUMN,
+    SOURCE_COLUMN,
+    COLLECTION_DATE_COLUMN,
+)
 
 # Colunas obrigatórias no corpus já rotulado, pronto para modelagem
 LABELED_CORPUS_REQUIRED_COLUMNS: tuple[str, ...] = (ID_COLUMN, TEXT_COLUMN, TARGET_COLUMN)

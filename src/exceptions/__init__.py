@@ -26,24 +26,29 @@ from exceptions.configuration import (
     MissingEnvironmentVariableError,
 )
 from exceptions.data import DataError, DataNotFoundError, DataValidationError, EmptyDatasetError
-from exceptions.model import ModelError, ModelNotFittedError, ModelPersistenceError, UnsupportedModelError
+from exceptions.model import (
+    ModelError,
+    ModelNotFittedError,
+    ModelPersistenceError,
+    UnsupportedModelError,
+)
 from exceptions.pipeline import PipelineError, PipelineStageError, UnknownPipelineStageError
 
 __all__: list[str] = [
-    "ProjectError",
     "ConfigurationError",
     "ConfigurationFileNotFoundError",
-    "InvalidConfigurationError",
-    "MissingEnvironmentVariableError",
     "DataError",
     "DataNotFoundError",
     "DataValidationError",
     "EmptyDatasetError",
+    "InvalidConfigurationError",
+    "MissingEnvironmentVariableError",
     "ModelError",
     "ModelNotFittedError",
     "ModelPersistenceError",
-    "UnsupportedModelError",
     "PipelineError",
     "PipelineStageError",
+    "ProjectError",
     "UnknownPipelineStageError",
+    "UnsupportedModelError",
 ]

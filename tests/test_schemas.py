@@ -54,20 +54,28 @@ class TestDatasetSchemas:
         with pytest.raises(DataValidationError):
             validate_raw_tweet_dataset(df)
 
-    def test_validate_labeled_corpus_accepts_valid_dataframe(self, sample_labeled_corpus: pl.DataFrame) -> None:
+    def test_validate_labeled_corpus_accepts_valid_dataframe(
+        self, sample_labeled_corpus: pl.DataFrame
+    ) -> None:
         """Um corpus rotulado válido deve ser aceito."""
         resultado = validate_labeled_corpus(sample_labeled_corpus)
         assert resultado.height == 3
 
-    def test_validate_labeled_corpus_allows_extra_column(self, sample_labeled_corpus: pl.DataFrame) -> None:
+    def test_validate_labeled_corpus_allows_extra_column(
+        self, sample_labeled_corpus: pl.DataFrame
+    ) -> None:
         """Colunas extras (ex.: metadados) devem ser permitidas (schema não estrito)."""
         df = sample_labeled_corpus.with_columns(pl.lit("scraping").alias("fonte_dados"))
         resultado = validate_labeled_corpus(df)
         assert "fonte_dados" in resultado.columns
 
-    def test_validate_labeled_corpus_rejects_invalid_label(self, sample_labeled_corpus: pl.DataFrame) -> None:
+    def test_validate_labeled_corpus_rejects_invalid_label(
+        self, sample_labeled_corpus: pl.DataFrame
+    ) -> None:
         """Um rótulo fora das classes conhecidas deve ser rejeitado."""
-        df = sample_labeled_corpus.with_columns(pl.Series("sentimento", ["muito_positivo", "negativo", "neutro"]))
+        df = sample_labeled_corpus.with_columns(
+            pl.Series("sentimento", ["muito_positivo", "negativo", "neutro"])
+        )
         with pytest.raises(DataValidationError):
             validate_labeled_corpus(df)
 
@@ -123,14 +131,24 @@ class TestPredictionSchema:
     def test_validate_prediction_accepts_valid_dataframe(self) -> None:
         """Uma predição válida deve ser aceita."""
         df = pl.DataFrame(
-            {"id": ["1"], "texto": ["ótimo produto"], "sentimento_predito": ["positivo"], "confianca": [0.95]}
+            {
+                "id": ["1"],
+                "texto": ["ótimo produto"],
+                "sentimento_predito": ["positivo"],
+                "confianca": [0.95],
+            }
         )
         assert validate_prediction(df).height == 1
 
     def test_validate_prediction_rejects_unknown_label(self) -> None:
         """Um rótulo predito fora das classes conhecidas deve ser rejeitado."""
         df = pl.DataFrame(
-            {"id": ["1"], "texto": ["ótimo produto"], "sentimento_predito": ["desconhecido"], "confianca": [0.95]}
+            {
+                "id": ["1"],
+                "texto": ["ótimo produto"],
+                "sentimento_predito": ["desconhecido"],
+                "confianca": [0.95],
+            }
         )
         with pytest.raises(DataValidationError):
             validate_prediction(df)
@@ -141,12 +159,26 @@ class TestTrainingExampleSchema:
 
     def test_validate_training_example_accepts_valid_dataframe(self) -> None:
         """Um exemplo de treino válido deve ser aceito."""
-        df = pl.DataFrame({"id": ["1"], "texto": ["ótimo produto"], "sentimento": ["positivo"], "split": ["treino"]})
+        df = pl.DataFrame(
+            {
+                "id": ["1"],
+                "texto": ["ótimo produto"],
+                "sentimento": ["positivo"],
+                "split": ["treino"],
+            }
+        )
         assert validate_training_example(df).height == 1
 
     def test_validate_training_example_rejects_unknown_split(self) -> None:
         """Um valor de split fora de treino/validacao/teste deve ser rejeitado."""
-        df = pl.DataFrame({"id": ["1"], "texto": ["ótimo produto"], "sentimento": ["positivo"], "split": ["outro"]})
+        df = pl.DataFrame(
+            {
+                "id": ["1"],
+                "texto": ["ótimo produto"],
+                "sentimento": ["positivo"],
+                "split": ["outro"],
+            }
+        )
         with pytest.raises(DataValidationError):
             validate_training_example(df)
 

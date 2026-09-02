@@ -64,4 +64,6 @@ def validate_training_example(dataframe: pl.DataFrame) -> pl.DataFrame:
     try:
         return TrainingExampleSchema.validate(dataframe)
     except SchemaError as excecao:
-        raise DataValidationError(schema_name="TrainingExampleSchema", detail=str(excecao)) from excecao
+        raise DataValidationError(
+            schema_name="TrainingExampleSchema", detail=str(excecao)
+        ) from excecao

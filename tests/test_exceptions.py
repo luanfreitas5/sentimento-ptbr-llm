@@ -10,7 +10,12 @@ from exceptions.configuration import (
     MissingEnvironmentVariableError,
 )
 from exceptions.data import DataError, DataNotFoundError, DataValidationError, EmptyDatasetError
-from exceptions.model import ModelError, ModelNotFittedError, ModelPersistenceError, UnsupportedModelError
+from exceptions.model import (
+    ModelError,
+    ModelNotFittedError,
+    ModelPersistenceError,
+    UnsupportedModelError,
+)
 from exceptions.pipeline import PipelineError, PipelineStageError, UnknownPipelineStageError
 
 
@@ -79,7 +84,9 @@ class TestDataExceptions:
 
     def test_data_validation_error_message(self) -> None:
         """A mensagem deve citar o nome do schema e o detalhe da falha."""
-        erro = DataValidationError(schema_name="LabeledCorpusSchema", detail="coluna ausente: sentimento")
+        erro = DataValidationError(
+            schema_name="LabeledCorpusSchema", detail="coluna ausente: sentimento"
+        )
         assert "LabeledCorpusSchema" in str(erro)
         assert "coluna ausente: sentimento" in str(erro)
 

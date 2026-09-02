@@ -72,7 +72,9 @@ class TestEnvironment:
             configure_environment_variables(tmp_path / "inexistente.env")
         assert any("não encontrado" in registro.message for registro in caplog.records)
 
-    def test_get_required_environment_variable_raises_when_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_get_required_environment_variable_raises_when_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Deve levantar MissingEnvironmentVariableError se a variável não estiver definida."""
         monkeypatch.delenv("VARIAVEL_AUSENTE_DE_TESTE", raising=False)
         with pytest.raises(MissingEnvironmentVariableError):
@@ -227,7 +229,9 @@ class TestVersion:
         entrada = read_latest_changelog_entry()
         assert entrada.startswith("## v0.2.0")
 
-    def test_read_latest_changelog_entry_returns_empty_string_when_no_entries(self, tmp_path: Path) -> None:
+    def test_read_latest_changelog_entry_returns_empty_string_when_no_entries(
+        self, tmp_path: Path
+    ) -> None:
         """Deve retornar string vazia se o changelog não tiver nenhuma seção '## '."""
         changelog_vazio = tmp_path / "CHANGELOG.md"
         changelog_vazio.write_text("# Changelog\n\nNenhuma entrada ainda.\n")

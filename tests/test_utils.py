@@ -189,7 +189,9 @@ class TestValidation:
         resultado = validate_directory_exists(diretorio, create_if_missing=True)
         assert resultado.is_dir()
 
-    def test_validate_directory_exists_raises_when_missing_and_not_created(self, tmp_path: Path) -> None:
+    def test_validate_directory_exists_raises_when_missing_and_not_created(
+        self, tmp_path: Path
+    ) -> None:
         """Deve levantar DataNotFoundError quando o diretório não existe e create_if_missing=False."""
         with pytest.raises(DataNotFoundError):
             validate_directory_exists(tmp_path / "inexistente", create_if_missing=False)

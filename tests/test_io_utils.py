@@ -120,7 +120,9 @@ class TestModelIO:
         with pytest.raises(DataNotFoundError):
             load_model(tmp_path / "inexistente.joblib")
 
-    def test_load_model_raises_model_persistence_error_for_corrupted_file(self, tmp_path: Path) -> None:
+    def test_load_model_raises_model_persistence_error_for_corrupted_file(
+        self, tmp_path: Path
+    ) -> None:
         """Um arquivo corrompido deve levantar ModelPersistenceError, não uma exceção genérica.
 
         Usa bytes que não correspondem a nenhum opcode válido de pickle

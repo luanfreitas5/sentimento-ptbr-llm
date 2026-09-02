@@ -105,4 +105,6 @@ def validate_labeled_corpus(dataframe: pl.DataFrame) -> pl.DataFrame:
     try:
         return LabeledCorpusSchema.validate(dataframe)
     except SchemaError as excecao:
-        raise DataValidationError(schema_name="LabeledCorpusSchema", detail=str(excecao)) from excecao
+        raise DataValidationError(
+            schema_name="LabeledCorpusSchema", detail=str(excecao)
+        ) from excecao

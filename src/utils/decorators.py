@@ -45,7 +45,9 @@ def log_execution_time(func: Callable[_P, _R]) -> Callable[_P, _R]:
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         with measure_execution_time() as tempo:
             resultado = func(*args, **kwargs)
-        logger.info("Função '%s' executada em %s", func.__qualname__, format_duration(tempo.elapsed_seconds))
+        logger.info(
+            "Função '%s' executada em %s", func.__qualname__, format_duration(tempo.elapsed_seconds)
+        )
         return resultado
 
     return wrapper

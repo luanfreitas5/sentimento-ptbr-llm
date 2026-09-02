@@ -31,19 +31,19 @@ from config.settings import GeneralConfig, Settings, create_settings, load_gener
 from config.version import get_project_name, get_project_version, read_latest_changelog_entry
 
 __all__: list[str] = [
-    "configure_environment_variables",
-    "configure_reproducibility",
-    "get_required_environment_variable",
-    "configure_logging",
     "PROJECT_ROOT",
-    "ProjectPaths",
-    "load_project_paths",
-    "resolve_project_path",
     "GeneralConfig",
+    "ProjectPaths",
     "Settings",
+    "configure_environment_variables",
+    "configure_logging",
+    "configure_reproducibility",
     "create_settings",
-    "load_general_config",
     "get_project_name",
     "get_project_version",
+    "get_required_environment_variable",
+    "load_general_config",
+    "load_project_paths",
     "read_latest_changelog_entry",
+    "resolve_project_path",
 ]

@@ -50,7 +50,9 @@ def remove_accents(text: str) -> str:
     'analise de sentimentos'
     """
     texto_normalizado = unicodedata.normalize("NFKD", text)
-    return "".join(caractere for caractere in texto_normalizado if not unicodedata.combining(caractere))
+    return "".join(
+        caractere for caractere in texto_normalizado if not unicodedata.combining(caractere)
+    )
 
 
 def truncate_text(text: str, max_length: int, *, suffix: str = "...") -> str:
@@ -81,7 +83,9 @@ def truncate_text(text: str, max_length: int, *, suffix: str = "...") -> str:
     'um text...'
     """
     if max_length < len(suffix):
-        raise ValueError(f"max_length ({max_length}) deve ser >= ao comprimento do sufixo ({len(suffix)})")
+        raise ValueError(
+            f"max_length ({max_length}) deve ser >= ao comprimento do sufixo ({len(suffix)})"
+        )
     if len(text) <= max_length:
         return text
     return text[: max_length - len(suffix)] + suffix

@@ -42,5 +42,7 @@ class ProjectError(Exception):
         """
         if not self.context:
             return self.message
-        contexto_formatado = ", ".join(f"{chave}={valor!r}" for chave, valor in self.context.items())
+        contexto_formatado = ", ".join(
+            f"{chave}={valor!r}" for chave, valor in self.context.items()
+        )
         return f"{self.message} (contexto: {contexto_formatado})"

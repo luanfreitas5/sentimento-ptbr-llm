@@ -2,7 +2,11 @@
 
 import pytest
 
-from constants.columns import LABELED_CORPUS_REQUIRED_COLUMNS, RAW_CORPUS_REQUIRED_COLUMNS, TARGET_COLUMN
+from constants.columns import (
+    LABELED_CORPUS_REQUIRED_COLUMNS,
+    RAW_CORPUS_REQUIRED_COLUMNS,
+    TARGET_COLUMN,
+)
 from constants.defaults import (
     DEFAULT_CONFIDENCE_LEVEL,
     DEFAULT_RANDOM_SEED,
@@ -18,7 +22,13 @@ from constants.labels import (
     validate_label,
 )
 from constants.metrics import ALL_METRICS, PRIMARY_METRIC, validate_metric_name
-from constants.regex import EMOJI_PATTERN, HASHTAG_PATTERN, MENTION_PATTERN, RETWEET_PATTERN, URL_PATTERN
+from constants.regex import (
+    EMOJI_PATTERN,
+    HASHTAG_PATTERN,
+    MENTION_PATTERN,
+    RETWEET_PATTERN,
+    URL_PATTERN,
+)
 from constants.tokens import SPECIAL_TOKENS, URL_TOKEN
 from exceptions.data import DataValidationError
 

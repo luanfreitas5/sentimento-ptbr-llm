@@ -20,7 +20,12 @@ RANKING_METRICS: tuple[str, ...] = ("roc_auc_ovr", "pr_auc_ovr")
 
 OPERATIONAL_METRICS: tuple[str, ...] = ("inference_time_ms", "computational_cost")
 
-ALL_METRICS: tuple[str, ...] = (PRIMARY_METRIC, *SECONDARY_METRICS, *RANKING_METRICS, *OPERATIONAL_METRICS)
+ALL_METRICS: tuple[str, ...] = (
+    PRIMARY_METRIC,
+    *SECONDARY_METRICS,
+    *RANKING_METRICS,
+    *OPERATIONAL_METRICS,
+)
 
 
 def validate_metric_name(metric_name: str) -> str:

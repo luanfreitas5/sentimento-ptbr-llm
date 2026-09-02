@@ -18,7 +18,11 @@ from logging_utils.handlers import (
     create_file_handler,
     remove_old_log_files,
 )
-from logging_utils.logger import configure_logger_handlers, get_logger, set_third_party_loggers_level
+from logging_utils.logger import (
+    configure_logger_handlers,
+    get_logger,
+    set_third_party_loggers_level,
+)
 from logging_utils.timer import time_block
 
 
@@ -96,7 +100,9 @@ class TestLogger:
 
     def test_set_third_party_loggers_level_applies_to_all_names(self) -> None:
         """Deve aplicar o nível informado a todos os loggers de terceiros listados."""
-        set_third_party_loggers_level(logging.ERROR, ["biblioteca_exemplo_a", "biblioteca_exemplo_b"])
+        set_third_party_loggers_level(
+            logging.ERROR, ["biblioteca_exemplo_a", "biblioteca_exemplo_b"]
+        )
         assert logging.getLogger("biblioteca_exemplo_a").level == logging.ERROR
         assert logging.getLogger("biblioteca_exemplo_b").level == logging.ERROR
 
@@ -104,10 +110,15 @@ class TestLogger:
 class TestTimeBlock:
     """Testes do gerenciador de contexto que loga a duração de um bloco."""
 
-    def test_time_block_logs_start_and_completion_messages(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_time_block_logs_start_and_completion_messages(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Deve registrar uma mensagem de início e uma de conclusão com a duração."""
         logger = logging.getLogger("sentimento_ptbr_llm.teste_time_block")
-        with caplog.at_level(logging.INFO, logger=logger.name), time_block(logger, "bloco de teste"):
+        with (
+            caplog.at_level(logging.INFO, logger=logger.name),
+            time_block(logger, "bloco de teste"),
+        ):
             _ = sum(range(100))
 
         mensagens = [registro.message for registro in caplog.records]

@@ -64,7 +64,9 @@ def write_parquet(dataframe: pl.DataFrame, file_path: Path, **kwargs: Any) -> No
 
     Examples
     --------
-    >>> write_parquet(pl.DataFrame({"a": [1, 2]}), Path("data/processed/exemplo.parquet"))  # doctest: +SKIP
+    >>> write_parquet(
+    ...     pl.DataFrame({"a": [1, 2]}), Path("data/processed/exemplo.parquet")
+    ... )  # doctest: +SKIP
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
     dataframe.write_parquet(file_path, **kwargs)

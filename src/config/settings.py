@@ -71,7 +71,9 @@ class LabelSettings(_StrictBaseModel):
     def validate_classes_match_known_sentiment_classes(cls, value: list[str]) -> list[str]:
         """Garante que as classes configuradas coincidam com :data:`SENTIMENT_CLASSES`."""
         if set(value) != set(SENTIMENT_CLASSES):
-            raise ValueError(f"labels.classes deve corresponder a {SENTIMENT_CLASSES}, recebido: {value}")
+            raise ValueError(
+                f"labels.classes deve corresponder a {SENTIMENT_CLASSES}, recebido: {value}"
+            )
         return value
 
 
