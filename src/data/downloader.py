@@ -73,7 +73,9 @@ def collect_tweets_by_query(
     )
 
     for query_failure in query_results.failures:
-        logger.warning("Falha ao coletar consulta '%s': %s", query_failure.item, query_failure.error)
+        logger.warning(
+            "Falha ao coletar consulta '%s': %s", query_failure.item, query_failure.error
+        )
 
     tweet_records = list(chain.from_iterable(query_results.successes))
 

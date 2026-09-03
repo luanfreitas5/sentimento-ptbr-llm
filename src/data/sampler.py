@@ -135,5 +135,3 @@ def sample_stratified_subset(
         sample_size,
     )
     return stratified_subset
-
-

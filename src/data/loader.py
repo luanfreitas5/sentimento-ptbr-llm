@@ -84,7 +84,9 @@ def load_raw_tweet_dataset(file_path: Path) -> pl.DataFrame:
     >>> load_raw_tweet_dataset(Path("data/raw/tweets_coletados.parquet"))  # doctest: +SKIP
     """
     validated_df = validate_raw_tweet_dataset(read_dataset_file(file_path))
-    logger.info("Dataset de tweets brutos carregado: %s (%d linhas)", file_path, validated_df.height)
+    logger.info(
+        "Dataset de tweets brutos carregado: %s (%d linhas)", file_path, validated_df.height
+    )
     return validated_df
 
 
@@ -143,7 +145,8 @@ def load_training_example_dataset(file_path: Path) -> pl.DataFrame:
     """
     validated_df = validate_training_example(read_dataset_file(file_path))
     logger.info(
-        "Conjunto de treino/validação/teste carregado: %s (%d linhas)", file_path, validated_df.height
+        "Conjunto de treino/validação/teste carregado: %s (%d linhas)",
+        file_path,
+        validated_df.height,
     )
     return validated_df
-
