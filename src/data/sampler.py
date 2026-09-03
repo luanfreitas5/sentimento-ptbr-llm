@@ -56,12 +56,12 @@ def sample_random_subset(
     if sample_size <= 0:
         raise ValueError(f"sample_size deve ser positivo, recebido: {sample_size}")
 
-    amostra_size = min(sample_size, dataframe.height)
-    amostra = dataframe.sample(n=amostra_size, seed=random_seed, shuffle=True)
+    sampled_size = min(sample_size, dataframe.height)
+    sampled_df = dataframe.sample(n=sampled_size, seed=random_seed, shuffle=True)
     logger.info(
-        "Amostra aleatória de %d/%d exemplo(s) selecionada.", amostra_size, dataframe.height
+        "Amostra aleatória de %d/%d exemplo(s) selecionada.", sampled_size, dataframe.height
     )
-    return amostra
+    return sampled_df
 
 
 def sample_stratified_subset(
@@ -120,18 +120,20 @@ def sample_stratified_subset(
     if sample_size <= 0:
         raise ValueError(f"sample_size deve ser positivo, recebido: {sample_size}")
 
-    amostra_size = min(sample_size, dataframe.height)
-    fraction = amostra_size / dataframe.height
+    sampled_size = min(sample_size, dataframe.height)
+    fraction = sampled_size / dataframe.height
 
-    grupos_amostrados: list[pl.DataFrame] = []
+    sampled_groups: list[pl.DataFrame] = []
     for grupo in dataframe.partition_by(stratify_column, maintain_order=True):
         grupo_amostra_size = min(max(1, round(grupo.height * fraction)), grupo.height)
-        grupos_amostrados.append(grupo.sample(n=grupo_amostra_size, seed=random_seed, shuffle=True))
+        sampled_groups.append(grupo.sample(n=grupo_amostra_size, seed=random_seed, shuffle=True))
 
-    resultado = pl.concat(grupos_amostrados)
+    stratified_subset = pl.concat(sampled_groups)
     logger.info(
         "Amostra estratificada de %d exemplo(s) selecionada (alvo: %d).",
-        resultado.height,
+        stratified_subset.height,
         sample_size,
     )
-    return resultado
+    return stratified_subset
+
+

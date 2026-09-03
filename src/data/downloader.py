@@ -68,18 +68,18 @@ def collect_tweets_by_query(
     >>> collect_tweets_by_query(coletar_exemplo, ["python"], show_progress=False).height
     1
     """
-    resultado = run_parallel_scraping(
+    query_results = run_parallel_scraping(
         scrape_func, queries, max_workers=max_workers, show_progress=show_progress
     )
 
-    for falha in resultado.failures:
-        logger.warning("Falha ao coletar consulta '%s': %s", falha.item, falha.error)
+    for query_failure in query_results.failures:
+        logger.warning("Falha ao coletar consulta '%s': %s", query_failure.item, query_failure.error)
 
-    registros = list(chain.from_iterable(resultado.successes))
+    tweet_records = list(chain.from_iterable(query_results.successes))
 
-    if not registros:
+    if not tweet_records:
         raise EmptyDatasetError("coleta de tweets via scraping")
-    return pl.DataFrame(registros)
+    return pl.DataFrame(tweet_records)
 
 
 def download_external_dataset(
@@ -111,7 +111,7 @@ def download_external_dataset(
     ... )  # doctest: +SKIP
     """
     destination_path.parent.mkdir(parents=True, exist_ok=True)
-    conteudo = download_func()
-    destination_path.write_bytes(conteudo)
-    logger.info("Dataset externo salvo em: %s (%d bytes)", destination_path, len(conteudo))
+    raw_data = download_func()
+    destination_path.write_bytes(raw_data)
+    logger.info("Dataset externo salvo em: %s (%d bytes)", destination_path, len(raw_data))
     return destination_path

@@ -83,9 +83,9 @@ def load_raw_tweet_dataset(file_path: Path) -> pl.DataFrame:
     --------
     >>> load_raw_tweet_dataset(Path("data/raw/tweets_coletados.parquet"))  # doctest: +SKIP
     """
-    validado = validate_raw_tweet_dataset(read_dataset_file(file_path))
-    logger.info("Dataset de tweets brutos carregado: %s (%d linhas)", file_path, validado.height)
-    return validado
+    validated_df = validate_raw_tweet_dataset(read_dataset_file(file_path))
+    logger.info("Dataset de tweets brutos carregado: %s (%d linhas)", file_path, validated_df.height)
+    return validated_df
 
 
 def load_labeled_corpus(file_path: Path) -> pl.DataFrame:
@@ -112,9 +112,9 @@ def load_labeled_corpus(file_path: Path) -> pl.DataFrame:
     --------
     >>> load_labeled_corpus(Path("data/processed/corpus_rotulado.parquet"))  # doctest: +SKIP
     """
-    validado = validate_labeled_corpus(read_dataset_file(file_path))
-    logger.info("Corpus rotulado carregado: %s (%d linhas)", file_path, validado.height)
-    return validado
+    validated_corpus = validate_labeled_corpus(read_dataset_file(file_path))
+    logger.info("Corpus rotulado carregado: %s (%d linhas)", file_path, validated_corpus.height)
+    return validated_corpus
 
 
 def load_training_example_dataset(file_path: Path) -> pl.DataFrame:
@@ -141,8 +141,9 @@ def load_training_example_dataset(file_path: Path) -> pl.DataFrame:
     --------
     >>> load_training_example_dataset(Path("data/processed/treino.parquet"))  # doctest: +SKIP
     """
-    validado = validate_training_example(read_dataset_file(file_path))
+    validated_df = validate_training_example(read_dataset_file(file_path))
     logger.info(
-        "Conjunto de treino/validação/teste carregado: %s (%d linhas)", file_path, validado.height
+        "Conjunto de treino/validação/teste carregado: %s (%d linhas)", file_path, validated_df.height
     )
-    return validado
+    return validated_df
+

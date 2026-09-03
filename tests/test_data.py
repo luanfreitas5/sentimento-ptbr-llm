@@ -212,21 +212,21 @@ class TestCreateStratifiedSplit:
     def test_assigns_all_three_splits(self) -> None:
         """Um grupo com exemplos suficientes deve receber as três classes de split."""
         df = pl.DataFrame({"id": [str(i) for i in range(10)], "sentiment_label": ["positivo"] * 10})
-        resultado = create_stratified_split(df, label_column="sentiment_label")
-        assert sorted(resultado["split"].unique().to_list()) == sorted(DATA_SPLITS)
+        result = create_stratified_split(df, label_column="sentiment_label")
+        assert sorted(result["split"].unique().to_list()) == sorted(DATA_SPLITS)
 
     def test_preserves_row_count(self) -> None:
         """O número de linhas do resultado deve ser igual ao da entrada."""
         df = pl.DataFrame({"id": [str(i) for i in range(15)], "sentiment_label": ["neutro"] * 15})
-        resultado = create_stratified_split(df, label_column="sentiment_label")
-        assert resultado.height == df.height
+        result = create_stratified_split(df, label_column="sentiment_label")
+        assert result.height == df.height
 
     def test_is_deterministic_given_same_seed(self) -> None:
         """A mesma semente deve produzir exatamente a mesma atribuição de split."""
         df = pl.DataFrame({"id": [str(i) for i in range(10)], "sentiment_label": ["positivo"] * 10})
-        resultado_a = create_stratified_split(df, label_column="sentiment_label", random_seed=7)
-        resultado_b = create_stratified_split(df, label_column="sentiment_label", random_seed=7)
-        assert resultado_a["split"].to_list() == resultado_b["split"].to_list()
+        result_a = create_stratified_split(df, label_column="sentiment_label", random_seed=7)
+        result_b = create_stratified_split(df, label_column="sentiment_label", random_seed=7)
+        assert result_a["split"].to_list() == result_b["split"].to_list()
 
     def test_raises_for_invalid_proportions(self) -> None:
         """test_size + validation_size >= 1 deve levantar ValueError."""
@@ -246,12 +246,12 @@ class TestCreateStratifiedSplit:
         )
         resultado = create_stratified_split(df, label_column="sentiment_label")
         for classe in ("positivo", "negativo"):
-            splits_da_classe = resultado.filter(pl.col("sentiment_label") == classe)[
+            class_splits = resultado.filter(pl.col("sentiment_label") == classe)[
                 "split"
             ].to_list()
-            assert splits_da_classe.count("teste") == 2
-            assert splits_da_classe.count("validacao") == 1
-            assert splits_da_classe.count("treino") == 7
+            assert class_splits.count("teste") == 2
+            assert class_splits.count("validacao") == 1
+            assert class_splits.count("treino") == 7
 
 
 class TestSampleRandomSubset:
@@ -289,8 +289,8 @@ class TestSampleStratifiedSubset:
                 "sentiment_label": ["positivo"] * 10 + ["negativo"] * 10,
             }
         )
-        resultado = sample_stratified_subset(df, stratify_column="sentiment_label", sample_size=10)
-        assert sorted(resultado["sentiment_label"].unique().to_list()) == ["negativo", "positivo"]
+        result = sample_stratified_subset(df, stratify_column="sentiment_label", sample_size=10)
+        assert sorted(result["sentiment_label"].unique().to_list()) == ["negativo", "positivo"]
 
     def test_raises_for_empty_dataframe(self) -> None:
         """Um DataFrame vazio deve levantar EmptyDatasetError."""
@@ -314,15 +314,15 @@ class TestDatasetCatalog:
     def test_build_dataset_catalog_entry_computes_hash_and_size(self, tmp_path: Path) -> None:
         """A entrada de catálogo deve conter o hash SHA-256 e o tamanho corretos do arquivo."""
         file_path = tmp_path / "exemplo.txt"
-        conteudo = b"conteudo de exemplo"
-        file_path.write_bytes(conteudo)
+        sample_data = b"conteudo de exemplo"
+        file_path.write_bytes(sample_data)
 
-        entrada = build_dataset_catalog_entry("exemplo", file_path)
+        dataset_entry = build_dataset_catalog_entry("exemplo", file_path)
 
-        assert entrada.name == "exemplo"
-        assert entrada.file_path == str(file_path)
-        assert entrada.sha256_hash == hashlib.sha256(conteudo).hexdigest()
-        assert entrada.size_bytes == len(conteudo)
+        assert dataset_entry.name == "exemplo"
+        assert dataset_entry.file_path == str(file_path)
+        assert dataset_entry.sha256_hash == hashlib.sha256(sample_data).hexdigest()
+        assert dataset_entry.size_bytes == len(sample_data)
 
     def test_build_dataset_catalog_entry_raises_for_missing_file(self, tmp_path: Path) -> None:
         """Deve levantar DataNotFoundError se o arquivo não existir."""
@@ -331,27 +331,27 @@ class TestDatasetCatalog:
 
     def test_build_dataset_catalog_skips_missing_datasets(self, tmp_path: Path) -> None:
         """Datasets ausentes devem ser ignorados, sem interromper a construção do catálogo."""
-        existente = tmp_path / "existente.txt"
-        existente.write_bytes(b"dados")
+        available_dataset = tmp_path / "existente.txt"
+        available_dataset.write_bytes(b"dados")
 
         catalogo = build_dataset_catalog(
-            {"existente": existente, "ausente": tmp_path / "ausente.txt"}
+            {"existente": available_dataset, "ausente": tmp_path / "ausente.txt"}
         )
 
         assert [entrada.name for entrada in catalogo] == ["existente"]
 
     def test_write_dataset_catalog_writes_json(self, tmp_path: Path) -> None:
         """O catálogo deve ser serializado em JSON, preservando todos os campos."""
-        entradas = [
+        dataset_entries = [
             DatasetCatalogEntry(
                 name="a", file_path="a.parquet", sha256_hash="hash_a", size_bytes=10
             )
         ]
-        destino = tmp_path / "catalogo.json"
+        catalog_file_path = tmp_path / "catalogo.json"
 
-        write_dataset_catalog(entradas, destino)
+        write_dataset_catalog(dataset_entries, catalog_file_path)
 
-        assert read_json(destino) == [
+        assert read_json(catalog_file_path) == [
             {"name": "a", "file_path": "a.parquet", "sha256_hash": "hash_a", "size_bytes": 10}
         ]
 
@@ -361,17 +361,17 @@ class TestCollectTweetsByQuery:
 
     def test_consolidates_successful_results(self) -> None:
         """Os registros de todas as consultas bem-sucedidas devem ser consolidados."""
-        resultado = collect_tweets_by_query(_scrape_ok, ["python", "nlp"], show_progress=False)
-        assert resultado.height == 2
-        assert sorted(resultado["id"].to_list()) == ["nlp", "python"]
+        result = collect_tweets_by_query(_scrape_ok, ["python", "nlp"], show_progress=False)
+        assert result.height == 2
+        assert sorted(result["id"].to_list()) == ["nlp", "python"]
 
     def test_skips_failed_queries(self) -> None:
         """Consultas que falham devem ser descartadas, sem interromper as demais."""
-        resultado = collect_tweets_by_query(
+        result = collect_tweets_by_query(
             _scrape_fail_on_specific_query, ["ok", "falha"], show_progress=False
         )
-        assert resultado.height == 1
-        assert resultado["id"].to_list() == ["ok"]
+        assert result.height == 1
+        assert result["id"].to_list() == ["ok"]
 
     def test_raises_when_all_queries_fail(self) -> None:
         """Se nenhuma consulta retornar resultado, deve levantar EmptyDatasetError."""
@@ -384,7 +384,7 @@ class TestDownloadExternalDataset:
 
     def test_writes_file_and_creates_parent_directories(self, tmp_path: Path) -> None:
         """O conteúdo baixado deve ser salvo no destino, criando diretórios pais ausentes."""
-        destino = tmp_path / "subdir" / "gold_set.bin"
-        resultado = download_external_dataset(lambda: b"conteudo binario", destino)
-        assert resultado == destino
-        assert destino.read_bytes() == b"conteudo binario"
+        output_file_path = tmp_path / "subdir" / "gold_set.bin"
+        result = download_external_dataset(lambda: b"conteudo binario", output_file_path)
+        assert result == output_file_path
+        assert output_file_path.read_bytes() == b"conteudo binario"
