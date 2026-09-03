@@ -246,9 +246,7 @@ class TestCreateStratifiedSplit:
         )
         resultado = create_stratified_split(df, label_column="sentiment_label")
         for classe in ("positivo", "negativo"):
-            class_splits = resultado.filter(pl.col("sentiment_label") == classe)[
-                "split"
-            ].to_list()
+            class_splits = resultado.filter(pl.col("sentiment_label") == classe)["split"].to_list()
             assert class_splits.count("teste") == 2
             assert class_splits.count("validacao") == 1
             assert class_splits.count("treino") == 7
