@@ -99,7 +99,7 @@ def load_fasttext_model(model_path: Path) -> StaticEmbeddingModel:
     """
     validate_file_exists(model_path)
     try:
-        import fasttext
+        import fasttext  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "A biblioteca 'fasttext' não está instalada. Instale com "
@@ -218,4 +218,4 @@ def extract_static_embeddings(
         len(tokenized_documents),
         dimension,
     )
-    return pl.DataFrame({id_column: document_ids, **embedding_columns})
+    return pl.DataFrame({id_column: document_ids} | embedding_columns)

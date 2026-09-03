@@ -47,8 +47,7 @@ def aggregate_by_weighted_majority_vote(labeling_results: pl.DataFrame) -> pl.Da
     >>> aggregate_by_weighted_majority_vote(df)["sentiment_label"].to_list()
     ['positivo']
     """
-    agreement = calculate_agreement_ratio(labeling_results)
-    result = agreement.rename(
+    result = calculate_agreement_ratio(labeling_results).rename(
         {"consensus_label": "sentiment_label", "agreement_ratio": "confidence"}
     )
     logger.info(

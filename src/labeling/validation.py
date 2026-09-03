@@ -86,6 +86,81 @@ def calculate_cohen_kappa(labels_a: Sequence[str], labels_b: Sequence[str]) -> f
     return (observed_agreement - expected_agreement) / (1.0 - expected_agreement)
 
 
+def _validate_reliability_data(reliability_data: Sequence[Sequence[str | None]]) -> None:
+    """Valida o formato da matriz de confiabilidade do Alpha de Krippendorff.
+
+    Parameters
+    ----------
+    reliability_data : Sequence[Sequence[str | None]]
+        Matriz de confiabilidade a validar (ver
+        :func:`calculate_krippendorff_alpha`).
+
+    Raises
+    ------
+    ValueError
+        Se houver menos de 2 avaliadores ou linhas de tamanhos diferentes.
+    """
+    n_raters = len(reliability_data)
+    if n_raters < 2:
+        raise ValueError(
+            f"Krippendorff's alpha requer ao menos 2 avaliadores, recebido: {n_raters}"
+        )
+
+    n_units = len(reliability_data[0])
+    for rater_values in reliability_data:
+        if len(rater_values) != n_units:
+            raise ValueError("Todos os avaliadores devem ter o mesmo número de unidades avaliadas.")
+
+
+def _build_coincidence_matrix(
+    reliability_data: Sequence[Sequence[str | None]], category_index: dict[str, int]
+) -> tuple[np.ndarray, float]:
+    """Constrói a matriz de coincidências do Alpha de Krippendorff, por unidade avaliada.
+
+    Parameters
+    ----------
+    reliability_data : Sequence[Sequence[str | None]]
+        Matriz de confiabilidade (ver :func:`calculate_krippendorff_alpha`).
+    category_index : dict[str, int]
+        Mapeamento de cada categoria observada para seu índice na matriz.
+
+    Returns
+    -------
+    tuple[np.ndarray, float]
+        Matriz de coincidências ``(n_categorias, n_categorias)`` e o total
+        de avaliações pareáveis (unidades com ao menos 2 avaliadores).
+    """
+    n_raters = len(reliability_data)
+    n_units = len(reliability_data[0])
+    n_categories = len(category_index)
+
+    coincidence = np.zeros((n_categories, n_categories), dtype=float)
+    total_pairable_values = 0.0
+
+    for unit_index in range(n_units):
+        unit_values = [
+            value
+            for value in (
+                reliability_data[rater_index][unit_index] for rater_index in range(n_raters)
+            )
+            if value is not None
+        ]
+        n_values_in_unit = len(unit_values)
+        if n_values_in_unit < 2:
+            continue
+
+        counts = np.zeros(n_categories, dtype=float)
+        for value in unit_values:
+            counts[category_index[value]] += 1
+
+        unit_coincidence = np.outer(counts, counts)
+        np.fill_diagonal(unit_coincidence, counts * (counts - 1))
+        coincidence += unit_coincidence / (n_values_in_unit - 1)
+        total_pairable_values += n_values_in_unit
+
+    return coincidence, total_pairable_values
+
+
 def calculate_krippendorff_alpha(reliability_data: Sequence[Sequence[str | None]]) -> float:
     """Calcula o Alpha de Krippendorff (métrica nominal) para múltiplos avaliadores.
 
@@ -124,16 +199,7 @@ def calculate_krippendorff_alpha(reliability_data: Sequence[Sequence[str | None]
     >>> round(calculate_krippendorff_alpha(dados), 4)
     0.4444
     """
-    n_raters = len(reliability_data)
-    if n_raters < 2:
-        raise ValueError(
-            f"Krippendorff's alpha requer ao menos 2 avaliadores, recebido: {n_raters}"
-        )
-
-    n_units = len(reliability_data[0])
-    for rater_values in reliability_data:
-        if len(rater_values) != n_units:
-            raise ValueError("Todos os avaliadores devem ter o mesmo número de unidades avaliadas.")
+    _validate_reliability_data(reliability_data)
 
     categories = sorted(
         {value for rater_values in reliability_data for value in rater_values if value is not None}
@@ -141,30 +207,8 @@ def calculate_krippendorff_alpha(reliability_data: Sequence[Sequence[str | None]
     if not categories:
         raise EmptyDatasetError("reliability_data")
     category_index = {category: index for index, category in enumerate(categories)}
-    n_categories = len(categories)
 
-    coincidence = np.zeros((n_categories, n_categories), dtype=float)
-    total_pairable_values = 0.0
-
-    for unit_index in range(n_units):
-        unit_values = [
-            reliability_data[rater_index][unit_index]
-            for rater_index in range(n_raters)
-            if reliability_data[rater_index][unit_index] is not None
-        ]
-        n_values_in_unit = len(unit_values)
-        if n_values_in_unit < 2:
-            continue
-
-        counts = np.zeros(n_categories, dtype=float)
-        for value in unit_values:
-            counts[category_index[value]] += 1
-
-        unit_coincidence = np.outer(counts, counts)
-        np.fill_diagonal(unit_coincidence, counts * (counts - 1))
-        coincidence += unit_coincidence / (n_values_in_unit - 1)
-        total_pairable_values += n_values_in_unit
-
+    coincidence, total_pairable_values = _build_coincidence_matrix(reliability_data, category_index)
     if total_pairable_values == 0:
         raise EmptyDatasetError("unidades com ao menos 2 avaliações em reliability_data")
 

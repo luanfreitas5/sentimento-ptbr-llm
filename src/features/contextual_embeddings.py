@@ -90,7 +90,7 @@ class _TransformersMeanPoolingEncoder:
         np.ndarray
             Matriz ``(len(texts), hidden_size)`` de embeddings.
         """
-        import torch
+        import torch  # type: ignore[reportMissingImports]
 
         encoded_input = self._tokenizer(
             list(texts),
@@ -113,6 +113,7 @@ class _TransformersMeanPoolingEncoder:
 def load_contextual_encoder(
     model_name: str = "neuralmind/bert-base-portuguese-cased",
     *,
+    revision: str = "main",
     max_length: int = 128,
     device: str | None = None,
 ) -> ContextualEncoder:
@@ -124,6 +125,10 @@ def load_contextual_encoder(
         Nome do modelo no Hugging Face Hub, by default
         "neuralmind/bert-base-portuguese-cased" (BERTimbau base, ver
         ``configs/model_params.yaml -> embeddings.contextual.model_name``).
+    revision : str, optional
+        Revisão (branch, tag ou commit SHA) do modelo no Hugging Face Hub a
+        ser baixada, by default "main". Fixar uma revisão específica evita
+        que o modelo mude silenciosamente entre execuções (CWE-494).
     max_length : int, optional
         Comprimento máximo de subtokens por texto, truncando o excedente,
         by default 128.
@@ -148,8 +153,8 @@ def load_contextual_encoder(
     >>> load_contextual_encoder()  # doctest: +SKIP
     """
     try:
-        import torch
-        from transformers import AutoModel, AutoTokenizer
+        import torch  # type: ignore[reportMissingImports]
+        from transformers import AutoModel, AutoTokenizer  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "As bibliotecas 'transformers'/'torch' não estão instaladas. Instale com "
@@ -157,8 +162,8 @@ def load_contextual_encoder(
         ) from exception
 
     resolved_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name).to(resolved_device).eval()
+    tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision)
+    model = AutoModel.from_pretrained(model_name, revision=revision).to(resolved_device).eval()
     logger.info(
         "Encoder contextual '%s' carregado no dispositivo '%s'.", model_name, resolved_device
     )
@@ -248,4 +253,4 @@ def extract_contextual_embeddings(
         len(batches),
         dimension,
     )
-    return pl.DataFrame({id_column: document_ids, **embedding_columns})
+    return pl.DataFrame({id_column: document_ids} | embedding_columns)

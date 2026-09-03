@@ -1,5 +1,6 @@
 """Testes do módulo de engenharia de features (``src/features``)."""
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -60,7 +61,7 @@ class _FakeStaticEmbeddingModel:
 class _FakeContextualEncoder:
     """Encoder contextual de teste: cada texto vira ``[len(texto), 0.0]``."""
 
-    def encode(self, texts: list[str]) -> np.ndarray:
+    def encode(self, texts: Sequence[str]) -> np.ndarray:
         """Codifica cada texto pelo seu comprimento em caracteres."""
         return np.array([[float(len(text)), 0.0] for text in texts])
 

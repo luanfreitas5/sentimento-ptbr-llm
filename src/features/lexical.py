@@ -346,7 +346,10 @@ def pivot_tfidf_features_to_wide(
     [0.0, 0.8]
     """
     validate_not_empty_collection(long_features, collection_name="long_features")
-    wide = long_features.pivot(
-        on=term_column, index=id_column, values=weight_column, aggregate_function="first"
-    ).fill_null(0.0)
-    return wide.sort(id_column)
+    return (
+        long_features.pivot(
+            on=term_column, index=id_column, values=weight_column, aggregate_function="first"
+        )
+        .fill_null(0.0)
+        .sort(id_column)
+    )

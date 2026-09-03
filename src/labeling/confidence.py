@@ -57,9 +57,9 @@ def calculate_weighted_label_scores(labeling_results: pl.DataFrame) -> pl.DataFr
     [1.8, 2.0]
     """
     validate_not_empty_collection(labeling_results, collection_name="labeling_results")
-    validated = validate_labeling_result(labeling_results)
     return (
-        validated.with_columns((pl.col("confidence") * pl.col("weight")).alias("weighted_score"))
+        validate_labeling_result(labeling_results)
+        .with_columns((pl.col("confidence") * pl.col("weight")).alias("weighted_score"))
         .group_by(["id", "sentiment_label"])
         .agg(pl.col("weighted_score").sum())
     )
@@ -104,15 +104,17 @@ def calculate_agreement_ratio(labeling_results: pl.DataFrame) -> pl.DataFrame:
     """
     scores = calculate_weighted_label_scores(labeling_results)
     totals = scores.group_by("id").agg(pl.col("weighted_score").sum().alias("total_score"))
-    winners = scores.group_by("id").agg(
-        pl.col("sentiment_label")
-        .sort_by("weighted_score", descending=True)
-        .first()
-        .alias("consensus_label"),
-        pl.col("weighted_score").max().alias("winning_score"),
-    )
-    result = winners.join(totals, on="id").with_columns(
-        (pl.col("winning_score") / pl.col("total_score")).alias("agreement_ratio")
+    result = (
+        scores.group_by("id")
+        .agg(
+            pl.col("sentiment_label")
+            .sort_by("weighted_score", descending=True)
+            .first()
+            .alias("consensus_label"),
+            pl.col("weighted_score").max().alias("winning_score"),
+        )
+        .join(totals, on="id")
+        .with_columns((pl.col("winning_score") / pl.col("total_score")).alias("agreement_ratio"))
     )
     logger.info("Razão de concordância calculada para %d amostra(s).", result.height)
     return result.select(["id", "consensus_label", "agreement_ratio"])
@@ -147,8 +149,9 @@ def calculate_discordance_score(labeling_results: pl.DataFrame) -> pl.DataFrame:
     >>> round(calculate_discordance_score(df)["discordance_score"].to_list()[0], 4)
     0.4737
     """
-    agreement = calculate_agreement_ratio(labeling_results)
-    return agreement.with_columns((1.0 - pl.col("agreement_ratio")).alias("discordance_score"))
+    return calculate_agreement_ratio(labeling_results).with_columns(
+        (1.0 - pl.col("agreement_ratio")).alias("discordance_score")
+    )
 
 
 def flag_low_confidence_samples(

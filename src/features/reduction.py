@@ -25,7 +25,7 @@ from utils.seed import seed_everything
 from utils.validation import validate_not_empty_collection
 
 if TYPE_CHECKING:
-    import torch
+    import torch  # type: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def _build_autoencoder_module(
     ValueError
         Se ``activation`` não for uma das funções suportadas.
     """
-    from torch import nn
+    from torch import nn  # type: ignore[reportMissingImports]
 
     activations: dict[str, type[nn.Module]] = {
         "relu": nn.ReLU,
@@ -119,8 +119,8 @@ def _build_autoencoder_module(
         for in_features, out_features in pairwise(layer_sizes):
             layers.append(nn.Linear(in_features, out_features))
             if out_features != layer_sizes[-1]:
-                layers.append(activation_layer())
-                layers.append(nn.Dropout(dropout))
+                layers.extend([activation_layer()])
+                layers.extend([nn.Dropout(dropout)])
         return nn.Sequential(*layers)
 
     encoder_layer_sizes = [input_dim, *hidden_layers, latent_dim]
@@ -221,8 +221,8 @@ def train_autoencoder(
     """
     validate_not_empty_collection(training_embeddings, collection_name="training_embeddings")
     try:
-        import torch
-        from torch.utils.data import DataLoader, TensorDataset
+        import torch  # type: ignore[reportMissingImports]
+        from torch.utils.data import DataLoader, TensorDataset  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "A biblioteca 'torch' não está instalada. Instale com `uv add torch` "
@@ -323,7 +323,7 @@ def encode_with_autoencoder(embeddings: np.ndarray, artifacts: AutoencoderArtifa
     >>> encode_with_autoencoder(np.zeros((10, 768)), artifacts)  # doctest: +SKIP
     """
     validate_not_empty_collection(embeddings, collection_name="embeddings")
-    import torch
+    import torch  # type: ignore[reportMissingImports]
 
     artifacts.module.eval()
     with torch.no_grad():
@@ -364,7 +364,7 @@ def compute_reconstruction_error(
     >>> compute_reconstruction_error(np.zeros((10, 768)), artifacts)  # doctest: +SKIP
     """
     validate_not_empty_collection(embeddings, collection_name="embeddings")
-    import torch
+    import torch  # type: ignore[reportMissingImports]
 
     artifacts.module.eval()
     with torch.no_grad():
