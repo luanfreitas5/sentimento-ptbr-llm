@@ -46,11 +46,11 @@ from utils.validation import validate_file_exists
 logger = logging.getLogger(__name__)
 
 try:
-    import torch
-    from torch import nn
-    from torch.nn import functional
-    from torch.utils.data import DataLoader, TensorDataset
-    from tqdm.auto import tqdm
+    import torch  # type: ignore[reportMissingImports]
+    from torch import nn  # type: ignore[reportMissingImports]
+    from torch.nn import functional  # type: ignore[reportMissingImports]
+    from torch.utils.data import DataLoader, TensorDataset  # type: ignore[reportMissingImports]
+    from tqdm.auto import tqdm  # type: ignore[reportMissingImports]
 except ImportError as _import_error:  # pragma: no cover - guarda defensiva
     raise ModelError(
         "A biblioteca 'torch' não está instalada. Instale com `uv add torch` "

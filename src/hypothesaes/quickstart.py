@@ -22,7 +22,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import torch
+import torch  # type: ignore[reportMissingImports]
 
 from hypothesaes.annotate import annotate_texts_with_concepts
 from hypothesaes.evaluation import score_hypotheses

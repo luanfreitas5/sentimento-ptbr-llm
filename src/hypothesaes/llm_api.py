@@ -71,7 +71,7 @@ def _import_openai() -> Any:
         Se a biblioteca ``openai`` não estiver instalada.
     """
     try:
-        import openai
+        import openai  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "A biblioteca 'openai' não está instalada. Instale com `uv add openai` "

@@ -69,8 +69,8 @@ def _request_openai_embeddings_batch(
     timeout: float | None = None,
 ) -> list[list[float]]:
     """Solicita embeddings de um lote de textos à API da OpenAI, truncando por tokens."""
-    import openai
-    import tiktoken
+    import openai  # type: ignore[reportMissingImports]
+    import tiktoken  # type: ignore[reportMissingImports]
 
     encoding = tiktoken.get_encoding("cl100k_base")
     truncated_batch = _truncate_batch_for_embedding(batch, encoding, max_tokens)
@@ -378,8 +378,8 @@ def extract_local_embeddings(
         return text_to_embedding
 
     try:
-        import torch
-        from sentence_transformers import SentenceTransformer
+        import torch  # type: ignore[reportMissingImports]
+        from sentence_transformers import SentenceTransformer  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "As bibliotecas 'torch'/'sentence-transformers' não estão instaladas. Instale com "

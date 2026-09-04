@@ -79,7 +79,7 @@ def _truncate_by_tokens(text: str, max_tokens: int | None) -> str:
     if max_tokens is None:
         return text
 
-    import tiktoken
+    import tiktoken  # type: ignore[reportMissingImports]
 
     encoding = tiktoken.get_encoding("cl100k_base")
     tokens = encoding.encode(text)

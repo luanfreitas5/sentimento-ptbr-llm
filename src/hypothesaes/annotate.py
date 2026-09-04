@@ -374,6 +374,7 @@ def _annotate_tasks_in_parallel(
                     _store_annotation(results, concept, text, annotation, cache)
                 completed += 1
                 if _should_checkpoint(completed, checkpoint_every, cache_path, cache):
+                    assert cache_path is not None and cache is not None
                     save_annotation_cache(cache_path, cache)
             except Exception:
                 retry_tasks.append((text, concept))

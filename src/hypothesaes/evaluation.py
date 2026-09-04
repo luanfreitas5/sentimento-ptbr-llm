@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
+import statsmodels.api as sm  # type: ignore[reportMissingImports]
 from scipy.optimize import linear_sum_assignment
 from scipy.stats import pearsonr, ttest_ind
 from sklearn.metrics import average_precision_score, roc_auc_score
@@ -45,9 +45,12 @@ def compute_pairwise_correlation_matrix(
         hipótese predita).
     """
     return {
-        (reference_hypothesis, predicted_hypothesis): pearsonr(
-            reference_hypotheses[reference_hypothesis], predicted_hypotheses[predicted_hypothesis]
-        )[0]
+        (reference_hypothesis, predicted_hypothesis): float(
+            pearsonr(
+                reference_hypotheses[reference_hypothesis],
+                predicted_hypotheses[predicted_hypothesis],
+            )[0]
+        )
         for reference_hypothesis in reference_hypotheses
         for predicted_hypothesis in predicted_hypotheses
     }
@@ -178,13 +181,13 @@ def compute_hypothesis_separation_scores(
 
 def _compute_regression_metrics(
     y_true: np.ndarray, y_pred: np.ndarray, results: Any, classification: bool
-) -> dict[str, float]:
+) -> dict[str, float | tuple[int, int, float]]:
     """Calcula as métricas de qualidade de ajuste (AUROC/AUPRC ou R²) do modelo de regressão."""
     if not classification:
         correlation, _ = pearsonr(y_true, y_pred)
-        return {"r2": correlation**2}
+        return {"r2": float(correlation) ** 2}
 
-    metrics: dict[str, float] = {
+    metrics: dict[str, float | tuple[int, int, float]] = {
         "auroc": roc_auc_score(y_true, y_pred),
         "auprc": average_precision_score(y_true, y_pred),
     }
@@ -280,7 +283,7 @@ def _build_hypothesis_dataframe(
         "regression_pval",
         "feature_prevalence",
     ]
-    return hypothesis_df[columns].sort_values("separation_score", ascending=False)
+    return hypothesis_df.loc[:, columns].sort_values("separation_score", ascending=False)
 
 
 def score_hypotheses(
