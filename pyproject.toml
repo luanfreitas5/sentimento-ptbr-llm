@@ -29,20 +29,27 @@ classifiers = [ # https://pypi.org/classifiers/
 
 # --- Dependências de runtime (instale apenas o que o projeto precisar) -------
 dependencies = [
-    # Configuração e validação (src/config, src/schemas)
-    "pydantic>=2.7",                # Validação de dados e configurações em tempo de execução
-    "pydantic-settings>=2.3",       # Configurações a partir de variáveis de ambiente e .env
-    "pyyaml>=6.0",                  # Leitura/escrita dos arquivos de configuração em configs/
-    "python-dotenv>=1.0",           # Carregamento de variáveis de ambiente a partir de .env
-    "tomli>=2.0.1; python_version < '3.11'",  # tomllib só existe na stdlib a partir do Python 3.11
-    # Logging (src/logging_utils, src/config/logging.py)
-    "rich>=13.7",                   # RichHandler (console) e formatação de tracebacks
-    # Dados (src/io_utils, src/schemas)
-    "polars>=1.0",                  # Manipulação de dados (preferida, ver CLAUDE.md "Core Stack")
-    "pandera[polars]>=0.20",        # Contratos de dados (schemas) sobre DataFrames Polars
-    "numpy>=1.26",                  # Computação numérica; usado na fixação de sementes (src/utils/seed.py)
-    # Persistência de modelos (src/io_utils/model.py)
-    "joblib>=1.4",                  # Serialização de modelos treinados
+    "joblib>=1.6.0",                            # serialização de modelos scikit-learn
+    "markitdown[pptx]>=0.1.7",                  # renderização de Markdown em slides PowerPoint
+    "matplotlib>=3.10.9",                       # visualização de dados
+    "mlflow>=3.16.0",                           # gerenciamento de experimentos
+    "numpy>=2.2.6",                             # arrays e álgebra linear
+    "pandas>=2.3.3",                            # manipulação de dados tabulares
+    "pandera[polars]>=0.33.1",                  # validação de dados
+    "polars>=1.44.1",                           # manipulação de dados estruturados
+    "pyarrow>=25.0.1",                          # leitura e escrita de arquivos em formato Parquet
+    "pydantic>=2.13.5",                         # validação de dados
+    "pydantic-settings>=2.15.0",                # configuração de projeto
+    "python-dotenv>=1.2.3",                     # carregamento de variáveis de ambiente
+    "python-pptx>=1.0.2",                       # criação de apresentações PowerPoint
+    "pyyaml>=6.0.3",                            # leitura e escrita de arquivos YAML
+    "rich>=15.0.0",                             # saída de terminal bonita e colorida
+    "scikit-learn>=1.7.2",                      # aprendizado de máquina
+    "scipy>=1.15.3",                            # álgebra linear, estatística e otimização
+    "seaborn>=0.13.2",                          # visualização de dados estatísticos
+    "shap>=0.49.1",                             # interpretação de modelos de aprendizado de máquina
+    "tomli>=2.0.1; python_version < '3.11'",    # tomllib só existe na stdlib a partir do Python 3.11
+    "xgboost>=3.2.0",                           # aprendizado de máquina baseado em árvores de decisão
 ]
 
 [tool.uv]
@@ -91,6 +98,51 @@ torchaudio = { index = "pytorch-cu124" }
 
 # --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
 [project.optional-dependencies]
+# Dependências pesadas de LLM.
+llm = [
+    "torch>=2.2",
+    "transformers>=4.44",
+    "accelerate>=0.33",
+    "datasets>=2.20",
+    "ollama>=0.3",
+    "sentencepiece>=0.2.2",
+]
+
+# Coleta no X/Twitter.
+collect = [
+    "twscrape>=0.13",
+]
+
+# Tokenização e lematização em pt-BR. O modelo `pt_core_news_sm` exige
+# download à parte (`make spacy-model`); sem ele o projeto cai no fallback
+# por regex, com aviso no log.
+nlp = [
+    "spacy>=3.7",
+]
+
+# Figuras opcionais: nuvens de palavras, rede de similaridade e projeção
+# UMAP dos embeddings. Ausentes, as figuras correspondentes são puladas.
+viz = [
+    "wordcloud>=1.9",
+    "networkx>=3.2",
+    "umap-learn>=0.5",
+]
+
+# Extensão exploratória 
+exploratory = [
+    "lightgbm>=4.5",
+]
+
+# Versionamento de dados/modelos (corpora somam vários GB)
+dvc = [
+    "dvc>=3.51",
+]
+
+# Dashboard interativo de resultados (Streamlit + Plotly)
+app = [
+    "streamlit>=1.60.0",
+    "plotly>=5.24",
+]
 
 
 # --- Dependências de desenvolvimento (não publicadas; PEP 735) --------------
