@@ -208,6 +208,10 @@ convention = "numpy"  # docstrings no formato NumPy
 "notebooks/*" = ["E402", "F401", "F821", "NPY002"]
 "app/*" = ["E402"]                      # sys.path precisa ser ajustado antes dos imports
 "src/main.py" = ["E402"]                # idem: `src/` entra no path antes de importar
+# `torch = pytest.importorskip("torch")` precisa rodar antes de importar
+# `hypothesaes` (que depende de torch no import), para que o módulo inteiro
+# seja pulado (não falhe) quando a dependência opcional estiver ausente.
+"tests/test_hypothesaes.py" = ["E402"]
 
 [tool.ruff.format]
 docstring-code-format = true
