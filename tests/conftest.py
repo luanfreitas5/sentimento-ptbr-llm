@@ -1,5 +1,12 @@
 """Fixtures compartilhadas entre os testes do projeto."""
 
+import matplotlib
+
+# Backend não interativo: os testes de src/visualization/ geram figuras sem
+# necessidade de um display, e o backend deve ser fixado antes de qualquer
+# import de matplotlib.pyplot em todo o processo de teste.
+matplotlib.use("Agg")
+
 import logging
 from collections.abc import Generator
 from typing import Any

@@ -10,9 +10,10 @@ interromper o restante do lote.
 """
 
 import logging
+import operator
 from collections.abc import Sequence
 from typing import Any
-import operator
+
 import polars as pl
 
 from inference.postprocessing import build_prediction_dataframe

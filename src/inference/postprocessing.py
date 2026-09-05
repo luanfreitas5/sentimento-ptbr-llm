@@ -8,9 +8,10 @@ de ``src/inference/`` reimplemente sua própria normalização.
 
 import logging
 from collections.abc import Mapping, Sequence
+from itertools import starmap
 
 import polars as pl
-from itertools import starmap
+
 from constants.labels import SENTIMENT_CLASSES
 from schemas.prediction import validate_prediction
 from utils.validation import validate_not_empty_collection
