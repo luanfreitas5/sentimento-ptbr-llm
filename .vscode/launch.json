@@ -1,0 +1,42 @@
+{
+  "version": "0.2.0",
+  // ==========================================================================
+  // Configuração compartilhada do VSCode (ver .vscode/settings.json).
+  // "Pipeline: executar etapa" pede a etapa via menu (configs/config.yaml ->
+  // stages) e chama `src/main.py --stage <etapa>` com breakpoints ativos.
+  // ==========================================================================
+  "configurations": [
+    {
+      "name": "Pipeline: executar etapa",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/main.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONHASHSEED": "42"
+      },
+      "args": ["--stage", "${input:pipelineStage}"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "pipelineStage",
+      "type": "pickString",
+      "description": "Etapa do pipeline a depurar (configs/config.yaml -> stages)",
+      "options": [
+        "ingestion",
+        "preprocessing",
+        "labeling",
+        "features",
+        "training_classical",
+        "training_deep_learning",
+        "llm_evaluation",
+        "comparative_evaluation",
+        "all"
+      ],
+      "default": "preprocessing"
+    }
+  ]
+}

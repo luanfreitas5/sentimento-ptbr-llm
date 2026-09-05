@@ -11,6 +11,9 @@ export PYTHONHASHSEED := 42
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
 	clean-processed clean-reports clean-outputs clean-notebooks \
+	pipeline-ingestion pipeline-preprocessing pipeline-labeling pipeline-features \
+	pipeline-training-classical pipeline-training-deep-learning pipeline-llm-evaluation \
+	pipeline-comparative-evaluation pipeline-all \
 
 help:  ## Lista os alvos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -148,7 +151,34 @@ tree:
 # --- Pipeline ---------------------------------------------------------------
 # Cada alvo executa uma etapa isolada; o acoplamento entre elas é o sistema de
 # arquivos, então qualquer etapa pode ser reexecutada sem repetir as anteriores.
+# Ver `uv run python src/main.py --help` para a lista completa de opções.
 
+pipeline-ingestion:  ## Executa a coleta de dados (requer SCRAPE_FUNC=modulo:funcao QUERIES="q1 q2")
+	$(RUN) --stage ingestion --scrape-func $(SCRAPE_FUNC) --queries $(QUERIES)
+
+pipeline-preprocessing:  ## Executa a etapa de pré-processamento do corpus bruto
+	$(RUN) --stage preprocessing
+
+pipeline-labeling:  ## Executa a etapa de rotulagem semiautomática em cascata
+	$(RUN) --stage labeling
+
+pipeline-features:  ## Executa o split treino/validação/teste e a extração de features
+	$(RUN) --stage features
+
+pipeline-training-classical:  ## Treina os classificadores clássicos de sentimento
+	$(RUN) --stage training_classical
+
+pipeline-training-deep-learning:  ## Treina os classificadores de deep learning/Transformers
+	$(RUN) --stage training_deep_learning
+
+pipeline-llm-evaluation:  ## Classifica e avalia o conjunto de teste via LLM local
+	$(RUN) --stage llm_evaluation
+
+pipeline-comparative-evaluation:  ## Avalia e compara os modelos (requer PREDICTIONS_FUNC=modulo:funcao)
+	$(RUN) --stage comparative_evaluation --predictions-func $(PREDICTIONS_FUNC)
+
+pipeline-all:  ## Executa o workflow completo, na ordem configurada em configs/config.yaml
+	$(RUN) --stage all
 
 # --- Serviços auxiliares ----------------------------------------------------
 mlflow:  ## Sobe a interface do MLflow para inspecionar os experimentos
