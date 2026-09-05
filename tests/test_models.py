@@ -368,7 +368,7 @@ class TestAutoencoderFeatureReducer:
             AutoencoderFeatureReducer().transform(np.zeros((2, 768)))
 
     def test_score_reconstruction_error_raises_when_not_fitted(self) -> None:
-        """Calcular o erro de reconstrução antes de treinar deve levantar ``ModelNotFittedError``."""
+        """Calcular o erro de reconstrução antes de treinar deve levantar ``ModelNotFittedError``"""
         with pytest.raises(ModelNotFittedError):
             AutoencoderFeatureReducer().score_reconstruction_error(np.zeros((2, 768)))
 

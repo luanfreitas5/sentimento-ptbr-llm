@@ -47,6 +47,6 @@ def build_bertimbau_classifier(**overrides: Any) -> TransformerSentimentClassifi
     >>> build_bertimbau_classifier().model_name
     'neuralmind/bert-base-portuguese-cased'
     """
-    parameters = {**_DEFAULT_PARAMETERS, **overrides}
+    parameters = _DEFAULT_PARAMETERS | overrides
     logger.info("Construindo classificador BERTimbau '%s'.", parameters["model_name"])
     return TransformerSentimentClassifier(**parameters)

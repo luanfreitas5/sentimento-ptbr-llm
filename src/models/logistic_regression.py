@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def build_logistic_regression_classifier(
     *,
-    C: float = 1.0,
+    C: float = 1.0,  # noqa: N803
     penalty: str = "l2",
     solver: str = "lbfgs",
     max_iter: int = 1000,

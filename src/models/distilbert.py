@@ -48,6 +48,6 @@ def build_distilbert_classifier(**overrides: Any) -> TransformerSentimentClassif
     >>> build_distilbert_classifier().model_name
     'adalbertojunior/distilbert-portuguese-cased'
     """
-    parameters = {**_DEFAULT_PARAMETERS, **overrides}
+    parameters = _DEFAULT_PARAMETERS | overrides
     logger.info("Construindo classificador DistilBERT '%s'.", parameters["model_name"])
     return TransformerSentimentClassifier(**parameters)

@@ -47,6 +47,6 @@ def build_roberta_classifier(**overrides: Any) -> TransformerSentimentClassifier
     >>> build_roberta_classifier().model_name
     'rdenadai/BR_BERTo'
     """
-    parameters = {**_DEFAULT_PARAMETERS, **overrides}
+    parameters = _DEFAULT_PARAMETERS | overrides
     logger.info("Construindo classificador RoBERTa '%s'.", parameters["model_name"])
     return TransformerSentimentClassifier(**parameters)

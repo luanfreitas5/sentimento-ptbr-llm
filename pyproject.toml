@@ -110,6 +110,9 @@ llm = [
     "sentencepiece>=0.2.2",
     "tiktoken>=0.14.0",
     "openai>=3.8.0",
+    "langchain-core>=0.3",      # orquestração LCEL (src/llm/chains.py)
+    "langchain-ollama>=0.2",    # backend Ollama via LangChain (src/llm/backends.py)
+    "langchain-huggingface>=0.1",  # backend Hugging Face via LangChain (src/llm/backends.py)
 ]
 
 # Coleta no X/Twitter.
@@ -246,6 +249,9 @@ ignore = [
                # por item (modelo, etapa, tentativa) em loops pequenos; o
                # custo de reexecutar tudo é maior que o overhead do try
 ]
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["X", "X_train", "X_test", "X_val"]    # ignora a convenção de nome de variável para `X` (matriz de features) em ML
 
 [tool.ruff.lint.isort]
 # `src/` é a raiz de importação, então os pacotes de primeira parte são os

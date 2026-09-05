@@ -207,7 +207,7 @@ def _build_neuron_interpretation_result(
     """
     neuron_activations = activations[:, idx]
     result: dict[str, Any] = {
-        "neuron_idx": int(idx),
+        "neuron_idx": idx,
         "interpretation": interpretations[idx][0] if n_candidates == 1 else interpretations[idx],
     }
 

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def build_svm_classifier(
     *,
     kernel: str = "linear",
-    C: float = 1.0,
+    C: float = 1.0,  # noqa: N803
     class_weight: str | dict[str, float] | None = "balanced",
     probability: bool = True,
     random_state: int = 42,

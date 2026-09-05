@@ -84,7 +84,7 @@ class AutoencoderFeatureReducer:
         self.random_state = random_state
         self._artifacts: AutoencoderArtifacts | None = None
 
-    def fit(self, X: np.ndarray, y: object = None) -> "AutoencoderFeatureReducer":
+    def fit(self, X: np.ndarray, y: object = None) -> "AutoencoderFeatureReducer":  # noqa: ARG002
         """Treina o autoencoder sobre a matriz de embeddings de entrada.
 
         Parameters
