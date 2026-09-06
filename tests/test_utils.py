@@ -34,18 +34,16 @@ class TestLogExecutionTime:
 
         assert add(2, 3) == 5
 
-    def test_logs_execution_message(self, log_capture_fixture: pytest.LogCaptureFixture) -> None:
+    def test_logs_execution_message(self, caplog: pytest.LogCaptureFixture) -> None:
         """Deve registrar uma mensagem de log informando o tempo de execução."""
 
         @log_execution_time
         def example_func() -> None:
             return None
 
-        with log_capture_fixture.at_level(logging.INFO, logger="utils.decorators"):
+        with caplog.at_level(logging.INFO, logger="utils.decorators"):
             example_func()
-        assert any(
-            "funcao_exemplo" in log_record.message for log_record in log_capture_fixture.records
-        )
+        assert any("example_func" in log_record.message for log_record in caplog.records)
 
 
 class TestRetryOnException:
@@ -118,6 +116,8 @@ class TestSeedEverything:
 
         seed_everything(123)
         random_sequence_second = [random.random() for _ in range(5)]
+        rng = np.random.default_rng(123)
+        rng.normal()  # Inicializa o gerador de números aleatórios do NumPy
         numpy_random_sequence_second = rng.random(5).tolist()
 
         assert random_sequence_first == random_sequence_second

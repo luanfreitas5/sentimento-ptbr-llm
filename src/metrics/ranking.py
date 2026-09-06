@@ -10,12 +10,37 @@ from collections.abc import Sequence
 
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
-from sklearn.preprocessing import label_binarize
 
 from constants.labels import SENTIMENT_CLASSES
 from exceptions.data import EmptyDatasetError
 
 logger = logging.getLogger(__name__)
+
+
+def binarize_one_vs_rest(y_true: Sequence[str], labels: Sequence[str]) -> np.ndarray:
+    """Constrói a matriz *one-hot* ``(n_amostras, n_classes)`` para o esquema *one-vs-rest*.
+
+    Equivalente a :func:`sklearn.preprocessing.label_binarize`, mas sempre
+    retorna uma coluna por classe em ``labels`` — mesmo com apenas duas
+    classes, caso em que ``label_binarize`` retorna uma única coluna (uma
+    particularidade do scikit-learn incompatível com o cálculo OvR por
+    classe usado neste módulo).
+
+    Parameters
+    ----------
+    y_true : Sequence[str]
+        Rótulos verdadeiros.
+    labels : Sequence[str]
+        Classes, na ordem desejada para as colunas da matriz resultante.
+
+    Returns
+    -------
+    np.ndarray
+        Matriz ``(n_amostras, n_classes)`` de inteiros 0/1.
+    """
+    y_true_array = np.asarray(y_true)
+    labels_array = np.asarray(list(labels))
+    return (y_true_array[:, None] == labels_array[None, :]).astype(int)
 
 
 def _validate_ranking_inputs(
@@ -92,9 +117,12 @@ def calculate_roc_auc_ovr(
     1.0
     """
     _validate_ranking_inputs(y_true, y_score, labels)
-    return float(
-        roc_auc_score(y_true, y_score, multi_class="ovr", average="macro", labels=list(labels))
-    )
+    y_true_binarized = binarize_one_vs_rest(y_true, labels)
+    per_class_scores = [
+        roc_auc_score(y_true_binarized[:, class_index], y_score[:, class_index])
+        for class_index in range(len(labels))
+    ]
+    return float(np.mean(per_class_scores))
 
 
 def calculate_pr_auc_ovr(
@@ -138,7 +166,7 @@ def calculate_pr_auc_ovr(
     1.0
     """
     _validate_ranking_inputs(y_true, y_score, labels)
-    y_true_binarized = label_binarize(y_true, classes=list(labels))
+    y_true_binarized = binarize_one_vs_rest(y_true, labels)
     per_class_scores = [
         average_precision_score(y_true_binarized[:, class_index], y_score[:, class_index])
         for class_index in range(len(labels))

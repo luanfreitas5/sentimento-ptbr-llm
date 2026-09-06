@@ -131,11 +131,16 @@ class SparseAutoencoder(nn.Module):
         self.input_bias = nn.Parameter(torch.zeros(input_dim))
         self.neuron_bias = nn.Parameter(torch.zeros(m_total_neurons))
 
-        self.steps_since_activation = torch.zeros(m_total_neurons, dtype=torch.long, device=device)
-
-        # Limiar de Batch Top-K (usado somente quando use_batch_topk=True).
+        # Registrados como buffers (não apenas atributos) para que `.to(device)`
+        # os mova corretamente — essencial em `load_model`, que primeiro
+        # constrói o modelo (possivelmente no device padrão) e só depois o
+        # move para o device solicitado.
         # Anotação explícita: `nn.Module.__getattr__` tipa buffers registrados via
-        # `register_buffer` como `Tensor | Module`, mas este é sempre um `Tensor`.
+        # `register_buffer` como `Tensor | Module`, mas estes são sempre `Tensor`.
+        self.steps_since_activation: torch.Tensor
+        self.register_buffer(
+            "steps_since_activation", torch.zeros(m_total_neurons, dtype=torch.long, device=device)
+        )
         self.threshold: torch.Tensor
         self.register_buffer("threshold", torch.tensor(0.0))
 

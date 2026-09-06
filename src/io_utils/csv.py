@@ -40,6 +40,12 @@ def read_csv(file_path: Path, **kwargs: Any) -> pl.DataFrame:
     >>> read_csv(Path("data/raw/exemplo.csv"))  # doctest: +SKIP
     """
     validate_file_exists(file_path)
+    # infer_schema_length=0: lê todas as colunas como string por padrão. Os
+    # datasets deste projeto (ver src/schemas/) são inteiramente textuais
+    # (id, text, sentiment_label, split); sem isto, colunas com conteúdo
+    # numérico em aparência (ex.: um "id" como "123") perderiam o tipo
+    # string original ao ir e voltar por CSV. Sobrescrevível via kwargs.
+    kwargs.setdefault("infer_schema_length", 0)
     dataframe = pl.read_csv(file_path, **kwargs)
     logger.debug("Arquivo CSV lido: %s (%d linhas)", file_path, dataframe.height)
     return dataframe

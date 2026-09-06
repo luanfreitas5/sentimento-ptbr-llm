@@ -192,7 +192,6 @@ class TestExperimentRunMetricSchema:
             {
                 "run_id": ["abc123"],
                 "model_name": ["logistic_regression"],
-                "sentiment_label": ["positivo"],
                 "metric_name": ["f1_macro"],
                 "metric_value": [0.82],
                 "git_sha": ["deadbeef"],
@@ -207,7 +206,6 @@ class TestExperimentRunMetricSchema:
             {
                 "run_id": ["abc123"],
                 "model_name": ["logistic_regression"],
-                "sentiment_label": ["positivo"],
                 "metric_name": ["metrica_inexistente"],
                 "metric_value": [0.82],
                 "git_sha": ["deadbeef"],

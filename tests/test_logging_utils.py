@@ -113,16 +113,16 @@ class TestTimeBlock:
     """Testes do gerenciador de contexto que loga a duração de um bloco."""
 
     def test_time_block_logs_start_and_completion_messages(
-        self, log_capture_fixture: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Deve registrar uma mensagem de início e uma de conclusão com a duração."""
         logger = logging.getLogger("sentimento_ptbr_llm.teste_time_block")
         with (
-            log_capture_fixture.at_level(logging.INFO, logger=logger.name),
+            caplog.at_level(logging.INFO, logger=logger.name),
             time_block(logger, "bloco de teste"),
         ):
             _ = sum(range(100))
 
-        log_messages = [log_record.message for log_record in log_capture_fixture.records]
+        log_messages = [log_record.message for log_record in caplog.records]
         assert any("bloco de teste: iniciado" in log_message for log_message in log_messages)
         assert any("bloco de teste: concluído em" in log_message for log_message in log_messages)

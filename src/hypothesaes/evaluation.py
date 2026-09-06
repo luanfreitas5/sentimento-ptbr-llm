@@ -228,7 +228,12 @@ def compute_ols_metrics(
     """
     hypotheses = list(hypothesis_annotations.keys())
     x = np.array([hypothesis_annotations[hypothesis] for hypothesis in hypotheses]).T
-    x = sm.add_constant(x)
+    # has_constant="add": força a inclusão do intercepto mesmo quando uma
+    # anotação de hipótese é constante em todo o conjunto (ex.: presente em
+    # 100% ou 0% dos exemplos) — caso em que `add_constant` por padrão
+    # ("skip") detecta essa coluna já-constante e omite o intercepto,
+    # deixando `results.params` mais curto que `hypotheses`.
+    x = sm.add_constant(x, has_constant="add")
 
     model = sm.Logit(y_true, x) if classification else sm.OLS(y_true, x)
 

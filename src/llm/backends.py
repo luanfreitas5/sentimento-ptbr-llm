@@ -152,7 +152,7 @@ def load_ollama_llm_backend(
     >>> load_ollama_llm_backend()  # doctest: +SKIP
     """
     try:
-        from langchain_ollama import OllamaLLM
+        from langchain_ollama import OllamaLLM  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "A biblioteca 'langchain-ollama' não está instalada. Instale com "
@@ -216,7 +216,7 @@ def load_huggingface_llm_backend(
     >>> load_huggingface_llm_backend()  # doctest: +SKIP
     """
     try:
-        from langchain_huggingface import HuggingFacePipeline
+        from langchain_huggingface import HuggingFacePipeline  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "As bibliotecas 'langchain-huggingface'/'transformers' não estão instaladas. "

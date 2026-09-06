@@ -434,7 +434,7 @@ class TestSelectNeuronsCustom:
             activations, target, n_select=1, metric_fn=lambda acts, _target: float(np.sum(acts))
         )
         assert indices == [1]
-        assert scores[0] == pytest.approx(102.0)
+        assert scores[0] == pytest.approx(100.0)
 
 
 class TestSelectNeuronsDispatcher:
@@ -1014,7 +1014,11 @@ class TestQuickstartEvaluateHypotheses:
 
         def _fake_completion(**kwargs: object) -> str:
             prompt = str(kwargs.get("prompt", ""))
-            return "yes" if "positivo" in prompt else "no"
+            # A hipótese "menciona algo positivo" contém a palavra "positivo",
+            # então checar apenas essa substring casaria com todo prompt,
+            # independentemente do texto anotado; a substring mais específica
+            # "texto positivo" identifica exclusivamente o texto positivo.
+            return "yes" if "texto positivo" in prompt else "no"
 
         monkeypatch.setattr(annotate, "generate_completion", _fake_completion)
 

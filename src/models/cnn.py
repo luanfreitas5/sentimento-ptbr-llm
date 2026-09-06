@@ -259,9 +259,12 @@ class CNNSentimentClassifier:
         """
         validate_not_empty_collection(X, collection_name="X")
         try:
-            import torch
-            from torch import nn
-            from torch.utils.data import DataLoader, TensorDataset
+            import torch  # type: ignore[reportMissingImports]
+            from torch import nn  # type: ignore[reportMissingImports]
+            from torch.utils.data import (  # type: ignore[reportMissingImports]
+                DataLoader,
+                TensorDataset,
+            )
         except ImportError as exception:
             raise ModelError(
                 "A biblioteca 'torch' não está instalada. Instale com `uv add torch` "
@@ -358,7 +361,7 @@ class CNNSentimentClassifier:
         """
         if self._module is None or self.vocabulary_ is None:
             raise ModelNotFittedError("CNNSentimentClassifier")
-        import torch
+        import torch  # type: ignore[reportMissingImports]
 
         encoded_sequences = encode_token_sequences(
             X, self.vocabulary_, max_sequence_length=self.max_sequence_length

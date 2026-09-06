@@ -320,9 +320,12 @@ class TransformerSentimentClassifier:
         """
         validate_not_empty_collection(X, collection_name="X")
         try:
-            import torch
-            from torch.utils.data import DataLoader, TensorDataset
-            from transformers import (
+            import torch  # type: ignore[reportMissingImports]
+            from torch.utils.data import (  # type: ignore[reportMissingImports]
+                DataLoader,
+                TensorDataset,
+            )
+            from transformers import (  # type: ignore[reportMissingImports]
                 AutoModelForSequenceClassification,
                 AutoTokenizer,
                 get_linear_schedule_with_warmup,
@@ -440,7 +443,7 @@ class TransformerSentimentClassifier:
         """
         if self._model is None or self._tokenizer is None:
             raise ModelNotFittedError(self.model_name)
-        import torch
+        import torch  # type: ignore[reportMissingImports]
 
         encoded_input = self._tokenizer(
             list(X), padding=True, truncation=True, max_length=self.max_length, return_tensors="pt"

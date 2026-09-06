@@ -65,14 +65,12 @@ class TestEnvironment:
             os.environ.pop("VARIAVEL_DE_TESTE_ENV", None)
 
     def test_configure_environment_variables_warns_when_file_missing(
-        self, tmp_path: Path, log_capture_fixture: pytest.LogCaptureFixture
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Deve registrar um aviso, sem levantar exceção, quando o .env não existe."""
-        with log_capture_fixture.at_level(logging.WARNING, logger="config.environment"):
+        with caplog.at_level(logging.WARNING, logger="config.environment"):
             configure_environment_variables(tmp_path / "inexistente.env")
-        assert any(
-            "não encontrado" in log_record.message for log_record in log_capture_fixture.records
-        )
+        assert any("não encontrado" in log_record.message for log_record in caplog.records)
 
     def test_get_required_environment_variable_raises_when_missing(
         self, monkeypatch: pytest.MonkeyPatch

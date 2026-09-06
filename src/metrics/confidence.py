@@ -12,10 +12,10 @@ from typing import cast
 
 import numpy as np
 from scipy.stats import pointbiserialr
-from sklearn.preprocessing import label_binarize
 
 from constants.labels import SENTIMENT_CLASSES
 from exceptions.data import EmptyDatasetError
+from metrics.ranking import binarize_one_vs_rest
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ def calculate_multiclass_brier_score(
     """
     if not y_true:
         raise EmptyDatasetError("y_true")
-    y_true_one_hot = label_binarize(y_true, classes=list(labels))
+    y_true_one_hot = binarize_one_vs_rest(y_true, labels)
     squared_errors = np.sum((y_true_one_hot - y_score) ** 2, axis=1)
     return float(np.mean(squared_errors))
 

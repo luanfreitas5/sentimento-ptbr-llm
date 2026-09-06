@@ -64,7 +64,7 @@ def register_model_version(model_uri: str, model_name: str) -> str:
 
     model_version = mlflow.register_model(model_uri, model_name)
     logger.info("Modelo '%s' registrado como versão %s.", model_name, model_version.version)
-    return model_version.version
+    return str(model_version.version)
 
 
 def transition_model_stage(model_name: str, model_version: str, stage: str) -> None:
@@ -134,4 +134,4 @@ def get_latest_model_version(model_name: str, *, stage: str = "Production") -> s
         raise ModelError(
             f"Nenhuma versão do modelo '{model_name}' encontrada no estágio '{stage}'."
         )
-    return versions[0].version
+    return str(versions[0].version)

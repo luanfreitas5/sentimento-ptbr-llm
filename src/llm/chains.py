@@ -81,7 +81,7 @@ def build_sentiment_classification_chain(
     'positivo'
     """
     try:
-        from langchain_core.runnables import RunnableLambda
+        from langchain_core.runnables import RunnableLambda  # type: ignore[reportMissingImports]
     except ImportError as exception:
         raise ModelError(
             "A biblioteca 'langchain-core' não está instalada. Instale com "

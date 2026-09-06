@@ -30,10 +30,13 @@ from experiment.tracker import (
 
 @pytest.fixture
 def local_mlflow_tracking(tmp_path: Path) -> None:
-    """Configura um MLflow Tracking Store local e isolado (arquivo) para os testes."""
+    """Configura um MLflow Tracking Store local e isolado (SQLite) para os testes."""
     import mlflow
 
-    mlflow.set_tracking_uri((tmp_path / "mlruns").as_posix())
+    # O backend de arquivo puro (ex.: "./mlruns") está em modo de manutenção
+    # nas versões recentes do MLflow e levanta MlflowException; SQLite é o
+    # backend local recomendado (mesmo padrão de `local_mlflow_registry`).
+    mlflow.set_tracking_uri(f"sqlite:///{(tmp_path / 'mlflow.db').as_posix()}")
     mlflow.set_experiment("teste-sentimento-ptbr-llm")
 
 

@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 from sklearn.metrics import precision_recall_curve, roc_curve
-from sklearn.preprocessing import label_binarize
 
 from constants.labels import SENTIMENT_CLASSES
 from exceptions.data import EmptyDatasetError
+from metrics.ranking import binarize_one_vs_rest
 from visualization.theme import SENTIMENT_COLOR_PALETTE
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ def plot_roc_curves_one_vs_rest(
     if not y_true:
         raise EmptyDatasetError("y_true")
 
-    y_true_binarized = label_binarize(y_true, classes=list(labels))
+    y_true_binarized = binarize_one_vs_rest(y_true, labels)
     figure, axis = plt.subplots(figsize=(6, 5))
     for class_index, class_label in enumerate(labels):
         false_positive_rate, true_positive_rate, _ = roc_curve(
@@ -136,7 +136,7 @@ def plot_precision_recall_curves_one_vs_rest(
     if not y_true:
         raise EmptyDatasetError("y_true")
 
-    y_true_binarized = label_binarize(y_true, classes=list(labels))
+    y_true_binarized = binarize_one_vs_rest(y_true, labels)
     figure, axis = plt.subplots(figsize=(6, 5))
     for class_index, class_label in enumerate(labels):
         precision, recall, _ = precision_recall_curve(
