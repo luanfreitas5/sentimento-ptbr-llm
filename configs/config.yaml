@@ -41,3 +41,4 @@ stages:
   - training_deep_learning
   - llm_evaluation
   - comparative_evaluation
+  - hypothesaes_analysis

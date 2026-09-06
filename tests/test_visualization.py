@@ -5,6 +5,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import polars as pl
 import pytest
 from matplotlib.figure import Figure
 
@@ -16,6 +17,7 @@ from visualization.diagnostics import (
 )
 from visualization.distributions import plot_class_distribution, plot_text_length_distribution
 from visualization.embeddings import plot_embedding_scatter
+from visualization.hypothesaes import plot_hypotheses_bars
 from visualization.interpretability import plot_shap_summary, plot_top_feature_importances
 from visualization.ngrams import plot_top_ngrams_bar
 from visualization.roc_pr_curves import (
@@ -266,6 +268,46 @@ class TestPlotShapSummary:
         """Deve levantar ``EmptyDatasetError`` quando ``shap_values`` está vazio."""
         with pytest.raises(EmptyDatasetError):
             plot_shap_summary(np.empty((0, 3)), np.empty((0, 3)), ["f1", "f2", "f3"])
+
+
+class TestPlotHypothesesBars:
+    """Testes de :func:`visualization.hypothesaes.plot_hypotheses_bars`."""
+
+    def test_returns_figure_with_expected_title(self) -> None:
+        """A figura retornada deve ter o título esperado."""
+        hypotheses_table = pl.DataFrame(
+            {"interpretation": ["usa ironia", "é muito curto"], "target_x": [0.3, -0.1]}
+        )
+        figure = plot_hypotheses_bars(hypotheses_table, target_column="target_x")
+        assert isinstance(figure, Figure)
+        assert figure.axes[0].get_title() == "Hipóteses de inconsistência x baixa confiança"
+
+    def test_accepts_custom_title(self) -> None:
+        """Um título customizado deve ser usado no lugar do padrão."""
+        hypotheses_table = pl.DataFrame({"interpretation": ["usa ironia"], "target_x": [0.3]})
+        figure = plot_hypotheses_bars(
+            hypotheses_table, target_column="target_x", title="Meu Título"
+        )
+        assert figure.axes[0].get_title() == "Meu Título"
+
+    def test_draws_one_bar_per_hypothesis_with_fidelity_annotations(self) -> None:
+        """Com ``f1_fidelity_score`` presente, deve anotar cada barra com o F1 correspondente."""
+        hypotheses_table = pl.DataFrame(
+            {
+                "interpretation": ["usa ironia", "é muito curto"],
+                "target_x": [0.3, -0.1],
+                "f1_fidelity_score": [0.8, 0.4],
+            }
+        )
+        figure = plot_hypotheses_bars(hypotheses_table, target_column="target_x")
+        assert len(figure.axes[0].patches) == 2
+        assert len(figure.axes[0].texts) == 2
+
+    def test_raises_on_empty_input(self) -> None:
+        """Deve levantar ``EmptyDatasetError`` quando ``hypotheses_table`` está vazio."""
+        empty = pl.DataFrame(schema={"interpretation": pl.Utf8, "target_x": pl.Float64})
+        with pytest.raises(EmptyDatasetError):
+            plot_hypotheses_bars(empty, target_column="target_x")
 
 
 class TestGenerateSentimentWordcloud:

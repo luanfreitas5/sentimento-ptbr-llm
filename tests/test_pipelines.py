@@ -11,18 +11,20 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 import polars as pl
 import pytest
 
 from config.paths import ProjectPaths
 from data.loader import read_dataset_file
 from data.writer import write_dataset, write_labeled_corpus
-from exceptions.data import EmptyDatasetError
+from exceptions.data import DataValidationError, EmptyDatasetError
 from exceptions.pipeline import PipelineStageError, UnknownPipelineStageError
 from labeling.automatic import LexicalHeuristicLabeler
-from pipelines import training_deep_learning, workflow
+from pipelines import hypothesaes_analysis, training_deep_learning, workflow
 from pipelines.comparative_evaluation import run_comparative_evaluation_stage
 from pipelines.features import run_features_stage
+from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
 from pipelines.ingestion import run_ingestion_stage
 from pipelines.labeling import run_labeling_stage
 from pipelines.llm_evaluation import run_llm_evaluation_stage
@@ -438,6 +440,143 @@ class TestRunComparativeEvaluationStage:
 
         assert set(result.slice_reports) == {"model_a", "model_b"}
         assert sorted(result.slice_reports["model_a"]["slice"].to_list()) == ["reddit", "twitter"]
+
+
+def _fake_extract_local_embeddings(
+    texts: list[str], **kwargs: Any
+) -> dict[str, np.ndarray]:
+    """Dublê de :func:`hypothesaes.embedding.extract_local_embeddings`: vetores fixos, sem modelo real."""
+    return {text: np.zeros(4, dtype=np.float32) for text in texts}
+
+
+def _fake_train_sae(**kwargs: Any) -> str:
+    """Dublê de :func:`hypothesaes.quickstart.train_sae`: retorna um sentinela, sem treinar de fato."""
+    return "sae-fake"
+
+
+def _fake_interpret_sae(**kwargs: Any) -> pd.DataFrame:
+    """Dublê de :func:`hypothesaes.quickstart.interpret_sae`: dois padrões fixos, sem chamar LLM."""
+    return pd.DataFrame({"neuron_idx": [0, 1], "interpretation": ["padrão a", "padrão b"]})
+
+
+def _fake_generate_hypotheses(*, selection_method: str, **kwargs: Any) -> pd.DataFrame:
+    """Dublê de :func:`hypothesaes.quickstart.generate_hypotheses`: duas hipóteses fixas, sem LLM."""
+    return pd.DataFrame(
+        {
+            "neuron_idx": [0, 1],
+            f"target_{selection_method}": [0.5, -0.3],
+            "interpretation": ["hipótese de baixa confiança", "hipótese de alta confiança"],
+        }
+    )
+
+
+def _fake_evaluate_hypotheses(**kwargs: Any) -> tuple[dict[str, Any], pd.DataFrame]:
+    """Dublê de :func:`hypothesaes.quickstart.evaluate_hypotheses`: métricas fixas, sem LLM."""
+    metrics = {"Significant": (1, 2, 0.5)}
+    evaluation_df = pd.DataFrame({"hypothesis": ["hipótese de baixa confiança"], "f1": [0.8]})
+    return metrics, evaluation_df
+
+
+class TestRunHypothesaesAnalysisStage:
+    """Testes de :func:`pipelines.hypothesaes_analysis.run_hypothesaes_analysis_stage`.
+
+    O SAE, os embeddings e todas as chamadas de LLM são substituídos por
+    dublês (ver funções ``_fake_*`` acima), mantendo o teste rápido e livre
+    de ``torch``/``sentence-transformers`` — apenas a integração entre a
+    etapa e ``evaluation.hypothesaes_report``/``visualization.hypothesaes``
+    é exercitada de verdade.
+    """
+
+    @staticmethod
+    def _labeled_corpus_with_confidence(n_rows: int = 20) -> pl.DataFrame:
+        """Corpus rotulado sintético, com 1/4 das amostras marcadas como baixa confiança."""
+        return pl.DataFrame(
+            {
+                "id": [str(index) for index in range(n_rows)],
+                "text": [f"tweet numero {index}" for index in range(n_rows)],
+                "sentiment_label": [
+                    "positivo" if index % 2 == 0 else "negativo" for index in range(n_rows)
+                ],
+                "confidence": [0.2 if index % 4 == 0 else 0.9 for index in range(n_rows)],
+            }
+        )
+
+    def _apply_fakes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            hypothesaes_analysis, "extract_local_embeddings", _fake_extract_local_embeddings
+        )
+        monkeypatch.setattr(hypothesaes_analysis, "train_sae", _fake_train_sae)
+        monkeypatch.setattr(hypothesaes_analysis, "interpret_sae", _fake_interpret_sae)
+        monkeypatch.setattr(hypothesaes_analysis, "generate_hypotheses", _fake_generate_hypotheses)
+
+    def test_saves_artifacts_and_returns_them(
+        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Deve sinalizar tweets de baixa confiança, gerar padrões/hipóteses e salvar tudo em disco."""
+        self._apply_fakes(monkeypatch)
+        labeled_corpus = self._labeled_corpus_with_confidence()
+
+        artifacts = run_hypothesaes_analysis_stage(
+            labeled_corpus, pipeline_paths, n_selected_neurons=2, random_seed=42
+        )
+
+        assert artifacts.low_confidence_tweets.height == 5
+        assert artifacts.patterns.height == 2
+        assert artifacts.hypotheses.height == 2
+        assert artifacts.top_hypotheses_table.height == 2
+        assert artifacts.holdout_metrics is None
+        assert artifacts.figure_paths[0].is_file()
+        assert artifacts.figure_paths[1].is_file()
+        assert artifacts.summary_path.is_file()
+
+        interpretability_dir = pipeline_paths.reports_interpretability_dir
+        assert (interpretability_dir / "hypothesaes_tweets_baixa_confianca.csv").is_file()
+        assert (interpretability_dir / "hypothesaes_descoberta_padroes.csv").is_file()
+        assert (interpretability_dir / "hypothesaes_hipoteses_inconsistencia.csv").is_file()
+        assert (interpretability_dir / "hypothesaes_top_hipoteses.csv").is_file()
+
+    def test_raises_when_confidence_column_is_missing(self, pipeline_paths: ProjectPaths) -> None:
+        """Deve levantar ``DataValidationError`` quando a coluna de confiança está ausente."""
+        labeled_corpus = pl.DataFrame(
+            {"id": ["1"], "text": ["tweet"], "sentiment_label": ["positivo"]}
+        )
+        with pytest.raises(DataValidationError):
+            run_hypothesaes_analysis_stage(labeled_corpus, pipeline_paths)
+
+    def test_raises_for_empty_corpus(self, pipeline_paths: ProjectPaths) -> None:
+        """Deve levantar ``EmptyDatasetError`` quando o corpus rotulado está vazio."""
+        empty_corpus = pl.DataFrame(
+            schema={
+                "id": pl.Utf8,
+                "text": pl.Utf8,
+                "sentiment_label": pl.Utf8,
+                "confidence": pl.Float64,
+            }
+        )
+        with pytest.raises(EmptyDatasetError):
+            run_hypothesaes_analysis_stage(empty_corpus, pipeline_paths)
+
+    def test_evaluates_on_holdout_when_enabled(
+        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Com ``evaluate_on_holdout=True``, deve avaliar as hipóteses no holdout e salvar as métricas."""
+        self._apply_fakes(monkeypatch)
+        monkeypatch.setattr(hypothesaes_analysis, "evaluate_hypotheses", _fake_evaluate_hypotheses)
+        labeled_corpus = self._labeled_corpus_with_confidence()
+
+        artifacts = run_hypothesaes_analysis_stage(
+            labeled_corpus,
+            pipeline_paths,
+            n_selected_neurons=2,
+            evaluate_on_holdout=True,
+            holdout_size=0.2,
+            random_seed=42,
+        )
+
+        assert artifacts.holdout_metrics == {"Significant": [1, 2, 0.5]}
+        interpretability_dir = pipeline_paths.reports_interpretability_dir
+        assert (interpretability_dir / "hypothesaes_avaliacao_holdout.csv").is_file()
+        assert (interpretability_dir / "hypothesaes_avaliacao_metricas.json").is_file()
 
 
 class TestRunPipelineStage:

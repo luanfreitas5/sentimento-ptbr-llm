@@ -1,0 +1,59 @@
+# Configuração do método HypotheSAEs (geração de hipóteses interpretáveis
+# via Sparse Autoencoder). Ver src/hypothesaes/ (porte do repositório
+# rmovva/HypotheSAEs) e src/pipelines/hypothesaes_analysis.py (estágio
+# "hypothesaes_analysis" de configs/config.yaml -> stages).
+#
+# Fluxo: treina um SAE sobre embeddings do corpus rotulado, interpreta uma
+# amostra de neurônios (descoberta de padrões) e seleciona/interpreta os
+# neurônios mais preditivos de rótulos de BAIXA confiança (`confidence` <
+# low_confidence.score_threshold), candidatos a inconsistência de rotulagem.
+
+embedding:
+  model_name: "neuralmind/bert-base-portuguese-cased" # BERTimbau
+  batch_size: 128
+
+sae:
+  m_total_neurons: 256
+  k_active_neurons: 8
+  matryoshka_prefix_lengths: [32, 256]
+
+low_confidence:
+  # confidence (razão de concordância da etapa "labeling") abaixo deste
+  # limiar é tratada como rótulo de baixa confiança/potencial inconsistência.
+  score_threshold: 0.5
+
+discovery:
+  n_random_neurons: 8 # nº de neurônios amostrados para checagem de sanidade
+
+hypotheses:
+  selection_method: "separation_score" # separation_score | correlation | lasso
+  n_selected_neurons: 15
+  n_scoring_examples: 100 # 0 desliga o fidelity-scoring (mais rápido)
+
+evaluation:
+  enabled: false # avalia hipóteses num holdout via LLM (lento; opt-in)
+  holdout_size: 0.1
+  validation_size: 0.1 # fração p/ validação (early stopping do SAE)
+
+llm:
+  # Endpoint OpenAI-compatível (Ollama local, por padrão); sobrescrito por
+  # settings.ollama_base_url (.env), se definida (ver src/main.py).
+  base_url: "http://localhost:11434/v1"
+  interpreter_model: "llama3.1:latest"
+  annotator_model: "llama3.1:latest"
+  n_examples_for_interpretation: 12
+  max_words_per_example: 60
+  max_interpretation_tokens: 200
+  n_workers: 8
+  task_specific_instructions: >
+    Os textos são tweets em português brasileiro, anotados com um
+    sentimento (positivo, negativo ou neutro) e um score de confiança do
+    classificador. Estamos analisando os tweets de BAIXA confiança — casos
+    em que o classificador ficou em dúvida sobre o sentimento. Descreva o
+    conceito como uma característica concisa do texto que ajude a explicar
+    por que esses tweets são ambíguos ou difíceis de classificar. Exemplos
+    de características possíveis: "mistura elogio e crítica no mesmo
+    tweet", "usa ironia ou sarcasmo", "contém gírias ou abreviações da
+    internet", "é muito curto e sem contexto claro". Responda em português.
+
+random_seed: 42

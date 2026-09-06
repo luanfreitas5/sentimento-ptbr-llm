@@ -17,6 +17,12 @@ from evaluation.evaluator import (
     calculate_bootstrap_confidence_intervals,
     evaluate_classifier,
 )
+from evaluation.hypothesaes_report import (
+    HIGH_CONFIDENCE_SIGNAL,
+    LOW_CONFIDENCE_SIGNAL,
+    build_top_hypotheses_table,
+    save_top_hypotheses_table,
+)
 from evaluation.reports import (
     build_evaluation_report,
     merge_evaluation_reports,
@@ -352,5 +358,66 @@ class TestSaveEvaluationReport:
         output_path = tmp_path / "subdir" / "relatorio.csv"
         save_evaluation_report(
             pl.DataFrame({"metric_name": ["f1_macro"], "metric_value": [0.8]}), output_path
+        )
+        assert output_path.is_file()
+
+
+class TestBuildTopHypothesesTable:
+    """Testes de :func:`evaluation.hypothesaes_report.build_top_hypotheses_table`."""
+
+    def test_cleans_interpretation_and_sorts_by_target_descending(self) -> None:
+        """Deve remover aspas/hifens residuais e ordenar por poder preditivo decrescente."""
+        hypotheses = pl.DataFrame(
+            {
+                "neuron_idx": [1, 2],
+                "target_separation_score": [-0.1, 0.3],
+                "interpretation": [' "é muito curto" ', '- "usa ironia"'],
+            }
+        )
+        result = build_top_hypotheses_table(hypotheses, target_column="target_separation_score")
+        assert result["target_separation_score"].to_list() == [0.3, -0.1]
+        assert result["interpretation"].to_list() == ["usa ironia", "é muito curto"]
+
+    def test_classifies_signal_by_target_sign(self) -> None:
+        """Alvo não negativo deve virar sinal de baixa confiança; negativo, de alta confiança."""
+        hypotheses = pl.DataFrame(
+            {
+                "neuron_idx": [1, 2],
+                "target_separation_score": [0.3, -0.1],
+                "interpretation": ["usa ironia", "é muito curto"],
+            }
+        )
+        result = build_top_hypotheses_table(hypotheses, target_column="target_separation_score")
+        assert result["signal"].to_list() == [LOW_CONFIDENCE_SIGNAL, HIGH_CONFIDENCE_SIGNAL]
+
+    def test_drops_rows_with_null_interpretation(self) -> None:
+        """Hipóteses sem interpretação (``None``) devem ser descartadas."""
+        hypotheses = pl.DataFrame(
+            {
+                "neuron_idx": [1, 2],
+                "target_separation_score": [0.3, -0.1],
+                "interpretation": ["usa ironia", None],
+            }
+        )
+        result = build_top_hypotheses_table(hypotheses, target_column="target_separation_score")
+        assert result.height == 1
+
+    def test_raises_on_empty_input(self) -> None:
+        """Deve levantar ``EmptyDatasetError`` quando ``hypotheses`` está vazio."""
+        empty = pl.DataFrame(
+            schema={"neuron_idx": pl.Int64, "target_x": pl.Float64, "interpretation": pl.Utf8}
+        )
+        with pytest.raises(EmptyDatasetError):
+            build_top_hypotheses_table(empty, target_column="target_x")
+
+
+class TestSaveTopHypothesesTable:
+    """Testes de :func:`evaluation.hypothesaes_report.save_top_hypotheses_table`."""
+
+    def test_writes_csv_file(self, tmp_path: Path) -> None:
+        """Deve criar o arquivo CSV no caminho informado, incluindo diretórios pais."""
+        output_path = tmp_path / "subdir" / "top_hipoteses.csv"
+        save_top_hypotheses_table(
+            pl.DataFrame({"interpretation": ["usa ironia"], "target_x": [0.3]}), output_path
         )
         assert output_path.is_file()

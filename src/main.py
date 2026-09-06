@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import logging
+import os
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -43,7 +44,7 @@ from config.environment import configure_environment_variables, configure_reprod
 from config.logging import configure_logging
 from config.paths import CONFIGS_DIR, ProjectPaths, load_project_paths
 from config.settings import GeneralConfig, Settings, create_settings, load_general_config
-from data.loader import load_training_example_dataset, read_dataset_file
+from data.loader import load_labeled_corpus, load_training_example_dataset, read_dataset_file
 from exceptions.configuration import InvalidConfigurationError
 from features.lexical import pivot_tfidf_features_to_wide
 from io_utils.yaml import read_yaml
@@ -174,6 +175,15 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "Caminho pontilhado para uma função sem argumentos que retorna a "
             "tupla `(model_predictions, y_true)` (etapa `comparative_evaluation`)."
+        ),
+    )
+    parser.add_argument(
+        "--hypothesaes-evaluate",
+        action="store_true",
+        help=(
+            "Habilita a avaliação das hipóteses num holdout via LLM (etapa "
+            "`hypothesaes_analysis`); sobrescreve `configs/hypothesaes.yaml -> "
+            "evaluation.enabled` apenas para ligar (nunca desliga)."
         ),
     )
     return parser.parse_args(argv)
@@ -614,6 +624,72 @@ def _build_comparative_evaluation_stage_kwargs(
     }
 
 
+def _build_hypothesaes_analysis_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de :func:`pipelines.hypothesaes_analysis.run_hypothesaes_analysis_stage`.
+
+    O endpoint LLM (OpenAI-compatível, tipicamente um Ollama local) é
+    resolvido aqui e exportado via variáveis de ambiente
+    (``OPENAI_BASE_URL``/``OPENAI_KEY_SAE``), lidas em tempo de chamada por
+    ``hypothesaes.llm_api.create_client``: este é o único estágio do
+    projeto que depende desse cliente.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada, não utilizada diretamente nesta etapa.
+    settings : Settings
+        Configurações sensíveis ao ambiente (``settings.ollama_base_url``,
+        quando definida, sobrescreve ``configs/hypothesaes.yaml ->
+        llm.base_url``).
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--hypothesaes-evaluate``,
+        ``--max-workers``, ``--random-seed``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para
+        :func:`pipelines.hypothesaes_analysis.run_hypothesaes_analysis_stage`.
+    """
+    del general_config
+    hypothesaes_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["hypothesaes"])
+
+    os.environ["OPENAI_BASE_URL"] = settings.ollama_base_url or hypothesaes_config["llm"]["base_url"]
+    os.environ.setdefault("OPENAI_KEY_SAE", "ollama")
+
+    return {
+        "labeled_corpus": load_labeled_corpus(paths.labeled_corpus_file),
+        "paths": paths,
+        "score_threshold": hypothesaes_config["low_confidence"]["score_threshold"],
+        "embedder_model_name": hypothesaes_config["embedding"]["model_name"],
+        "embedding_batch_size": hypothesaes_config["embedding"]["batch_size"],
+        "m_total_neurons": hypothesaes_config["sae"]["m_total_neurons"],
+        "k_active_neurons": hypothesaes_config["sae"]["k_active_neurons"],
+        "matryoshka_prefix_lengths": hypothesaes_config["sae"]["matryoshka_prefix_lengths"],
+        "n_random_neurons": hypothesaes_config["discovery"]["n_random_neurons"],
+        "selection_method": hypothesaes_config["hypotheses"]["selection_method"],
+        "n_selected_neurons": hypothesaes_config["hypotheses"]["n_selected_neurons"],
+        "n_scoring_examples": hypothesaes_config["hypotheses"]["n_scoring_examples"],
+        "interpreter_model": hypothesaes_config["llm"]["interpreter_model"],
+        "annotator_model": hypothesaes_config["llm"]["annotator_model"],
+        "n_examples_for_interpretation": hypothesaes_config["llm"]["n_examples_for_interpretation"],
+        "max_words_per_example": hypothesaes_config["llm"]["max_words_per_example"],
+        "max_interpretation_tokens": hypothesaes_config["llm"]["max_interpretation_tokens"],
+        "task_specific_instructions": hypothesaes_config["llm"]["task_specific_instructions"],
+        "n_workers": args.max_workers or hypothesaes_config["llm"]["n_workers"],
+        "evaluate_on_holdout": args.hypothesaes_evaluate or hypothesaes_config["evaluation"]["enabled"],
+        "holdout_size": hypothesaes_config["evaluation"]["holdout_size"],
+        "validation_size": hypothesaes_config["evaluation"]["validation_size"],
+        "random_seed": (
+            args.random_seed if args.random_seed is not None else hypothesaes_config["random_seed"]
+        ),
+    }
+
+
 _STAGE_KWARGS_BUILDERS: dict[
     str, Callable[[ProjectPaths, GeneralConfig, Settings, argparse.Namespace], dict[str, Any]]
 ] = {
@@ -625,6 +701,7 @@ _STAGE_KWARGS_BUILDERS: dict[
     "training_deep_learning": _build_training_deep_learning_stage_kwargs,
     "llm_evaluation": _build_llm_evaluation_stage_kwargs,
     "comparative_evaluation": _build_comparative_evaluation_stage_kwargs,
+    "hypothesaes_analysis": _build_hypothesaes_analysis_stage_kwargs,
 }
 
 

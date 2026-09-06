@@ -20,6 +20,7 @@ CONFIG_FILE_NAMES: dict[str, str] = {
     "llm": "llm.yaml",
     "labeling": "labeling.yaml",
     "evaluation": "evaluation.yaml",
+    "hypothesaes": "hypothesaes.yaml",
 }
 
 # Nomes dos pacotes de primeira parte dentro de ``src/`` (raiz de

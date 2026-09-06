@@ -311,13 +311,13 @@ def interpret_sae(
             "n_random_neurons e n_top_neurons"
         )
 
-    x = (
+    processed_embeddings = (
         embeddings
         if isinstance(embeddings, torch.Tensor)
         else torch.tensor(embeddings, dtype=torch.float)
     )
 
-    activations = sae.compute_activations(x)
+    activations = sae.compute_activations(processed_embeddings)
     logger.info("Formato das ativações: %s", activations.shape)
     activation_counts = (activations != 0).sum(axis=0)
     activation_percent = activation_counts / activations.shape[0] * 100
@@ -505,7 +505,7 @@ def generate_hypotheses(
         Se ``n_selected_neurons`` exceder o total de neurônios do SAE.
     """
     labels = np.array(labels)
-    x = (
+    processed_embeddings = (
         embeddings
         if isinstance(embeddings, torch.Tensor)
         else torch.tensor(embeddings, dtype=torch.float)
@@ -516,7 +516,7 @@ def generate_hypotheses(
 
     logger.info("Formato dos embeddings: %s", np.shape(embeddings))
 
-    activations = sae.compute_activations(x)
+    activations = sae.compute_activations(processed_embeddings)
     logger.info("Formato das ativações: %s", activations.shape)
 
     logger.info("Etapa 1: selecionando os %d neurônios mais preditivos", n_selected_neurons)
