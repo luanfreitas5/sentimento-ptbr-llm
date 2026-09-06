@@ -88,7 +88,7 @@ class LangChainSentimentClassifier:
         random_state: int = 42,
     ) -> None:
         self.backend = backend
-        self.strategy = strategy
+        self.strategy: PromptStrategy = strategy
         self.n_examples_per_class = n_examples_per_class
         self.allowed_labels = tuple(allowed_labels)
         self.fallback_label = fallback_label
@@ -98,7 +98,7 @@ class LangChainSentimentClassifier:
         self.classes_ = np.array(self.allowed_labels)
         self._few_shot_examples: list[tuple[str, str]] = []
 
-    def fit(self, X: Sequence[str], y: Sequence[str]) -> "LangChainSentimentClassifier":
+    def fit(self, X: Sequence[str], y: Sequence[str]) -> "LangChainSentimentClassifier":  # noqa: N803
         """Seleciona exemplos balanceados a partir do treino, quando a estratégia exige exemplos.
 
         Não tem efeito quando ``strategy="zero_shot"``, mantendo a paridade
@@ -155,7 +155,7 @@ class LangChainSentimentClassifier:
             fallback_label=self.fallback_label,
         )
 
-    def predict(self, X: Sequence[str]) -> np.ndarray:
+    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Classifica um lote de textos.
 
         Parameters
@@ -170,7 +170,7 @@ class LangChainSentimentClassifier:
         """
         return np.array([self._classify_one(text).sentimento for text in X])
 
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:
+    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Estima uma distribuição de probabilidade por classe a partir da confiança do LLM.
 
         Não é uma probabilidade calibrada: atribui a confiança relatada
@@ -197,7 +197,7 @@ class LangChainSentimentClassifier:
             probabilities[row_index, predicted_index] = output.confianca
         return probabilities
 
-    def predict_with_justification(self, X: Sequence[str]) -> list[SentimentLLMOutput]:
+    def predict_with_justification(self, X: Sequence[str]) -> list[SentimentLLMOutput]:  # noqa: N803
         """Classifica um lote de textos, preservando a justificativa textual de cada predição.
 
         Parameters

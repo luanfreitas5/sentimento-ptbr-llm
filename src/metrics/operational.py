@@ -44,7 +44,7 @@ def calculate_latency_statistics(latencies_ms: Sequence[float]) -> dict[str, flo
     >>> resultado["mean_ms"]
     20.75
     """
-    if len(latencies_ms) == 0:
+    if not latencies_ms:
         raise EmptyDatasetError("latencies_ms")
     latencies_array = np.asarray(latencies_ms, dtype=float)
     return {

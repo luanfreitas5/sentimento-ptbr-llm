@@ -48,7 +48,7 @@ class SentimentClassifier(Protocol):
     ``src/models/lstm.py``, ``src/models/cnn.py`` e ``src/models/llm.py``.
     """
 
-    def fit(self, X: Any, y: Any) -> "SentimentClassifier":
+    def fit(self, X: Any, y: Any) -> "SentimentClassifier":  # noqa: N803
         """Treina o classificador.
 
         Parameters
@@ -67,7 +67,7 @@ class SentimentClassifier(Protocol):
         """
         ...
 
-    def predict(self, X: Any) -> np.ndarray:
+    def predict(self, X: Any) -> np.ndarray:  # noqa: N803
         """Prediz o rótulo de sentimento mais provável para cada amostra.
 
         Parameters
@@ -82,7 +82,7 @@ class SentimentClassifier(Protocol):
         """
         ...
 
-    def predict_proba(self, X: Any) -> np.ndarray:
+    def predict_proba(self, X: Any) -> np.ndarray:  # noqa: N803
         """Estima a distribuição de probabilidade por classe de sentimento.
 
         Parameters
@@ -251,6 +251,12 @@ class TransformerSentimentClassifier:
         Dispositivo PyTorch (``"cpu"``, ``"cuda"``). Se ``None``, usa
         ``"cuda"`` quando disponível e ``"cpu"`` caso contrário, by default
         None.
+    revision : str | None, optional
+        Commit/tag/branch específico do repositório no Hugging Face Hub a
+        baixar (ex.: um SHA de commit), por segurança de cadeia de
+        suprimentos: sem fixar uma revisão, o conteúdo de ``model_name``
+        pode mudar entre execuções. Se ``None``, usa a revisão padrão
+        (``main``) do Hub, by default None.
     """
 
     def __init__(
@@ -266,6 +272,7 @@ class TransformerSentimentClassifier:
         early_stopping_patience: int = 2,
         random_state: int = 42,
         device: str | None = None,
+        revision: str | None = None,
     ) -> None:
         self.model_name = model_name
         self.max_length = max_length
@@ -277,12 +284,13 @@ class TransformerSentimentClassifier:
         self.early_stopping_patience = early_stopping_patience
         self.random_state = random_state
         self.device = device
+        self.revision = revision
         self.classes_: np.ndarray | None = None
         self._tokenizer: Any = None
         self._model: Any = None
         self._device: str | None = None
 
-    def fit(self, X: Sequence[str], y: Sequence[str]) -> "TransformerSentimentClassifier":
+    def fit(self, X: Sequence[str], y: Sequence[str]) -> "TransformerSentimentClassifier":  # noqa: N803
         """Executa o fine-tuning do encoder sobre os textos e rótulos de treino.
 
         Parameters
@@ -333,9 +341,9 @@ class TransformerSentimentClassifier:
         label_to_index = {label: index for index, label in enumerate(self.classes_)}
         encoded_labels = torch.tensor([label_to_index[label] for label in y], dtype=torch.long)
 
-        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name, revision=self.revision)
         self._model = AutoModelForSequenceClassification.from_pretrained(
-            self.model_name, num_labels=len(self.classes_)
+            self.model_name, num_labels=len(self.classes_), revision=self.revision
         ).to(resolved_device)
 
         encoded_input = self._tokenizer(
@@ -412,7 +420,7 @@ class TransformerSentimentClassifier:
         )
         return self
 
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:
+    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Estima a distribuição de probabilidade por classe de sentimento.
 
         Parameters
@@ -442,7 +450,7 @@ class TransformerSentimentClassifier:
             logits = self._model(**encoded_input).logits
             return torch.softmax(logits, dim=-1).cpu().numpy()
 
-    def predict(self, X: Sequence[str]) -> np.ndarray:
+    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Prediz o rótulo de sentimento mais provável para cada texto.
 
         Parameters

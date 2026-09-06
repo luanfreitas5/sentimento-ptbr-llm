@@ -222,7 +222,7 @@ class TestLSTMSentimentClassifier:
     def test_fit_predict_returns_known_labels(self) -> None:
         """As predições devem pertencer às classes vistas no treino."""
         pytest.importorskip("torch")
-        X = [
+        X = [  # noqa: N806
             ["ótimo", "produto", "adorei"],
             ["péssimo", "atendimento", "horrível"],
             ["ótimo", "excelente", "adorei"],
@@ -245,7 +245,7 @@ class TestLSTMSentimentClassifier:
     def test_predict_proba_rows_sum_to_one(self) -> None:
         """Cada linha da matriz de probabilidades deve somar (aproximadamente) 1."""
         pytest.importorskip("torch")
-        X = [["bom"], ["ruim"], ["bom"], ["ruim"]]
+        X = [["bom"], ["ruim"], ["bom"], ["ruim"]]  # noqa: N806
         y = ["positivo", "negativo", "positivo", "negativo"]
         classifier = LSTMSentimentClassifier(
             embedding_dim=4,
@@ -286,7 +286,7 @@ class TestCNNSentimentClassifier:
     def test_fit_predict_returns_known_labels(self) -> None:
         """As predições devem pertencer às classes vistas no treino."""
         pytest.importorskip("torch")
-        X = [
+        X = [  # noqa: N806
             ["ótimo", "produto", "adorei"],
             ["péssimo", "atendimento", "horrível"],
             ["ótimo", "excelente", "adorei"],
@@ -309,7 +309,7 @@ class TestCNNSentimentClassifier:
     def test_predict_proba_rows_sum_to_one(self) -> None:
         """Cada linha da matriz de probabilidades deve somar (aproximadamente) 1."""
         pytest.importorskip("torch")
-        X = [["bom", "dia"], ["ruim", "dia"], ["bom", "dia"], ["ruim", "dia"]]
+        X = [["bom", "dia"], ["ruim", "dia"], ["bom", "dia"], ["ruim", "dia"]]  # noqa: N806
         y = ["positivo", "negativo", "positivo", "negativo"]
         classifier = CNNSentimentClassifier(
             embedding_dim=4,

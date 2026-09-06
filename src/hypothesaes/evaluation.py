@@ -9,7 +9,7 @@ hipóteses via LLM (útil para deduplicar hipóteses redundantes).
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -46,9 +46,12 @@ def compute_pairwise_correlation_matrix(
     """
     return {
         (reference_hypothesis, predicted_hypothesis): float(
-            pearsonr(
-                reference_hypotheses[reference_hypothesis],
-                predicted_hypotheses[predicted_hypothesis],
+            cast(
+                tuple[float, float],
+                pearsonr(
+                    reference_hypotheses[reference_hypothesis],
+                    predicted_hypotheses[predicted_hypothesis],
+                ),
             )[0]
         )
         for reference_hypothesis in reference_hypotheses
@@ -184,7 +187,7 @@ def _compute_regression_metrics(
 ) -> dict[str, float | tuple[int, int, float]]:
     """Calcula as métricas de qualidade de ajuste (AUROC/AUPRC ou R²) do modelo de regressão."""
     if not classification:
-        correlation, _ = pearsonr(y_true, y_pred)
+        correlation, _ = cast(tuple[float, float], pearsonr(y_true, y_pred))
         return {"r2": float(correlation) ** 2}
 
     metrics: dict[str, float | tuple[int, int, float]] = {

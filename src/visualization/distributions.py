@@ -55,7 +55,7 @@ def plot_class_distribution(
     >>> figura.axes[0].get_title()
     'Distribuição das Classes de Sentimento'
     """
-    if len(labels) == 0:
+    if not labels:
         raise EmptyDatasetError("labels")
 
     label_counts = Counter(labels)
@@ -109,7 +109,7 @@ def plot_text_length_distribution(
     >>> figura.axes[0].get_title()
     'Distribuição do Comprimento de Texto'
     """
-    if len(text_lengths) == 0:
+    if not text_lengths:
         raise EmptyDatasetError("text_lengths")
 
     figure, axis = plt.subplots(figsize=(6, 5))

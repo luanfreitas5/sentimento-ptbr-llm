@@ -10,6 +10,7 @@ Consumido por ``src/evaluation/evaluator.py``.
 
 import logging
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 from sklearn.metrics import (
@@ -43,7 +44,7 @@ def _validate_prediction_inputs(y_true: Sequence[str], y_pred: Sequence[str]) ->
     ValueError
         Se ``y_true`` e ``y_pred`` tiverem tamanhos diferentes.
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
     if len(y_true) != len(y_pred):
         raise ValueError(
@@ -159,7 +160,10 @@ def calculate_precision_recall_f1(
     """
     _validate_prediction_inputs(y_true, y_pred)
     precision, recall, f1_score, _ = precision_recall_fscore_support(
-        y_true, y_pred, average=average, zero_division=0
+        y_true,
+        y_pred,
+        average=average,
+        zero_division=0,  # type: ignore[reportArgumentType]
     )
     return {"precision": float(precision), "recall": float(recall), "f1": float(f1_score)}
 
@@ -205,13 +209,18 @@ def calculate_per_class_report(
     1.0
     """
     _validate_prediction_inputs(y_true, y_pred)
-    report = classification_report(
-        y_true,
-        y_pred,
-        labels=list(labels),
-        target_names=list(labels),
-        output_dict=True,
-        zero_division=0,
+    # scikit-learn tipa `classification_report` como retornando sempre `str`; em tempo
+    # de execução, `output_dict=True` retorna um dict aninhado (ver documentação).
+    report = cast(
+        dict[str, dict[str, float]],
+        classification_report(
+            y_true,
+            y_pred,
+            labels=list(labels),
+            target_names=list(labels),
+            output_dict=True,
+            zero_division=0,  # type: ignore[reportArgumentType]
+        ),
     )
     return {
         label: {

@@ -9,6 +9,7 @@ evaluation").
 
 import logging
 from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 from scipy.stats import friedmanchisquare, rankdata, studentized_range, wilcoxon
@@ -67,21 +68,23 @@ def run_mcnemar_test(
     >>> resultado["p_value"] >= 0.0
     True
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
 
     correct_a = np.array(
-        [true == predicted for true, predicted in zip(y_true, y_pred_a)], dtype=bool
+        [true == predicted for true, predicted in zip(y_true, y_pred_a, strict=True)], dtype=bool
     )
     correct_b = np.array(
-        [true == predicted for true, predicted in zip(y_true, y_pred_b)], dtype=bool
+        [true == predicted for true, predicted in zip(y_true, y_pred_b, strict=True)], dtype=bool
     )
 
     contingency_table = [
         [int(np.sum(correct_a & correct_b)), int(np.sum(correct_a & ~correct_b))],
         [int(np.sum(~correct_a & correct_b)), int(np.sum(~correct_a & ~correct_b))],
     ]
-    result = mcnemar(contingency_table, exact=exact)
+    # statsmodels não distribui stubs de tipo para `mcnemar`: o retorno em tempo de
+    # execução expõe `.statistic`/`.pvalue`, mas o checker só o vê como `_Bunch` opaco.
+    result = cast(Any, mcnemar(contingency_table, exact=exact))
     logger.info(
         "Teste de McNemar: estatística=%.4f, p-valor=%.4f.", result.statistic, result.pvalue
     )
@@ -120,9 +123,11 @@ def run_wilcoxon_signed_rank_test(
     >>> resultado["p_value"] >= 0.0
     True
     """
-    if len(scores_a) == 0:
+    if not scores_a:
         raise EmptyDatasetError("scores_a")
-    statistic, p_value = wilcoxon(scores_a, scores_b)
+    # scipy tipa o retorno de `wilcoxon` como uma tupla genérica: o desempacotamento
+    # perde o tipo concreto (`np.float64`), daí o cast explícito antes de `float()`.
+    statistic, p_value = cast(tuple[float, float], wilcoxon(scores_a, scores_b))
     return {"statistic": float(statistic), "p_value": float(p_value)}
 
 
@@ -163,7 +168,7 @@ def run_friedman_test(*model_scores: Sequence[float]) -> dict[str, float]:
             f"run_friedman_test requer ao menos 3 modelos, recebido: {len(model_scores)}"
         )
     for scores in model_scores:
-        if len(scores) == 0:
+        if not scores:
             raise EmptyDatasetError("model_scores")
     statistic, p_value = friedmanchisquare(*model_scores)
     return {"statistic": float(statistic), "p_value": float(p_value)}
@@ -218,8 +223,7 @@ def run_nemenyi_post_hoc_test(
             f"scores_matrix deve ter ao menos 2 modelos (colunas), recebido: {n_models}"
         )
 
-    ranks_per_fold = np.apply_along_axis(lambda row: rankdata(-row), 1, scores_matrix)
-    average_ranks = ranks_per_fold.mean(axis=0)
+    average_ranks = np.apply_along_axis(lambda row: rankdata(-row), 1, scores_matrix).mean(axis=0)
 
     studentized_range_quantile = studentized_range.ppf(1 - alpha, n_models, np.inf)
     critical_difference = (studentized_range_quantile / np.sqrt(2)) * np.sqrt(

@@ -11,7 +11,7 @@ que o restante do módulo permaneça importável sem elas.
 """
 
 import logging
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from exceptions.model import ModelError, UnsupportedModelError
 
@@ -21,6 +21,7 @@ LLMBackendName = Literal["ollama", "huggingface"]
 LLM_BACKEND_NAMES: tuple[LLMBackendName, ...] = ("huggingface", "ollama")
 
 
+@runtime_checkable
 class LLMBackend(Protocol):
     """Interface mínima de um backend de geração de texto por LLM.
 
@@ -57,7 +58,7 @@ class OllamaLLMBackend:
         método ``invoke(prompt: str) -> str`` compatível), já configurada.
     """
 
-    def __init__(self, llm_runnable: object) -> None:
+    def __init__(self, llm_runnable: Any) -> None:
         self._llm_runnable = llm_runnable
 
     def generate(self, prompt: str) -> str:
@@ -87,7 +88,7 @@ class HuggingFaceLLMBackend:
         compatível), já configurada.
     """
 
-    def __init__(self, llm_runnable: object) -> None:
+    def __init__(self, llm_runnable: Any) -> None:
         self._llm_runnable = llm_runnable
 
     def generate(self, prompt: str) -> str:

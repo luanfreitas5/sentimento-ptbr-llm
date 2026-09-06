@@ -102,7 +102,11 @@ class HypothesaesArtifacts:
 
 
 def _prepare_corpus(
-    labeled_corpus: pl.DataFrame, *, text_column: str, confidence_column: str, score_threshold: float
+    labeled_corpus: pl.DataFrame,
+    *,
+    text_column: str,
+    confidence_column: str,
+    score_threshold: float,
 ) -> pl.DataFrame:
     """Deduplica por texto, remove textos vazios e sinaliza rótulos de baixa confiança."""
     if confidence_column not in labeled_corpus.columns:
@@ -119,13 +123,20 @@ def _prepare_corpus(
         labeled_corpus.filter(pl.col(text_column).str.strip_chars() != "")
         .unique(subset=[text_column], keep="first")
         .with_columns(
-            (pl.col(confidence_column) < score_threshold).cast(pl.Int8).alias(_LOW_CONFIDENCE_COLUMN)
+            (pl.col(confidence_column) < score_threshold)
+            .cast(pl.Int8)
+            .alias(_LOW_CONFIDENCE_COLUMN)
         )
     )
 
 
 def _build_cache_name(
-    *, selection_method: str, n_train: int, n_validation: int, m_total_neurons: int, k_active_neurons: int
+    *,
+    selection_method: str,
+    n_train: int,
+    n_validation: int,
+    m_total_neurons: int,
+    k_active_neurons: int,
 ) -> str:
     """Monta um nome de cache/checkpoint estável, dependente do tamanho dos dados e do SAE."""
     return (
@@ -293,7 +304,9 @@ def run_hypothesaes_analysis_stage(
         .select([id_column, text_column, label_column, confidence_column])
         .sort(confidence_column)
     )
-    write_csv(low_confidence_tweets, paths.reports_interpretability_dir / _LOW_CONFIDENCE_TWEETS_FILE_NAME)
+    write_csv(
+        low_confidence_tweets, paths.reports_interpretability_dir / _LOW_CONFIDENCE_TWEETS_FILE_NAME
+    )
     logger.info(
         "Tweets de baixa confiança (confidence < %.2f): %d/%d.",
         score_threshold,
@@ -431,7 +444,9 @@ def run_hypothesaes_analysis_stage(
                 holdout_metrics, paths.reports_interpretability_dir / _HOLDOUT_METRICS_FILE_NAME
             )
 
-    summary = _build_dataset_summary(corpus, label_column=label_column, score_threshold=score_threshold)
+    summary = _build_dataset_summary(
+        corpus, label_column=label_column, score_threshold=score_threshold
+    )
     summary["parametros"] = {
         "selection_method": selection_method,
         "m_total_neurons": m_total_neurons,

@@ -31,9 +31,9 @@ DEFAULT_DEEP_LEARNING_MODEL_NAMES: tuple[str, ...] = (
 
 
 def run_training_deep_learning_stage(
-    X_train: Sequence[Any],
+    X_train: Sequence[Any],  # noqa: N803
     y_train: Sequence[str],
-    X_val: Sequence[Any] | None,
+    X_val: Sequence[Any] | None,  # noqa: N803
     y_val: Sequence[str] | None,
     *,
     model_names: Sequence[str] = DEFAULT_DEEP_LEARNING_MODEL_NAMES,

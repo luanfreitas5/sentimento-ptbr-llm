@@ -36,7 +36,8 @@ from pipelines.workflow import run_full_workflow, run_pipeline_stage
 
 @pytest.fixture
 def pipeline_paths(tmp_path: Path) -> ProjectPaths:
-    """Constrói um :class:`ProjectPaths` isolado em diretório temporário, para testes de pipeline."""
+    """Constrói um :class:`ProjectPaths` isolado em diretório temporário,
+    para testes de pipeline."""
     return ProjectPaths(
         data_raw_dir=tmp_path / "data" / "raw",
         data_external_dir=tmp_path / "data" / "external",
@@ -168,7 +169,8 @@ class TestRunLabelingStage:
     def test_applies_human_validation_labels_and_gold_set_without_raising(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Deve sobrescrever o rótulo por validação humana e apenas alertar em desacordo com o gold set."""
+        """Deve sobrescrever o rótulo por validação humana e apenas alertar
+        em desacordo com o gold set."""
         normalized_corpus = pl.DataFrame(
             {
                 "id": ["1", "2"],
@@ -237,9 +239,9 @@ class TestRunTrainingClassicalStage:
 
     def test_trains_and_saves_each_classical_model(self, pipeline_paths: ProjectPaths) -> None:
         """Deve treinar cada modelo clássico configurado e salvar seu checkpoint em disco."""
-        X_train = np.array([[1, 0], [0, 1], [1, 1], [0, 0], [2, 0], [0, 2]])
+        X_train = np.array([[1, 0], [0, 1], [1, 1], [0, 0], [2, 0], [0, 2]])  # noqa: N806
         y_train = ["positivo", "negativo", "neutro", "negativo", "positivo", "neutro"]
-        X_val = np.array([[1, 0], [0, 1]])
+        X_val = np.array([[1, 0], [0, 1]])  # noqa: N806
         y_val = ["positivo", "negativo"]
 
         results = run_training_classical_stage(
@@ -260,15 +262,15 @@ class TestRunTrainingClassicalStage:
 class _FakeDeepLearningClassifier:
     """Dublê leve de classificador de deep learning, sem dependência de PyTorch."""
 
-    def fit(self, X: Sequence[Any], y: Sequence[str]) -> "_FakeDeepLearningClassifier":
+    def fit(self, X: Sequence[Any], y: Sequence[str]) -> "_FakeDeepLearningClassifier":  # noqa: N803
         """Simula o treino sem nenhum cálculo real."""
         return self
 
-    def predict(self, X: Sequence[Any]) -> list[str]:
+    def predict(self, X: Sequence[Any]) -> list[str]:  # noqa: N803
         """Sempre prediz a classe positiva, para simplicidade do dublê."""
         return ["positivo" for _ in X]
 
-    def predict_proba(self, X: Sequence[Any]) -> list[list[float]]:
+    def predict_proba(self, X: Sequence[Any]) -> list[list[float]]:  # noqa: N803
         """Retorna uma distribuição de probabilidade fixa por amostra."""
         return [[0.1, 0.1, 0.8] for _ in X]
 
@@ -320,13 +322,17 @@ class _FakeSentimentClassifier:
 
     classes_: tuple[str, ...] = ("negativo", "neutro", "positivo")
 
-    def predict(self, X: Sequence[str]) -> list[str]:
-        """Classifica pela presença de palavras-chave simples."""
-        return [self._label(text) for text in X]
+    def fit(self, X: Any, y: Any) -> "_FakeSentimentClassifier":  # noqa: N803
+        """Não faz nada: dublê pré-configurado por palavras-chave, sem estado treinável."""
+        return self
 
-    def predict_proba(self, X: Sequence[str]) -> list[list[float]]:
+    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
+        """Classifica pela presença de palavras-chave simples."""
+        return np.array([self._label(text) for text in X])
+
+    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Atribui alta probabilidade à classe predita, distribuindo o restante."""
-        return [self._probabilities(text) for text in X]
+        return np.array([self._probabilities(text) for text in X])
 
     def _label(self, text: str) -> str:
         """Determina o rótulo a partir de palavras-chave presentes no texto."""
@@ -442,15 +448,15 @@ class TestRunComparativeEvaluationStage:
         assert sorted(result.slice_reports["model_a"]["slice"].to_list()) == ["reddit", "twitter"]
 
 
-def _fake_extract_local_embeddings(
-    texts: list[str], **kwargs: Any
-) -> dict[str, np.ndarray]:
-    """Dublê de :func:`hypothesaes.embedding.extract_local_embeddings`: vetores fixos, sem modelo real."""
+def _fake_extract_local_embeddings(texts: list[str], **kwargs: Any) -> dict[str, np.ndarray]:
+    """Dublê de :func:`hypothesaes.embedding.extract_local_embeddings`:
+    vetores fixos, sem modelo real."""
     return {text: np.zeros(4, dtype=np.float32) for text in texts}
 
 
 def _fake_train_sae(**kwargs: Any) -> str:
-    """Dublê de :func:`hypothesaes.quickstart.train_sae`: retorna um sentinela, sem treinar de fato."""
+    """Dublê de :func:`hypothesaes.quickstart.train_sae`: retorna um
+    sentinela, sem treinar de fato."""
     return "sae-fake"
 
 
@@ -460,7 +466,8 @@ def _fake_interpret_sae(**kwargs: Any) -> pd.DataFrame:
 
 
 def _fake_generate_hypotheses(*, selection_method: str, **kwargs: Any) -> pd.DataFrame:
-    """Dublê de :func:`hypothesaes.quickstart.generate_hypotheses`: duas hipóteses fixas, sem LLM."""
+    """Dublê de :func:`hypothesaes.quickstart.generate_hypotheses`: duas
+    hipóteses fixas, sem LLM."""
     return pd.DataFrame(
         {
             "neuron_idx": [0, 1],
@@ -512,7 +519,8 @@ class TestRunHypothesaesAnalysisStage:
     def test_saves_artifacts_and_returns_them(
         self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Deve sinalizar tweets de baixa confiança, gerar padrões/hipóteses e salvar tudo em disco."""
+        """Deve sinalizar tweets de baixa confiança, gerar padrões/hipóteses
+        e salvar tudo em disco."""
         self._apply_fakes(monkeypatch)
         labeled_corpus = self._labeled_corpus_with_confidence()
 
@@ -559,7 +567,8 @@ class TestRunHypothesaesAnalysisStage:
     def test_evaluates_on_holdout_when_enabled(
         self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Com ``evaluate_on_holdout=True``, deve avaliar as hipóteses no holdout e salvar as métricas."""
+        """Com ``evaluate_on_holdout=True``, deve avaliar as hipóteses no
+        holdout e salvar as métricas."""
         self._apply_fakes(monkeypatch)
         monkeypatch.setattr(hypothesaes_analysis, "evaluate_hypotheses", _fake_evaluate_hypotheses)
         labeled_corpus = self._labeled_corpus_with_confidence()

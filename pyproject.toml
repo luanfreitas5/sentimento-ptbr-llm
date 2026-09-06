@@ -330,6 +330,13 @@ ignore_names = ["cls", "y", "input_features", "exc_info"]
 ignore = [
     "FURB105",  # print() sem parênteses vazios — inofensivo, pode ignorar
     "FURB126",  # return implícito — às vezes reduz clareza em funções longas
+    # FURB123 (cast redundante): falso positivo sistemático neste projeto — o
+    # checker vê `float(x)` como redundante porque `x` já foi anotado/`cast`
+    # como `float` para o type checker, mas em tempo de execução `x` é um
+    # escalar NumPy (ex.: retorno de `scipy.stats`/`sklearn`); remover o
+    # `float()` deixaria o valor real como `np.float64` (quebra serialização
+    # JSON/MLflow), não um `float` nativo.
+    "FURB123",
 ]
 
 # =============================================================================

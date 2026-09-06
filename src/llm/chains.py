@@ -88,19 +88,23 @@ def build_sentiment_classification_chain(
             "`uv add langchain-core` (ou `uv sync --extra llm`) para montar cadeias LangChain."
         ) from exception
 
-    prompt_step = RunnableLambda(
-        lambda text: build_sentiment_prompt(
+    def _build_prompt(text: str) -> str:
+        """Monta o prompt de classificação para ``text``, fechando sobre os parâmetros da cadeia."""
+        return build_sentiment_prompt(
             text,
             strategy=strategy,
             few_shot_examples=few_shot_examples,
             allowed_labels=allowed_labels,
             version=version,
         )
-    )
+
+    def _parse_output(raw_output: str) -> SentimentLLMOutput | None:
+        """Interpreta a saída bruta do LLM, fechando sobre ``allowed_labels`` da cadeia."""
+        return parse_structured_llm_output(raw_output, allowed_labels=allowed_labels)
+
+    prompt_step = RunnableLambda(_build_prompt)
     generation_step = RunnableLambda(backend.generate)
-    parsing_step = RunnableLambda(
-        lambda raw_output: parse_structured_llm_output(raw_output, allowed_labels=allowed_labels)
-    )
+    parsing_step = RunnableLambda(_parse_output)
     return prompt_step | generation_step | parsing_step
 
 

@@ -8,7 +8,7 @@ produziram, permitindo reconstruir qualquer resultado publicado.
 
 import logging
 import platform
-import subprocess
+import subprocess  # nosec B404 - usado apenas para `git rev-parse` (comando fixo, sem entrada do usuário)
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
@@ -55,7 +55,9 @@ def get_current_git_sha(*, short: bool = False) -> str:
     """
     command = ["git", "rev-parse", "--short", "HEAD"] if short else ["git", "rev-parse", "HEAD"]
     try:
-        result = subprocess.run(
+        # Comando fixo (lista literal acima), shell=False (padrão); não há entrada
+        # externa/não confiável interpolada no comando.
+        result = subprocess.run(  # nosec B603
             command, cwd=PROJECT_ROOT, capture_output=True, text=True, check=True
         )
     except (subprocess.CalledProcessError, FileNotFoundError) as exception:

@@ -132,7 +132,8 @@ class TestTrackExperimentRun:
 
 
 class TestLogRunParametersAndMetrics:
-    """Testes de :func:`experiment.tracker.log_run_parameters` e :func:`experiment.tracker.log_run_metrics`."""
+    """Testes de :func:`experiment.tracker.log_run_parameters` e
+    :func:`experiment.tracker.log_run_metrics`."""
 
     def test_logs_parameters_and_metrics_without_raising(self, local_mlflow_tracking: None) -> None:
         """Registrar parâmetros e métricas válidas não deve levantar exceções."""
@@ -206,12 +207,14 @@ class TestModelRegistryLifecycle:
         self, local_mlflow_registry: None
     ) -> None:
         """Registrar um modelo deve retornar o número da versão criada."""
-        import mlflow.sklearn
+        import mlflow
+        import mlflow.sklearn as mlflow_sklearn  # type: ignore[reportPrivateImportUsage]
         from sklearn.dummy import DummyClassifier
 
         model = DummyClassifier(strategy="most_frequent").fit([[0], [1]], ["positivo", "negativo"])
+        model_uri = ""
         with mlflow.start_run() as run:
-            mlflow.sklearn.log_model(model, "modelo")
+            mlflow_sklearn.log_model(model, "modelo")
             model_uri = f"runs:/{run.info.run_id}/modelo"
 
         version_number = register_model_version(model_uri, "modelo-registrado-teste")
@@ -219,12 +222,13 @@ class TestModelRegistryLifecycle:
 
     def test_register_promote_and_query_latest_version(self, local_mlflow_registry: None) -> None:
         """Deve registrar, promover e consultar a versão mais recente de um modelo."""
-        import mlflow.sklearn
+        import mlflow
+        import mlflow.sklearn as mlflow_sklearn  # type: ignore[reportPrivateImportUsage]
         from sklearn.dummy import DummyClassifier
 
         model = DummyClassifier(strategy="most_frequent").fit([[0], [1]], ["positivo", "negativo"])
         with mlflow.start_run():
-            mlflow.sklearn.log_model(model, "modelo", registered_model_name="modelo-teste")
+            mlflow_sklearn.log_model(model, "modelo", registered_model_name="modelo-teste")
 
         latest_version = get_latest_model_version("modelo-teste", stage="None")
         transition_model_stage("modelo-teste", latest_version, "Staging")

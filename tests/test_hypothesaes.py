@@ -592,7 +592,7 @@ class TestComputeActivations:
         """Um tipo de entrada não suportado deve levantar ``TypeError``."""
         model = SparseAutoencoder(input_dim=6, m_total_neurons=12, k_active_neurons=3, device="cpu")
         with pytest.raises(TypeError):
-            model.compute_activations("nao eh um array")
+            model.compute_activations("nao eh um array")  # type: ignore[reportArgumentType]
 
 
 # =============================================================================

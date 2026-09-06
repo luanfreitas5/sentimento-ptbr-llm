@@ -61,7 +61,7 @@ class ModelCheckpoint:
         self.monitor = monitor
         self.mode = mode
         self.save_best_only = save_best_only
-        self.backend = backend
+        self.backend: PersistenceBackend = backend
 
         self.best_value: float | None = None
         self.best_path: Path | None = None

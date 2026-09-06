@@ -63,7 +63,7 @@ def plot_roc_curves_one_vs_rest(
     >>> len(figura.axes[0].lines) >= 2
     True
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
 
     y_true_binarized = label_binarize(y_true, classes=list(labels))
@@ -133,7 +133,7 @@ def plot_precision_recall_curves_one_vs_rest(
     >>> len(figura.axes[0].lines) >= 2
     True
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
 
     y_true_binarized = label_binarize(y_true, classes=list(labels))

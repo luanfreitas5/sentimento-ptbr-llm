@@ -91,7 +91,7 @@ def merge_evaluation_reports(reports: list[pl.DataFrame]) -> pl.DataFrame:
     >>> merge_evaluation_reports([relatorio_a, relatorio_b])["model_name"].to_list()
     ['a', 'b']
     """
-    if len(reports) == 0:
+    if not reports:
         raise EmptyDatasetError("reports")
     return pl.concat(reports, how="vertical")
 

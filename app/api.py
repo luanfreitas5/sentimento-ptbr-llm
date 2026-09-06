@@ -286,7 +286,9 @@ async def _lifespan(app: FastAPI) -> Iterator[None]:
 
 app = FastAPI(
     title="API de Análise de Sentimentos pt-BR",
-    description="Inferência de sentimento (positivo/negativo/neutro) sobre texto livre em português.",
+    description=(
+        "Inferência de sentimento (positivo/negativo/neutro) sobre texto livre em português."
+    ),
     version="0.1.0",
     lifespan=_lifespan,
 )

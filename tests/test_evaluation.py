@@ -1,6 +1,7 @@
 """Testes da avaliação rigorosa de classificadores (``src/evaluation``)."""
 
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import polars as pl
@@ -159,8 +160,8 @@ class TestRunNemenyiPostHocTest:
         """O modelo com maior métrica em todas as dobras deve ter rank médio 1.0."""
         scores_matrix = np.array([[0.80, 0.75, 0.70], [0.82, 0.78, 0.71], [0.79, 0.74, 0.69]])
         result = run_nemenyi_post_hoc_test(scores_matrix)
-        assert result["average_ranks"].tolist() == [1.0, 2.0, 3.0]
-        assert result["critical_difference"] > 0
+        assert cast(np.ndarray, result["average_ranks"]).tolist() == [1.0, 2.0, 3.0]
+        assert cast(float, result["critical_difference"]) > 0
 
     def test_raises_on_single_model(self) -> None:
         """Deve levantar ``ValueError`` quando há apenas um modelo (coluna)."""

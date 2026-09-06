@@ -276,7 +276,7 @@ def _load_classical_training_arrays(paths: ProjectPaths) -> tuple[np.ndarray, li
         .sort("id")
     )
     feature_columns = [column for column in tfidf_wide.columns if column != "id"]
-    X_train = tfidf_wide.select(feature_columns).to_numpy()
+    X_train = tfidf_wide.select(feature_columns).to_numpy()  # noqa: N806
     y_train = training_corpus["sentiment_label"].to_list()
     return X_train, y_train
 
@@ -468,7 +468,7 @@ def _build_training_classical_stage_kwargs(
         :func:`pipelines.training_classical.run_training_classical_stage`.
     """
     del general_config, settings
-    X_train, y_train = _load_classical_training_arrays(paths)
+    X_train, y_train = _load_classical_training_arrays(paths)  # noqa: N806
     model_params = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["model_params"])["classical"]
     return {
         "X_train": X_train,
@@ -485,7 +485,8 @@ def _build_training_classical_stage_kwargs(
 def _build_training_deep_learning_stage_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
-    """Monta os argumentos de :func:`pipelines.training_deep_learning.run_training_deep_learning_stage`.
+    """Monta os argumentos de
+    :func:`pipelines.training_deep_learning.run_training_deep_learning_stage`.
 
     ``X_train`` é o texto (já tokenizado/normalizado) do conjunto de treino:
     cada classificador (LSTM/CNN/Transformer) é responsável por sua própria
@@ -575,7 +576,8 @@ def _build_llm_evaluation_stage_kwargs(
 def _build_comparative_evaluation_stage_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
-    """Monta os argumentos de :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`.
+    """Monta os argumentos de
+    :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`.
 
     A coleta das predições de cada modelo treinado não pode ser reconstruída
     apenas a partir de artefatos em disco: a etapa ``features`` só calcula
@@ -658,7 +660,9 @@ def _build_hypothesaes_analysis_stage_kwargs(
     del general_config
     hypothesaes_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["hypothesaes"])
 
-    os.environ["OPENAI_BASE_URL"] = settings.ollama_base_url or hypothesaes_config["llm"]["base_url"]
+    os.environ["OPENAI_BASE_URL"] = (
+        settings.ollama_base_url or hypothesaes_config["llm"]["base_url"]
+    )
     os.environ.setdefault("OPENAI_KEY_SAE", "ollama")
 
     return {
@@ -681,7 +685,8 @@ def _build_hypothesaes_analysis_stage_kwargs(
         "max_interpretation_tokens": hypothesaes_config["llm"]["max_interpretation_tokens"],
         "task_specific_instructions": hypothesaes_config["llm"]["task_specific_instructions"],
         "n_workers": args.max_workers or hypothesaes_config["llm"]["n_workers"],
-        "evaluate_on_holdout": args.hypothesaes_evaluate or hypothesaes_config["evaluation"]["enabled"],
+        "evaluate_on_holdout": args.hypothesaes_evaluate
+        or hypothesaes_config["evaluation"]["enabled"],
         "holdout_size": hypothesaes_config["evaluation"]["holdout_size"],
         "validation_size": hypothesaes_config["evaluation"]["validation_size"],
         "random_seed": (

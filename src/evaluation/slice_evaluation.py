@@ -21,6 +21,46 @@ from metrics.classification import calculate_classification_metrics
 logger = logging.getLogger(__name__)
 
 
+def _compute_slice_row(
+    y_true: Sequence[str],
+    y_pred: Sequence[str],
+    slice_labels: Sequence[str],
+    slice_value: str,
+) -> dict[str, float | int | str]:
+    """Calcula a linha de métricas de um único valor de fatia.
+
+    Parameters
+    ----------
+    y_true : Sequence[str]
+        Rótulos de sentimento verdadeiros (conjunto completo).
+    y_pred : Sequence[str]
+        Rótulos de sentimento preditos (conjunto completo).
+    slice_labels : Sequence[str]
+        Valor de fatia de cada amostra (conjunto completo).
+    slice_value : str
+        Valor de fatia a isolar nesta linha.
+
+    Returns
+    -------
+    dict[str, float | int | str]
+        ``slice``, ``n_samples`` e as métricas de
+        :func:`metrics.classification.calculate_classification_metrics`
+        restritas às amostras de ``slice_value``.
+    """
+    sliced_true = [
+        true_label
+        for true_label, current_slice in zip(y_true, slice_labels, strict=True)
+        if current_slice == slice_value
+    ]
+    sliced_pred = [
+        predicted_label
+        for predicted_label, current_slice in zip(y_pred, slice_labels, strict=True)
+        if current_slice == slice_value
+    ]
+    metrics = calculate_classification_metrics(sliced_true, sliced_pred)
+    return {"slice": slice_value, "n_samples": len(sliced_true), **metrics}
+
+
 def evaluate_metrics_by_slice(
     y_true: Sequence[str], y_pred: Sequence[str], slice_labels: Sequence[str]
 ) -> pl.DataFrame:
@@ -60,7 +100,7 @@ def evaluate_metrics_by_slice(
     >>> sorted(resultado["slice"].to_list())
     ['reddit', 'twitter']
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
     if not (len(y_true) == len(y_pred) == len(slice_labels)):
         raise ValueError(
@@ -68,20 +108,10 @@ def evaluate_metrics_by_slice(
             f"{len(y_true)}, {len(y_pred)} e {len(slice_labels)}"
         )
 
-    rows: list[dict[str, float | int | str]] = []
-    for slice_value in sorted(set(slice_labels)):
-        sliced_true = [
-            true_label
-            for true_label, current_slice in zip(y_true, slice_labels)
-            if current_slice == slice_value
-        ]
-        sliced_pred = [
-            predicted_label
-            for predicted_label, current_slice in zip(y_pred, slice_labels)
-            if current_slice == slice_value
-        ]
-        metrics = calculate_classification_metrics(sliced_true, sliced_pred)
-        rows.append({"slice": slice_value, "n_samples": len(sliced_true), **metrics})
+    rows = [
+        _compute_slice_row(y_true, y_pred, slice_labels, slice_value)
+        for slice_value in sorted(set(slice_labels))
+    ]
 
     result = pl.DataFrame(rows)
     logger.info("Avaliação por fatia concluída para %d valor(es) de fatia.", result.height)

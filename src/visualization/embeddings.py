@@ -9,6 +9,7 @@ representações.
 
 import logging
 from collections.abc import Sequence
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +20,70 @@ from exceptions.data import EmptyDatasetError
 from visualization.theme import SENTIMENT_COLOR_PALETTE
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_scatter_inputs(coordinates_2d: np.ndarray, labels: Sequence[str]) -> None:
+    """Valida o formato de ``coordinates_2d`` e sua compatibilidade com ``labels``.
+
+    Parameters
+    ----------
+    coordinates_2d : np.ndarray
+        Matriz ``(n_amostras, 2)`` de coordenadas reduzidas a duas dimensões.
+    labels : Sequence[str]
+        Classe de sentimento de cada amostra.
+
+    Raises
+    ------
+    EmptyDatasetError
+        Se ``coordinates_2d`` estiver vazia.
+    ValueError
+        Se ``coordinates_2d`` não tiver exatamente duas colunas, ou se seu
+        número de linhas diferir do tamanho de ``labels``.
+    """
+    if coordinates_2d.shape[0] == 0:
+        raise EmptyDatasetError("coordinates_2d")
+    if coordinates_2d.shape[1] != 2:
+        raise ValueError(
+            f"coordinates_2d deve ter exatamente 2 colunas, recebido: {coordinates_2d.shape[1]}"
+        )
+    if coordinates_2d.shape[0] != len(labels):
+        raise ValueError(
+            "coordinates_2d e labels devem ter o mesmo número de amostras, recebido "
+            f"{coordinates_2d.shape[0]} e {len(labels)}"
+        )
+
+
+def _plot_class_scatter_points(
+    axis: Any,
+    coordinates_2d: np.ndarray,
+    labels_array: np.ndarray,
+    class_order: Sequence[str],
+) -> None:
+    """Desenha os pontos de dispersão de cada classe presente em ``labels_array``.
+
+    Parameters
+    ----------
+    axis : matplotlib.axes.Axes
+        Eixo onde os pontos são desenhados.
+    coordinates_2d : np.ndarray
+        Matriz ``(n_amostras, 2)`` de coordenadas reduzidas a duas dimensões.
+    labels_array : np.ndarray
+        Classe de sentimento de cada amostra, como array.
+    class_order : Sequence[str]
+        Ordem das classes desenhadas (e da legenda).
+    """
+    for class_label in class_order:
+        class_mask = labels_array == class_label
+        if not np.any(class_mask):
+            continue
+        axis.scatter(
+            coordinates_2d[class_mask, 0],
+            coordinates_2d[class_mask, 1],
+            label=class_label,
+            color=SENTIMENT_COLOR_PALETTE.get(class_label, "#666666"),
+            alpha=0.7,
+            s=20,
+        )
 
 
 def plot_embedding_scatter(
@@ -66,32 +131,11 @@ def plot_embedding_scatter(
     >>> figura.axes[0].get_title()
     'Projeção 2D dos Embeddings por Sentimento'
     """
-    if coordinates_2d.shape[0] == 0:
-        raise EmptyDatasetError("coordinates_2d")
-    if coordinates_2d.shape[1] != 2:
-        raise ValueError(
-            f"coordinates_2d deve ter exatamente 2 colunas, recebido: {coordinates_2d.shape[1]}"
-        )
-    if coordinates_2d.shape[0] != len(labels):
-        raise ValueError(
-            "coordinates_2d e labels devem ter o mesmo número de amostras, recebido "
-            f"{coordinates_2d.shape[0]} e {len(labels)}"
-        )
+    _validate_scatter_inputs(coordinates_2d, labels)
 
     labels_array = np.asarray(labels)
     figure, axis = plt.subplots(figsize=(7, 6))
-    for class_label in class_order:
-        class_mask = labels_array == class_label
-        if not np.any(class_mask):
-            continue
-        axis.scatter(
-            coordinates_2d[class_mask, 0],
-            coordinates_2d[class_mask, 1],
-            label=class_label,
-            color=SENTIMENT_COLOR_PALETTE.get(class_label, "#666666"),
-            alpha=0.7,
-            s=20,
-        )
+    _plot_class_scatter_points(axis, coordinates_2d, labels_array, class_order)
     axis.set_xlabel("Dimensão 1")
     axis.set_ylabel("Dimensão 2")
     axis.set_title(title)

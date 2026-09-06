@@ -161,7 +161,7 @@ class CrossValidationResult:
 
 def run_stratified_cross_validation(
     model_builder: Callable[[], SentimentClassifier],
-    X: Sequence[Any] | np.ndarray,
+    X: Sequence[Any] | np.ndarray,  # noqa: N803
     y: Sequence[str],
     *,
     cv: int = DEFAULT_CROSS_VALIDATION_FOLDS,
@@ -236,15 +236,15 @@ def run_stratified_cross_validation(
     for fold_index, (train_indices, val_indices) in enumerate(
         splitter.split(dummy_features, y_array)
     ):
-        X_train = _select_rows(X, train_indices)
+        X_train = _select_rows(X, train_indices)  # noqa: N806
         y_train_fold = _select_rows(y_array, train_indices)
-        X_val = _select_rows(X, val_indices)
+        X_val = _select_rows(X, val_indices)  # noqa: N806
         y_val_fold = _select_rows(y_array, val_indices)
 
         fold_model = model_builder()
         fold_model.fit(X_train, y_train_fold)
         y_pred = fold_model.predict(X_val)
-        fold_score = compute_classification_score(y_val_fold, y_pred, scoring=scoring)
+        fold_score = compute_classification_score(list(y_val_fold), list(y_pred), scoring=scoring)
         result.fold_scores.append(fold_score)
 
         logger.info("Dobra %d/%d: %s=%.4f.", fold_index + 1, cv, scoring, fold_score)

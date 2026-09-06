@@ -314,7 +314,7 @@ def select_balanced_few_shot_examples(
         chosen_indices = rng.choice(
             candidate_indices, size=min(n_examples_per_class, len(candidate_indices)), replace=False
         )
-        examples.extend((texts[index], label) for index in chosen_indices)
+        examples.extend((texts[int(index)], label) for index in chosen_indices)
     return examples
 
 
@@ -371,7 +371,7 @@ class LLMSentimentClassifier:
         self.classes_ = np.array(self.allowed_labels)
         self._few_shot_examples: list[tuple[str, str]] = []
 
-    def fit(self, X: Sequence[str], y: Sequence[str]) -> "LLMSentimentClassifier":
+    def fit(self, X: Sequence[str], y: Sequence[str]) -> "LLMSentimentClassifier":  # noqa: N803
         """Seleciona exemplos few-shot balanceados a partir do conjunto de treino.
 
         Quando ``few_shot=False``, é um no-op que apenas retorna ``self``,
@@ -438,7 +438,7 @@ class LLMSentimentClassifier:
         )
         return self.fallback_label, 0.0
 
-    def predict(self, X: Sequence[str]) -> np.ndarray:
+    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Classifica um lote de textos.
 
         Parameters
@@ -453,7 +453,7 @@ class LLMSentimentClassifier:
         """
         return np.array([self._classify_one(text)[0] for text in X])
 
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:
+    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Estima uma distribuição de probabilidade por classe a partir da confiança do LLM.
 
         Não é uma probabilidade calibrada: atribui a confiança relatada pelo

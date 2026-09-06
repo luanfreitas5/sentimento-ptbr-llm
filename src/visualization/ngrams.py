@@ -6,6 +6,7 @@ específica), útil para inspeção qualitativa do vocabulário discriminativo.
 """
 
 import logging
+import operator
 from collections.abc import Mapping
 
 import matplotlib.pyplot as plt
@@ -53,12 +54,12 @@ def plot_top_ngrams_bar(
     >>> figura.axes[0].get_title()
     'N-gramas Mais Frequentes'
     """
-    if len(ngram_frequencies) == 0:
+    if not ngram_frequencies:
         raise EmptyDatasetError("ngram_frequencies")
     if top_n < 1:
         raise ValueError(f"top_n deve ser >= 1, recebido: {top_n}")
 
-    top_ngrams = sorted(ngram_frequencies.items(), key=lambda item: item[1], reverse=True)[:top_n]
+    top_ngrams = sorted(ngram_frequencies.items(), key=operator.itemgetter(1), reverse=True)[:top_n]
     ngram_labels = [ngram for ngram, _ in top_ngrams][::-1]
     ngram_counts = [count for _, count in top_ngrams][::-1]
 

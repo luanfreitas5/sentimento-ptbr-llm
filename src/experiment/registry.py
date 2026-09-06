@@ -129,8 +129,7 @@ def get_latest_model_version(model_name: str, *, stage: str = "Production") -> s
     _validate_stage(stage)
     from mlflow.tracking import MlflowClient
 
-    client = MlflowClient()
-    versions = client.get_latest_versions(model_name, stages=[stage])
+    versions = MlflowClient().get_latest_versions(model_name, stages=[stage])
     if not versions:
         raise ModelError(
             f"Nenhuma versão do modelo '{model_name}' encontrada no estágio '{stage}'."

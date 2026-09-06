@@ -12,7 +12,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -37,10 +37,74 @@ DEFAULT_CLASSICAL_MODEL_NAMES: tuple[str, ...] = (
 _INTEGER_LABEL_MODEL_NAMES: frozenset[str] = frozenset({"gradient_boosting"})
 
 
-def run_training_classical_stage(
-    X_train: np.ndarray,
+def _train_one_classical_model(
+    model_name: str,
+    X_train: np.ndarray,  # noqa: N803
     y_train: Sequence[str],
-    X_val: np.ndarray | None,
+    X_val: np.ndarray | None,  # noqa: N803
+    y_val: Sequence[str] | None,
+    *,
+    overrides: Mapping[str, Any],
+    checkpoints_dir: Path,
+    track_with_mlflow: bool,
+) -> TrainingResult:
+    """Treina um único classificador clássico, codificando os rótulos quando exigido pelo modelo.
+
+    Parameters
+    ----------
+    model_name : str
+        Nome do modelo, uma das chaves de
+        :func:`models.factory.create_classifier`.
+    X_train : np.ndarray
+        Matriz de features de treino.
+    y_train : Sequence[str]
+        Rótulos de sentimento de treino, mesmo tamanho de ``X_train``.
+    X_val : np.ndarray | None
+        Matriz de features de validação.
+    y_val : Sequence[str] | None
+        Rótulos de sentimento de validação, mesmo tamanho de ``X_val``.
+    overrides : Mapping[str, Any]
+        Hiperparâmetros deste modelo (``configs/model_params.yaml ->
+        classical``).
+    checkpoints_dir : Path
+        Diretório de destino do checkpoint do modelo treinado.
+    track_with_mlflow : bool
+        Repassado a :class:`training.trainer.Trainer`.
+
+    Returns
+    -------
+    TrainingResult
+        Modelo treinado, métricas de validação e tempo de execução.
+    """
+    model_builder = partial(create_classifier, model_name, **overrides)
+    trainer = Trainer(model_builder, track_with_mlflow=track_with_mlflow)
+
+    if model_name in _INTEGER_LABEL_MODEL_NAMES:
+        fold_y_train = [transform_label_to_id(label) for label in y_train]
+        fold_y_val = (
+            [transform_label_to_id(label) for label in y_val] if y_val is not None else None
+        )
+    else:
+        fold_y_train = y_train
+        fold_y_val = y_val
+
+    # `Trainer.fit` repassa `y_train`/`y_val` como estão a `model.fit`/às métricas de
+    # validação, que operam sobre qualquer rótulo "hasheável" (str ou int
+    # codificado); a assinatura declara `Sequence[str]` porque é o caso majoritário.
+    result = trainer.fit(
+        X_train,
+        cast(Sequence[str], fold_y_train),
+        X_val,
+        cast("Sequence[str] | None", fold_y_val),
+    )
+    save_classifier(result.model, checkpoints_dir / f"{model_name}.joblib")
+    return result
+
+
+def run_training_classical_stage(
+    X_train: np.ndarray,  # noqa: N803
+    y_train: Sequence[str],
+    X_val: np.ndarray | None,  # noqa: N803
     y_val: Sequence[str] | None,
     *,
     model_names: Sequence[str] = DEFAULT_CLASSICAL_MODEL_NAMES,
@@ -96,20 +160,16 @@ def run_training_classical_stage(
 
     for model_name in model_names:
         overrides = resolved_model_params.get(model_name, {})
-        model_builder = partial(create_classifier, model_name, **overrides)
-        trainer = Trainer(model_builder, track_with_mlflow=track_with_mlflow)
-
-        if model_name in _INTEGER_LABEL_MODEL_NAMES:
-            fold_y_train = [transform_label_to_id(label) for label in y_train]
-            fold_y_val = (
-                [transform_label_to_id(label) for label in y_val] if y_val is not None else None
-            )
-        else:
-            fold_y_train = y_train
-            fold_y_val = y_val
-
-        result = trainer.fit(X_train, fold_y_train, X_val, fold_y_val)
-        save_classifier(result.model, checkpoints_dir / f"{model_name}.joblib")
+        result = _train_one_classical_model(
+            model_name,
+            X_train,
+            y_train,
+            X_val,
+            y_val,
+            overrides=overrides,
+            checkpoints_dir=checkpoints_dir,
+            track_with_mlflow=track_with_mlflow,
+        )
         results[model_name] = result
         logger.info(
             "Modelo clássico '%s' treinado em %.2fs (métricas=%s).",

@@ -84,7 +84,7 @@ class AutoencoderFeatureReducer:
         self.random_state = random_state
         self._artifacts: AutoencoderArtifacts | None = None
 
-    def fit(self, X: np.ndarray, y: object = None) -> "AutoencoderFeatureReducer":  # noqa: ARG002
+    def fit(self, X: np.ndarray, y: object = None) -> "AutoencoderFeatureReducer":  # noqa: ARG002, N803
         """Treina o autoencoder sobre a matriz de embeddings de entrada.
 
         Parameters
@@ -122,7 +122,7 @@ class AutoencoderFeatureReducer:
         )
         return self
 
-    def transform(self, X: np.ndarray) -> np.ndarray:
+    def transform(self, X: np.ndarray) -> np.ndarray:  # noqa: N803
         """Projeta embeddings no espaço latente aprendido.
 
         Parameters
@@ -146,7 +146,7 @@ class AutoencoderFeatureReducer:
             raise ModelNotFittedError("AutoencoderFeatureReducer")
         return encode_with_autoencoder(X, self._artifacts)
 
-    def fit_transform(self, X: np.ndarray, y: object = None) -> np.ndarray:
+    def fit_transform(self, X: np.ndarray, y: object = None) -> np.ndarray:  # noqa: N803
         """Treina o autoencoder e projeta ``X`` no espaço latente em seguida.
 
         Parameters
@@ -163,7 +163,7 @@ class AutoencoderFeatureReducer:
         """
         return self.fit(X, y).transform(X)
 
-    def score_reconstruction_error(self, X: np.ndarray) -> np.ndarray:
+    def score_reconstruction_error(self, X: np.ndarray) -> np.ndarray:  # noqa: N803
         """Calcula o erro de reconstrução por amostra, como sinal diagnóstico.
 
         Parameters

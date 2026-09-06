@@ -30,6 +30,65 @@ logger = logging.getLogger(__name__)
 _HUMAN_VALIDATION_SAMPLE_FILE_NAME = "human_validation_sample.csv"
 
 
+def _select_and_write_human_validation_sample(
+    labeling_results: pl.DataFrame,
+    paths: ProjectPaths,
+    *,
+    sample_size: int,
+) -> None:
+    """Sinaliza candidatos de baixa confiança e grava a amostra de validação humana, se houver.
+
+    Parameters
+    ----------
+    labeling_results : pl.DataFrame
+        Saída de :func:`labeling.automatic.run_cascade_labeling`.
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto (``configs/paths.yaml``).
+    sample_size : int
+        Repassado a
+        :func:`labeling.manual.select_samples_for_human_validation`.
+    """
+    flagged = flag_low_confidence_samples(calculate_discordance_score(labeling_results))
+    if flagged.filter(pl.col("requires_human_validation")).height > 0:
+        human_validation_sample = select_samples_for_human_validation(
+            flagged, sample_size=sample_size
+        )
+        write_csv(
+            human_validation_sample,
+            paths.reports_tables_dir / _HUMAN_VALIDATION_SAMPLE_FILE_NAME,
+        )
+    else:
+        logger.info("Nenhuma amostra sinalizada para validação humana nesta execução.")
+
+
+def _validate_against_gold_set_if_provided(
+    labeled_corpus: pl.DataFrame, gold_set: pl.DataFrame | None, *, minimum_kappa: float
+) -> None:
+    """Avalia a concordância com o gold set e alerta se abaixo do limiar mínimo.
+
+    Parameters
+    ----------
+    labeled_corpus : pl.DataFrame
+        Corpus rotulado (após consenso e eventual validação humana).
+    gold_set : pl.DataFrame | None
+        Gold set de referência; ``None`` desativa a validação.
+    minimum_kappa : float
+        Repassado a :func:`labeling.validation.evaluate_against_gold_set`.
+    """
+    if gold_set is None:
+        return
+    validation_result = evaluate_against_gold_set(
+        labeled_corpus, gold_set, minimum_kappa=minimum_kappa
+    )
+    if not validation_result.meets_minimum_agreement:
+        logger.warning(
+            "Concordância com o gold set (kappa=%.4f, n=%d) abaixo do limiar mínimo (%.2f).",
+            validation_result.cohen_kappa,
+            validation_result.n_samples,
+            minimum_kappa,
+        )
+
+
 def run_labeling_stage(
     paths: ProjectPaths,
     labelers: Mapping[str, SentimentLabeler],
@@ -106,32 +165,14 @@ def run_labeling_stage(
     labeled_corpus = merge_consensus_into_corpus(normalized_corpus, consensus)
 
     if select_for_human_validation:
-        flagged = flag_low_confidence_samples(calculate_discordance_score(labeling_results))
-        if flagged.filter(pl.col("requires_human_validation")).height > 0:
-            human_validation_sample = select_samples_for_human_validation(
-                flagged, sample_size=human_validation_sample_size
-            )
-            write_csv(
-                human_validation_sample,
-                paths.reports_tables_dir / _HUMAN_VALIDATION_SAMPLE_FILE_NAME,
-            )
-        else:
-            logger.info("Nenhuma amostra sinalizada para validação humana nesta execução.")
+        _select_and_write_human_validation_sample(
+            labeling_results, paths, sample_size=human_validation_sample_size
+        )
 
     if human_validation_labels is not None:
         labeled_corpus = apply_human_validation_labels(labeled_corpus, human_validation_labels)
 
-    if gold_set is not None:
-        validation_result = evaluate_against_gold_set(
-            labeled_corpus, gold_set, minimum_kappa=minimum_kappa
-        )
-        if not validation_result.meets_minimum_agreement:
-            logger.warning(
-                "Concordância com o gold set (kappa=%.4f, n=%d) abaixo do limiar mínimo (%.2f).",
-                validation_result.cohen_kappa,
-                validation_result.n_samples,
-                minimum_kappa,
-            )
+    _validate_against_gold_set_if_provided(labeled_corpus, gold_set, minimum_kappa=minimum_kappa)
 
     write_labeled_corpus(labeled_corpus, paths.labeled_corpus_file)
     logger.info("Etapa de rotulagem concluída: %d amostra(s) rotulada(s).", labeled_corpus.height)

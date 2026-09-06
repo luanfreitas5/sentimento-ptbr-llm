@@ -10,7 +10,7 @@ lógica de I/O.
 
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
 import joblib
 
@@ -20,6 +20,27 @@ from utils.validation import validate_file_exists
 logger = logging.getLogger(__name__)
 
 PersistenceBackend = Literal["joblib", "torch"]
+
+
+def _raise_unsupported_backend(backend: str) -> NoReturn:
+    """Levanta ``ValueError`` para um backend de persistência desconhecido.
+
+    Isolada em função própria para que o ``raise`` não fique diretamente
+    dentro do bloco ``try`` das funções de (des)serialização, mantendo a
+    intenção de "erro de programação, não falha de I/O" explícita mesmo
+    sendo capturado e reembalado como :class:`ModelPersistenceError`.
+
+    Parameters
+    ----------
+    backend : str
+        Nome do backend informado pelo chamador.
+
+    Raises
+    ------
+    ValueError
+        Sempre, com mensagem indicando o backend não suportado.
+    """
+    raise ValueError(f"Backend de persistência '{backend}' não suportado.")
 
 
 def save_classifier(model: Any, file_path: Path, *, backend: PersistenceBackend = "joblib") -> Path:
@@ -63,7 +84,7 @@ def save_classifier(model: Any, file_path: Path, *, backend: PersistenceBackend 
 
             torch.save(model, file_path)
         else:
-            raise ValueError(f"Backend de persistência '{backend}' não suportado.")
+            _raise_unsupported_backend(backend)
     except (OSError, ValueError, ImportError, TypeError) as exception:
         raise ModelPersistenceError(str(file_path), str(exception)) from exception
 
@@ -112,9 +133,9 @@ def load_classifier(file_path: Path, *, backend: PersistenceBackend = "joblib") 
             # weights_only=False é necessário pois os artefatos deste projeto são
             # objetos Python completos (ex.: LSTMSentimentClassifier), não apenas
             # tensores; mesma justificativa de confiança do ramo "joblib" acima.
-            model = torch.load(file_path, weights_only=False)
+            model = torch.load(file_path, weights_only=False)  # nosec B614
         else:
-            raise ValueError(f"Backend de persistência '{backend}' não suportado.")
+            _raise_unsupported_backend(backend)
     except (OSError, ValueError, ImportError, TypeError, EOFError) as exception:
         raise ModelPersistenceError(str(file_path), str(exception)) from exception
 
@@ -166,19 +187,19 @@ def log_classifier_to_mlflow(
     """
     try:
         if backend == "joblib":
-            import mlflow.sklearn
+            import mlflow.sklearn as mlflow_sklearn  # type: ignore[reportPrivateImportUsage]
 
-            model_info = mlflow.sklearn.log_model(
+            model_info = mlflow_sklearn.log_model(
                 model, artifact_path, registered_model_name=registered_model_name
             )
         elif backend == "torch":
-            import mlflow.pytorch
+            import mlflow.pytorch as mlflow_pytorch  # type: ignore[reportPrivateImportUsage]
 
-            model_info = mlflow.pytorch.log_model(
+            model_info = mlflow_pytorch.log_model(
                 model, artifact_path, registered_model_name=registered_model_name
             )
         else:
-            raise ValueError(f"Backend de persistência '{backend}' não suportado.")
+            _raise_unsupported_backend(backend)
     except (OSError, ValueError, ImportError, TypeError) as exception:
         raise ModelPersistenceError(artifact_path, str(exception)) from exception
 

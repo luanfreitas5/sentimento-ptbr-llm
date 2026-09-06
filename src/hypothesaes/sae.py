@@ -134,6 +134,9 @@ class SparseAutoencoder(nn.Module):
         self.steps_since_activation = torch.zeros(m_total_neurons, dtype=torch.long, device=device)
 
         # Limiar de Batch Top-K (usado somente quando use_batch_topk=True).
+        # Anotação explícita: `nn.Module.__getattr__` tipa buffers registrados via
+        # `register_buffer` como `Tensor | Module`, mas este é sempre um `Tensor`.
+        self.threshold: torch.Tensor
         self.register_buffer("threshold", torch.tensor(0.0))
 
         self.device = device
@@ -274,10 +277,11 @@ class SparseAutoencoder(nn.Module):
         if multi_coef != 0 and info["multik_reconstruction"] is not None:
             main_l2 = main_l2 + multi_coef * self._normalized_mse(info["multik_reconstruction"], x)
 
-        if self.aux_k is not None and info["aux_indices"] is not None:
+        aux_indices, aux_values = info["aux_indices"], info["aux_values"]
+        if self.aux_k is not None and aux_indices is not None and aux_values is not None:
             residual = x - reconstruction.detach()
             aux_activations = torch.zeros_like(activations)
-            aux_activations.scatter_(-1, info["aux_indices"], info["aux_values"])
+            aux_activations.scatter_(-1, aux_indices, aux_values)
             residual_reconstruction = self.decoder(aux_activations)
             aux_loss = self._normalized_mse(residual_reconstruction, residual)
             return main_l2 + aux_coef * aux_loss

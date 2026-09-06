@@ -93,7 +93,139 @@ class CNNSentimentClassifier:
         self.vocabulary_: dict[str, int] | None = None
         self._module: Any = None
 
-    def fit(self, X: Sequence[Sequence[str]], y: Sequence[str]) -> "CNNSentimentClassifier":
+    def _encode_training_data(
+        self,
+        X: Sequence[Sequence[str]],  # noqa: N803
+        y: Sequence[str],
+    ) -> tuple[np.ndarray, np.ndarray, int, int]:
+        """Constrói o vocabulário/rótulos e codifica ``X``/``y`` para tensores de treino.
+
+        Parameters
+        ----------
+        X : Sequence[Sequence[str]]
+            Documentos de treino, já tokenizados.
+        y : Sequence[str]
+            Rótulos de sentimento de treino, mesmo tamanho de ``X``.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray, int, int]
+            Sequências codificadas, rótulos codificados, tamanho do
+            vocabulário e número de classes, nesta ordem.
+        """
+        self.vocabulary_ = build_token_vocabulary(X, max_vocabulary_size=self.max_vocabulary_size)
+        encoded_sequences = encode_token_sequences(
+            X, self.vocabulary_, max_sequence_length=self.max_sequence_length
+        )
+        self.classes_ = np.array(sorted(set(y)))
+        label_to_index = {label: index for index, label in enumerate(self.classes_)}
+        encoded_labels = np.array([label_to_index[label] for label in y], dtype=np.int64)
+        return encoded_sequences, encoded_labels, len(self.vocabulary_), len(self.classes_)
+
+    def _split_train_validation(
+        self,
+        torch: Any,
+        data_loader_cls: Any,
+        tensor_dataset_cls: Any,
+        encoded_sequences: np.ndarray,
+        encoded_labels: np.ndarray,
+    ) -> tuple[Any, "torch.Tensor", "torch.Tensor"]:
+        """Separa 10% das amostras para validação e monta o ``DataLoader`` de treino.
+
+        Parameters
+        ----------
+        torch : Any
+            Módulo ``torch`` importado tardiamente por :meth:`fit`.
+        data_loader_cls : Any
+            Classe ``torch.utils.data.DataLoader``.
+        tensor_dataset_cls : Any
+            Classe ``torch.utils.data.TensorDataset``.
+        encoded_sequences : np.ndarray
+            Sequências de índices de token codificadas.
+        encoded_labels : np.ndarray
+            Rótulos codificados, mesmo tamanho de ``encoded_sequences``.
+
+        Returns
+        -------
+        tuple[Any, torch.Tensor, torch.Tensor]
+            ``DataLoader`` de treino, tensor de validação e rótulos de
+            validação, nesta ordem.
+        """
+        validation_size = max(1, int(0.1 * len(encoded_sequences)))
+        permutation = np.random.default_rng(self.random_state).permutation(len(encoded_sequences))
+        validation_indices = permutation[:validation_size]
+        train_indices = permutation[validation_size:]
+
+        train_tensor = torch.tensor(encoded_sequences[train_indices], dtype=torch.long)
+        train_labels_tensor = torch.tensor(encoded_labels[train_indices], dtype=torch.long)
+        validation_tensor = torch.tensor(encoded_sequences[validation_indices], dtype=torch.long)
+        validation_labels_tensor = torch.tensor(
+            encoded_labels[validation_indices], dtype=torch.long
+        )
+
+        train_loader = data_loader_cls(
+            tensor_dataset_cls(train_tensor, train_labels_tensor),
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+        return train_loader, validation_tensor, validation_labels_tensor
+
+    def _run_training_loop(
+        self,
+        module: Any,
+        torch: Any,
+        optimizer: Any,
+        loss_function: Any,
+        train_loader: Any,
+        validation_tensor: "torch.Tensor",
+        validation_labels_tensor: "torch.Tensor",
+    ) -> None:
+        """Executa o laço de épocas com parada antecipada sobre a perda de validação.
+
+        Parameters
+        ----------
+        module : Any
+            Módulo PyTorch a ser treinado (mutado in-place).
+        torch : Any
+            Módulo ``torch`` importado tardiamente por :meth:`fit`.
+        optimizer : Any
+            Otimizador já associado aos parâmetros de ``module``.
+        loss_function : Any
+            Função de perda (ex.: ``nn.CrossEntropyLoss()``).
+        train_loader : Any
+            ``DataLoader`` com os lotes de treino.
+        validation_tensor : torch.Tensor
+            Tensor de entrada do conjunto de validação.
+        validation_labels_tensor : torch.Tensor
+            Rótulos do conjunto de validação.
+        """
+        best_validation_loss = float("inf")
+        epochs_without_improvement = 0
+
+        for epoch in range(self.epochs):
+            module.train()
+            for batch_sequences, batch_labels in train_loader:
+                optimizer.zero_grad()
+                loss = loss_function(module(batch_sequences), batch_labels)
+                loss.backward()
+                optimizer.step()
+
+            module.eval()
+            with torch.no_grad():
+                validation_loss = loss_function(
+                    module(validation_tensor), validation_labels_tensor
+                ).item()
+
+            if validation_loss < best_validation_loss:
+                best_validation_loss = validation_loss
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+            if epochs_without_improvement >= self.early_stopping_patience:
+                logger.info("Parada antecipada na época %d.", epoch)
+                break
+
+    def fit(self, X: Sequence[Sequence[str]], y: Sequence[str]) -> "CNNSentimentClassifier":  # noqa: N803
         """Treina a TextCNN sobre os documentos tokenizados de entrada.
 
         Constrói o vocabulário a partir de ``X``, reserva 10% das amostras
@@ -137,17 +269,9 @@ class CNNSentimentClassifier:
             ) from exception
 
         seed_everything(self.random_state)
-        self.vocabulary_ = build_token_vocabulary(X, max_vocabulary_size=self.max_vocabulary_size)
-        encoded_sequences = encode_token_sequences(
-            X, self.vocabulary_, max_sequence_length=self.max_sequence_length
+        encoded_sequences, encoded_labels, vocabulary_size, num_classes = (
+            self._encode_training_data(X, y)
         )
-
-        self.classes_ = np.array(sorted(set(y)))
-        label_to_index = {label: index for index, label in enumerate(self.classes_)}
-        encoded_labels = np.array([label_to_index[label] for label in y], dtype=np.int64)
-
-        vocabulary_size = len(self.vocabulary_)
-        num_classes = len(self.classes_)
         embedding_dim = self.embedding_dim
         num_filters = self.num_filters
         filter_sizes = self.filter_sizes
@@ -193,49 +317,18 @@ class CNNSentimentClassifier:
         optimizer = torch.optim.Adam(module.parameters(), lr=self.learning_rate)
         loss_function = nn.CrossEntropyLoss()
 
-        validation_size = max(1, int(0.1 * len(encoded_sequences)))
-        permutation = np.random.default_rng(self.random_state).permutation(len(encoded_sequences))
-        validation_indices = permutation[:validation_size]
-        train_indices = permutation[validation_size:]
-
-        train_tensor = torch.tensor(encoded_sequences[train_indices], dtype=torch.long)
-        train_labels_tensor = torch.tensor(encoded_labels[train_indices], dtype=torch.long)
-        validation_tensor = torch.tensor(encoded_sequences[validation_indices], dtype=torch.long)
-        validation_labels_tensor = torch.tensor(
-            encoded_labels[validation_indices], dtype=torch.long
+        train_loader, validation_tensor, validation_labels_tensor = self._split_train_validation(
+            torch, DataLoader, TensorDataset, encoded_sequences, encoded_labels
         )
-
-        train_loader = DataLoader(
-            TensorDataset(train_tensor, train_labels_tensor),
-            batch_size=self.batch_size,
-            shuffle=True,
+        self._run_training_loop(
+            module,
+            torch,
+            optimizer,
+            loss_function,
+            train_loader,
+            validation_tensor,
+            validation_labels_tensor,
         )
-
-        best_validation_loss = float("inf")
-        epochs_without_improvement = 0
-
-        for epoch in range(self.epochs):
-            module.train()
-            for batch_sequences, batch_labels in train_loader:
-                optimizer.zero_grad()
-                loss = loss_function(module(batch_sequences), batch_labels)
-                loss.backward()
-                optimizer.step()
-
-            module.eval()
-            with torch.no_grad():
-                validation_loss = loss_function(
-                    module(validation_tensor), validation_labels_tensor
-                ).item()
-
-            if validation_loss < best_validation_loss:
-                best_validation_loss = validation_loss
-                epochs_without_improvement = 0
-            else:
-                epochs_without_improvement += 1
-            if epochs_without_improvement >= self.early_stopping_patience:
-                logger.info("Parada antecipada na época %d.", epoch)
-                break
 
         self._module = module
         logger.info(
@@ -245,7 +338,7 @@ class CNNSentimentClassifier:
         )
         return self
 
-    def predict_proba(self, X: Sequence[Sequence[str]]) -> np.ndarray:
+    def predict_proba(self, X: Sequence[Sequence[str]]) -> np.ndarray:  # noqa: N803
         """Estima a distribuição de probabilidade por classe de sentimento.
 
         Parameters
@@ -275,7 +368,7 @@ class CNNSentimentClassifier:
             logits = self._module(torch.tensor(encoded_sequences, dtype=torch.long))
             return torch.softmax(logits, dim=-1).numpy()
 
-    def predict(self, X: Sequence[Sequence[str]]) -> np.ndarray:
+    def predict(self, X: Sequence[Sequence[str]]) -> np.ndarray:  # noqa: N803
         """Prediz o rótulo de sentimento mais provável para cada documento.
 
         Parameters

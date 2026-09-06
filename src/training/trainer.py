@@ -145,9 +145,9 @@ class Trainer:
 
     def fit(
         self,
-        X_train: Sequence[Any] | np.ndarray,
+        X_train: Sequence[Any] | np.ndarray,  # noqa: N803
         y_train: Sequence[str],
-        X_val: Sequence[Any] | np.ndarray | None = None,
+        X_val: Sequence[Any] | np.ndarray | None = None,  # noqa: N803
         y_val: Sequence[str] | None = None,
     ) -> TrainingResult:
         """Treina um único modelo sobre ``X_train``/``y_train``.
@@ -188,7 +188,7 @@ class Trainer:
             metrics: dict[str, float] = {}
             if X_val is not None and y_val is not None:
                 y_pred = model.predict(X_val)
-                metrics = _compute_validation_metrics(y_val, y_pred)
+                metrics = _compute_validation_metrics(y_val, y_pred.tolist())
 
             self.callback_list.on_step_end(0, model, metrics)
 
@@ -202,7 +202,7 @@ class Trainer:
 
     def fit_with_cross_validation(
         self,
-        X: Sequence[Any] | np.ndarray,
+        X: Sequence[Any] | np.ndarray,  # noqa: N803
         y: Sequence[str],
         *,
         cv: int = DEFAULT_CROSS_VALIDATION_FOLDS,

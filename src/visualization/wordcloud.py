@@ -61,7 +61,7 @@ def generate_sentiment_wordcloud(
     --------
     >>> generate_sentiment_wordcloud({"ótimo": 10, "produto": 8})  # doctest: +SKIP
     """
-    if len(word_frequencies) == 0:
+    if not word_frequencies:
         raise EmptyDatasetError("word_frequencies")
 
     try:

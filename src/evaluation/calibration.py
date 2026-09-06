@@ -69,13 +69,16 @@ def calculate_reliability_curve(
     >>> curva["bin_counts"].tolist()
     [1, 3]
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
     if n_bins < 1:
         raise ValueError(f"n_bins deve ser >= 1, recebido: {n_bins}")
 
     correctness = np.array(
-        [true_label == predicted_label for true_label, predicted_label in zip(y_true, y_pred)],
+        [
+            true_label == predicted_label
+            for true_label, predicted_label in zip(y_true, y_pred, strict=True)
+        ],
         dtype=float,
     )
     bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
@@ -148,7 +151,7 @@ def calculate_expected_calibration_error(
     total_samples = len(y_true)
     expected_calibration_error = 0.0
     for count, confidence_mean, accuracy in zip(
-        curve["bin_counts"], curve["bin_confidence_means"], curve["bin_accuracy"]
+        curve["bin_counts"], curve["bin_confidence_means"], curve["bin_accuracy"], strict=True
     ):
         if count > 0:
             expected_calibration_error += (count / total_samples) * abs(accuracy - confidence_mean)

@@ -1,5 +1,6 @@
 """Testes do módulo de treino de classificadores de sentimento (``src/training``)."""
 
+from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ from training.trainer import Trainer
 
 def _binary_feature_dataset() -> tuple[np.ndarray, list[str]]:
     """Monta um dataset binário, linearmente separável, para testes de treino/CV."""
-    X = np.array(
+    X = np.array(  # noqa: N806
         [[1, 0], [2, 0], [3, 0], [0, 1], [0, 2], [0, 3]],
         dtype=np.float64,
     )
@@ -49,7 +50,7 @@ class _RecordingCallback:
         """Registra o evento de início do treino."""
         self.events.append("train_begin")
 
-    def on_step_end(self, step_index: int, model: Any, metrics: dict[str, float]) -> bool:
+    def on_step_end(self, step_index: int, model: Any, metrics: Mapping[str, float]) -> bool:
         """Registra o evento de fim de passo e retorna ``should_stop``."""
         self.events.append(f"step_end:{step_index}")
         return self.should_stop
@@ -221,7 +222,7 @@ class TestRunStratifiedCrossValidation:
 
     def test_returns_one_score_per_fold(self) -> None:
         """Sem interrupção antecipada, deve haver exatamente ``cv`` pontuações."""
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         result = run_stratified_cross_validation(
             partial(create_classifier, "naive_bayes"), X, y, cv=3, scoring="f1_macro"
         )
@@ -230,7 +231,7 @@ class TestRunStratifiedCrossValidation:
 
     def test_on_fold_end_can_stop_early(self) -> None:
         """``on_fold_end`` retornando ``True`` deve interromper as dobras restantes."""
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         result = run_stratified_cross_validation(
             partial(create_classifier, "naive_bayes"),
             X,
@@ -321,7 +322,7 @@ class TestResume:
     def test_save_and_resume_roundtrip(self, tmp_path: Path) -> None:
         """O estado retomado deve reproduzir o modelo e os metadados salvos."""
         model = create_classifier("naive_bayes")
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         model.fit(X, y)
         state = TrainingCheckpointState(
             model=model, completed_steps=2, metrics_history=[{"f1_macro": 0.8}, {"f1_macro": 0.9}]
@@ -340,7 +341,7 @@ class TestTrainer:
 
     def test_fit_trains_and_computes_validation_metrics(self) -> None:
         """``fit`` deve treinar o modelo e calcular métricas quando há dados de validação."""
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         trainer = Trainer(partial(create_classifier, "naive_bayes"))
 
         result = trainer.fit(X, y, X_val=X, y_val=y)
@@ -351,7 +352,7 @@ class TestTrainer:
 
     def test_fit_without_validation_data_returns_empty_metrics(self) -> None:
         """Sem ``X_val``/``y_val``, nenhuma métrica deve ser calculada."""
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         trainer = Trainer(partial(create_classifier, "naive_bayes"))
 
         result = trainer.fit(X, y)
@@ -361,7 +362,7 @@ class TestTrainer:
 
     def test_fit_notifies_callbacks(self) -> None:
         """``fit`` deve notificar os callbacks registrados em cada etapa."""
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         recorder = _RecordingCallback()
         trainer = Trainer(partial(create_classifier, "naive_bayes"), callbacks=[recorder])
 
@@ -371,7 +372,7 @@ class TestTrainer:
 
     def test_fit_with_cross_validation_refits_on_all_data(self) -> None:
         """O modelo final deve ser reajustado sobre todo o conjunto de dados."""
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         trainer = Trainer(partial(create_classifier, "naive_bayes"))
 
         result = trainer.fit_with_cross_validation(X, y, cv=3, scoring="f1_macro")
@@ -383,7 +384,7 @@ class TestTrainer:
 
     def test_fit_with_cross_validation_stops_early_via_callback(self) -> None:
         """Um callback de parada antecipada deve interromper as dobras restantes."""
-        X, y = _binary_feature_dataset()
+        X, y = _binary_feature_dataset()  # noqa: N806
         early_stopping_callback = EarlyStoppingCallback("f1_macro", patience=1, mode="min")
         trainer = Trainer(
             partial(create_classifier, "naive_bayes"), callbacks=[early_stopping_callback]

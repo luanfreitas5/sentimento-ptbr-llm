@@ -55,6 +55,46 @@ def _build_progress_bar() -> Progress:
     )
 
 
+def _run_batches(
+    predictor: Predictor,
+    texts: Sequence[Any],
+    resolved_ids: list[str],
+    *,
+    batch_size: int,
+    progress: Progress | None,
+) -> list[pl.DataFrame]:
+    """Percorre ``texts`` em blocos, delegando cada um a ``predictor`` e atualizando o progresso.
+
+    Parameters
+    ----------
+    predictor : inference.predictor.Predictor
+        Interface de inferência sobre um modelo já treinado.
+    texts : Sequence[Any]
+        Amostras de entrada, no formato esperado pelo modelo.
+    resolved_ids : list[str]
+        Identificadores das amostras, mesmo tamanho de ``texts``.
+    batch_size : int
+        Número de amostras processadas por bloco.
+    progress : Progress | None
+        Barra de progresso já aberta (``None`` para não exibir progresso).
+
+    Returns
+    -------
+    list[pl.DataFrame]
+        Um DataFrame de predições por bloco processado, na ordem original.
+    """
+    frames: list[pl.DataFrame] = []
+    task_id = progress.add_task("Inferência em lote", total=len(texts)) if progress else None
+    for start in range(0, len(texts), batch_size):
+        end = start + batch_size
+        batch_texts = texts[start:end]
+        batch_ids = resolved_ids[start:end]
+        frames.append(predictor.predict(batch_texts, ids=batch_ids))
+        if progress is not None and task_id is not None:
+            progress.update(task_id, advance=len(batch_texts))
+    return frames
+
+
 def run_batch_inference(
     predictor: Predictor,
     texts: Sequence[Any],
@@ -108,16 +148,10 @@ def run_batch_inference(
     progress = _build_progress_bar() if show_progress else None
     progress_context = progress if progress is not None else nullcontext()
 
-    frames: list[pl.DataFrame] = []
     with progress_context:
-        task_id = progress.add_task("Inferência em lote", total=len(texts)) if progress else None
-        for start in range(0, len(texts), batch_size):
-            end = start + batch_size
-            batch_texts = texts[start:end]
-            batch_ids = resolved_ids[start:end]
-            frames.append(predictor.predict(batch_texts, ids=batch_ids))
-            if progress is not None and task_id is not None:
-                progress.update(task_id, advance=len(batch_texts))
+        frames = _run_batches(
+            predictor, texts, resolved_ids, batch_size=batch_size, progress=progress
+        )
 
     result = pl.concat(frames)
     logger.info("Inferência em lote concluída: %d amostra(s).", result.height)

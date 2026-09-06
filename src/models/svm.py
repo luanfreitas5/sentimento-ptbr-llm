@@ -55,6 +55,6 @@ def build_svm_classifier(
         kernel=kernel,
         C=C,
         class_weight=class_weight,
-        probability=probability,
+        probability=probability,  # type: ignore[reportArgumentType]
         random_state=random_state,
     )

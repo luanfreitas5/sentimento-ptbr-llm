@@ -64,7 +64,7 @@ def calculate_ablation_impact(
     >>> resultado["component"].to_list()
     ['sem_embeddings_contextuais', 'sem_autoencoder']
     """
-    if len(ablated_metrics) == 0:
+    if not ablated_metrics:
         raise EmptyDatasetError("ablated_metrics")
     if metric_name not in baseline_metrics:
         raise ValueError(f"metric_name '{metric_name}' não encontrado em baseline_metrics")

@@ -321,7 +321,8 @@ class TestGenerateSentimentWordcloud:
     def test_raises_import_error_when_dependency_is_missing(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Deve levantar ``ImportError`` com mensagem clara quando ``wordcloud`` não está instalado."""
+        """Deve levantar ``ImportError`` com mensagem clara quando
+        ``wordcloud`` não está instalado."""
         monkeypatch.setitem(sys.modules, "wordcloud", None)
         with pytest.raises(ImportError, match="wordcloud"):
             generate_sentiment_wordcloud({"ótimo": 5})

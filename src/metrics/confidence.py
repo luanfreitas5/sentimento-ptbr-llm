@@ -8,6 +8,7 @@ predições de baixa confiança (``src/visualization/diagnostics.py``).
 
 import logging
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 from scipy.stats import pointbiserialr
@@ -88,13 +89,16 @@ def calculate_confidence_accuracy_correlation(
     >>> round(calculate_confidence_accuracy_correlation(y_true, y_pred, confidences), 4)
     0.6532
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
     correctness = np.array(
-        [true_label == predicted_label for true_label, predicted_label in zip(y_true, y_pred)],
+        [
+            true_label == predicted_label
+            for true_label, predicted_label in zip(y_true, y_pred, strict=True)
+        ],
         dtype=int,
     )
-    correlation, _ = pointbiserialr(correctness, confidences)
+    correlation, _ = cast(tuple[float, float], pointbiserialr(correctness, confidences))
     return float(correlation)
 
 
@@ -136,7 +140,7 @@ def calculate_multiclass_brier_score(
     >>> calculate_multiclass_brier_score(y_true, y_score, labels=["negativo", "positivo"])
     0.0
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
     y_true_one_hot = label_binarize(y_true, classes=list(labels))
     squared_errors = np.sum((y_true_one_hot - y_score) ** 2, axis=1)
@@ -185,7 +189,7 @@ def calculate_selective_prediction_accuracy(
     >>> calculate_selective_prediction_accuracy(y_true, y_pred, confidences, coverage=0.5)
     1.0
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
     if not (0 < coverage <= 1):
         raise ValueError(f"coverage deve estar em (0, 1], recebido: {coverage}")

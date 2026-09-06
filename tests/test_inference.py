@@ -19,15 +19,15 @@ class _FakeTextClassifier:
     def __init__(self) -> None:
         self.classes_ = np.array(["negativo", "positivo"])
 
-    def fit(self, X: Sequence[str], y: Sequence[str]) -> "_FakeTextClassifier":
+    def fit(self, X: Sequence[str], y: Sequence[str]) -> "_FakeTextClassifier":  # noqa: N803
         """No-op: o classificador de teste não aprende parâmetros."""
         return self
 
-    def predict(self, X: Sequence[str]) -> np.ndarray:
+    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Prediz 'positivo' para textos contendo 'bom', 'negativo' caso contrário."""
         return np.array(["positivo" if "bom" in text else "negativo" for text in X])
 
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:
+    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Retorna probabilidades fixas de 0.9/0.1, conforme a predição de :meth:`predict`."""
         return np.array([[0.1, 0.9] if "bom" in text else [0.9, 0.1] for text in X])
 
@@ -35,13 +35,13 @@ class _FakeTextClassifier:
 class _FlakyTextClassifier(_FakeTextClassifier):
     """Classificador de teste que falha propositalmente para o texto ``"erro"``."""
 
-    def predict(self, X: Sequence[str]) -> np.ndarray:
+    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Levanta ``ValueError`` se algum texto do lote for ``"erro"``; delega o restante."""
         if "erro" in X:
             raise ValueError("falha simulada de inferência")
         return super().predict(X)
 
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:
+    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Levanta ``ValueError`` se algum texto do lote for ``"erro"``; delega o restante."""
         if "erro" in X:
             raise ValueError("falha simulada de inferência")

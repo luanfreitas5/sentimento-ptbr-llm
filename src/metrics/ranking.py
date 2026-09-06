@@ -39,7 +39,7 @@ def _validate_ranking_inputs(
     ValueError
         Se ``y_score`` não tiver uma coluna por classe em ``labels``.
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
     if y_score.shape[0] != len(y_true):
         raise ValueError(

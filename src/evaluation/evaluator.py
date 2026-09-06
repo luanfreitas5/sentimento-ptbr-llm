@@ -108,7 +108,7 @@ def calculate_bootstrap_confidence_intervals(
     >>> "f1_macro" in intervalos
     True
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
 
     random_generator = np.random.default_rng(random_state)
@@ -193,7 +193,7 @@ def evaluate_classifier(
     >>> "f1_macro" in resultado.point_metrics
     True
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
 
     point_metrics = calculate_classification_metrics(y_true, y_pred)
