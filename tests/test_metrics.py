@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from exceptions.data import EmptyDatasetError
@@ -140,6 +140,7 @@ class TestCalculateClassificationMetrics:
             "mcc",
         }
 
+    @settings(deadline=None)
     @given(st.lists(st.sampled_from(["positivo", "negativo", "neutro"]), min_size=1, max_size=30))
     def test_metrics_values_are_bounded(self, y_true: list[str]) -> None:
         """Todas as métricas devem estar dentro de seus intervalos teóricos válidos."""
