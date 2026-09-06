@@ -135,7 +135,7 @@ viz = [
     "umap-learn>=0.5",
 ]
 
-# Extensão exploratória 
+# Extensão exploratória
 exploratory = [
     "lightgbm>=4.5",
 ]
@@ -251,7 +251,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.pep8-naming]
-ignore-names = ["X", "X_train", "X_test", "X_val"]    # ignora a convenção de nome de variável para `X` (matriz de features) em ML
 
 [tool.ruff.lint.isort]
 # `src/` é a raiz de importação, então os pacotes de primeira parte são os

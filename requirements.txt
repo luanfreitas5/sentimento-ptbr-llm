@@ -6,13 +6,13 @@ aiohttp==3.14.3
     # via mlflow
 aiosignal==1.4.0
     # via aiohttp
-alembic==1.19.1
+alembic==1.19.2
     # via mlflow
 annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
-anyio==4.14.2
+anyio==4.15.1
     # via
     #   mlflow-skinny
     #   starlette
@@ -161,6 +161,8 @@ flatbuffers==25.12.19
     # via onnxruntime
 fonttools==4.64.0
     # via matplotlib
+formulaic==1.2.2
+    # via statsmodels
 frozenlist==1.8.0
     # via
     #   aiohttp
@@ -183,7 +185,7 @@ graphql-relay==3.2.0
     # via graphene
 greenlet==3.5.5 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'
     # via sqlalchemy
-griffelib==2.2.0
+griffelib==2.3.0
     # via mkdocstrings-python
 gunicorn==26.2.0 ; sys_platform != 'win32'
     # via mlflow
@@ -205,6 +207,8 @@ importlib-metadata==9.0.1
     # via mlflow-skinny
 iniconfig==2.3.0
     # via pytest
+interface-meta==2.0.1
+    # via formulaic
 interrogate==1.7.0
 ipykernel==7.3.0
 ipython==8.39.0 ; python_full_version < '3.11'
@@ -347,8 +351,10 @@ mypy-extensions==1.1.0
     # via
     #   mypy
     #   typing-inspect
-narwhals==2.25.0 ; python_full_version >= '3.11'
-    # via scikit-learn
+narwhals==2.25.0
+    # via
+    #   formulaic
+    #   scikit-learn
 nbformat==5.11.1
     # via nbstripout
 nbqa==1.9.1
@@ -364,12 +370,14 @@ numba==0.67.0
 numpy==2.2.6 ; python_full_version < '3.11'
     # via
     #   contourpy
+    #   formulaic
     #   magika
     #   matplotlib
     #   mlflow
     #   numba
     #   onnxruntime
     #   pandas
+    #   patsy
     #   scalene
     #   scikit-learn
     #   scipy
@@ -377,16 +385,19 @@ numpy==2.2.6 ; python_full_version < '3.11'
     #   sentimento-ptbr-llm
     #   shap
     #   skops
+    #   statsmodels
     #   xgboost
 numpy==2.4.6 ; python_full_version == '3.11.*'
     # via
     #   contourpy
+    #   formulaic
     #   magika
     #   matplotlib
     #   mlflow
     #   numba
     #   onnxruntime
     #   pandas
+    #   patsy
     #   scalene
     #   scikit-learn
     #   scipy
@@ -394,16 +405,19 @@ numpy==2.4.6 ; python_full_version == '3.11.*'
     #   sentimento-ptbr-llm
     #   shap
     #   skops
+    #   statsmodels
     #   xgboost
 numpy==2.5.2 ; python_full_version >= '3.12'
     # via
     #   contourpy
+    #   formulaic
     #   magika
     #   matplotlib
     #   mlflow
     #   numba
     #   onnxruntime
     #   pandas
+    #   patsy
     #   scalene
     #   scikit-learn
     #   scipy
@@ -411,6 +425,7 @@ numpy==2.5.2 ; python_full_version >= '3.12'
     #   sentimento-ptbr-llm
     #   shap
     #   skops
+    #   statsmodels
     #   xgboost
 nvidia-ml-py==13.610.43 ; sys_platform != 'darwin'
     # via scalene
@@ -448,25 +463,31 @@ packaging==26.3
     #   mlflow-tracing
     #   onnxruntime
     #   pandera
+    #   patsy
     #   pip-audit
     #   pip-requirements-parser
     #   pytest
     #   shap
     #   skops
+    #   statsmodels
 paginate==0.5.7
     # via mkdocs-material
 pandas==2.3.3 ; python_full_version < '3.11'
     # via
+    #   formulaic
     #   mlflow
     #   seaborn
     #   sentimento-ptbr-llm
     #   shap
+    #   statsmodels
 pandas==3.0.5 ; python_full_version >= '3.11'
     # via
+    #   formulaic
     #   mlflow
     #   seaborn
     #   sentimento-ptbr-llm
     #   shap
+    #   statsmodels
 pandera==0.33.1
     # via sentimento-ptbr-llm
 parso==0.8.7
@@ -475,6 +496,8 @@ pathspec==1.1.1
     # via
     #   mkdocs
     #   mypy
+patsy==1.0.3
+    # via statsmodels
 pexpect==4.9.0 ; sys_platform != 'emscripten' and sys_platform != 'win32'
     # via ipython
 pillow==12.3.0
@@ -674,27 +697,33 @@ scikit-learn==1.9.0 ; python_full_version >= '3.11'
     #   skops
 scipy==1.15.3 ; python_full_version < '3.11'
     # via
+    #   formulaic
     #   mlflow
     #   scikit-learn
     #   sentimento-ptbr-llm
     #   shap
     #   skops
+    #   statsmodels
     #   xgboost
 scipy==1.17.1 ; python_full_version == '3.11.*'
     # via
+    #   formulaic
     #   mlflow
     #   scikit-learn
     #   sentimento-ptbr-llm
     #   shap
     #   skops
+    #   statsmodels
     #   xgboost
 scipy==1.18.1 ; python_full_version >= '3.12'
     # via
+    #   formulaic
     #   mlflow
     #   scikit-learn
     #   sentimento-ptbr-llm
     #   shap
     #   skops
+    #   statsmodels
     #   xgboost
 seaborn==0.13.2
     # via sentimento-ptbr-llm
@@ -733,6 +762,8 @@ starlette==1.6.0
     # via
     #   fastapi
     #   mlflow-skinny
+statsmodels==0.15.0
+    # via sentimento-ptbr-llm
 stevedore==5.8.0 ; python_full_version < '3.11'
     # via bandit
 stevedore==5.9.1 ; python_full_version >= '3.11'
@@ -769,7 +800,9 @@ tornado==6.5.8
     #   ipykernel
     #   jupyter-client
 tqdm==4.70.0
-    # via shap
+    # via
+    #   sentimento-ptbr-llm
+    #   shap
 traitlets==5.16.1
     # via
     #   ipykernel
@@ -794,6 +827,7 @@ typing-extensions==4.16.0
     #   exceptiongroup
     #   fastapi
     #   flask-cors
+    #   formulaic
     #   graphene
     #   ipython
     #   jupyter-client
@@ -851,7 +885,9 @@ werkzeug==3.1.8
 widgetsnbextension==4.0.16
     # via ipywidgets
 wrapt==2.4.0
-    # via deprecated
+    # via
+    #   deprecated
+    #   formulaic
 xenon==0.9.3
 xgboost==3.2.0 ; python_full_version < '3.12'
     # via sentimento-ptbr-llm
