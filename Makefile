@@ -7,13 +7,18 @@ RUN := uv run python src/main.py    # 'src' vira raiz do path ao rodar o script
 export PYTHONHASHSEED := 42
 
 .DEFAULT_GOAL := help
-.PHONY: help init venv install install-all  update lock export \
+.PHONY: help init venv install install-all \
+	install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model \
+	update lock export \
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
 	clean-processed clean-reports clean-outputs clean-notebooks \
 	pipeline-ingestion pipeline-preprocessing pipeline-labeling pipeline-features \
 	pipeline-training-classical pipeline-training-deep-learning pipeline-llm-evaluation \
 	pipeline-comparative-evaluation pipeline-all \
+	mlflow app \
+	docker-build docker-up docker-down docker-ollama \
+	dvc-repro dvc-dag dvc-push dvc-pull \
 
 help:  ## Lista os alvos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -32,7 +37,30 @@ install:  ## Instala dependências (runtime + dev)
 install-all:  ## Instala tudo (todos os extras + dev)
 	uv sync --all-extras --dev
 
+install-llm:  ## Instala os extras de LLM (PyTorch + Transformers + Accelerate + Ollama)
+	uv sync --extra llm --dev
 
+install-collect:  ## Instala os extras de coleta (twscrape)
+	uv sync --extra collect --dev
+
+install-nlp:  ## Instala os extras de PLN (spaCy) e baixa o modelo pt-BR
+	uv sync --extra nlp --dev
+	$(MAKE) spacy-model
+
+spacy-model:  ## Baixa o modelo do spaCy para português (habilita a lematização)
+	uv run python -m spacy download pt_core_news_sm
+
+install-viz:  ## Instala os extras de visualização (wordcloud, networkx, umap-learn)
+	uv sync --extra viz --dev
+
+install-dvc:  ## Instala o extra de versionamento de dados/modelos (DVC)
+	uv sync --extra dvc --dev
+
+install-app:  ## Instala os extras do dashboard (Streamlit + Plotly)
+	uv sync --extra app --dev
+
+install-exploratory:  ## Instala o extra exploratório (LightGBM)
+	uv sync --extra exploratory --dev
 
 update:  ## Atualiza todas as dependências e sincroniza
 	uv lock --upgrade
@@ -184,5 +212,31 @@ pipeline-all:  ## Executa o workflow completo, na ordem configurada em configs/c
 mlflow:  ## Sobe a interface do MLflow para inspecionar os experimentos
 	uv run mlflow ui --backend-store-uri mlruns
 
-app:  ## Sobe o dashboard Streamlit de resultados
+app:  ## Sobe o dashboard Streamlit de resultados (requer: make install-app)
 	uv run streamlit run app/dashboard.py
+
+# --- Docker ------------------------------------------------------------------
+docker-build:  ## Constrói a imagem Docker do pipeline
+	docker build -t sentimento-ptbr-llm .
+
+docker-up:  ## Sobe o servidor MLflow via docker compose (http://localhost:5000)
+	docker compose up -d mlflow
+
+docker-ollama:  ## Sobe o servidor Ollama via docker compose (perfil "llm")
+	docker compose --profile llm up -d ollama
+
+docker-down:  ## Derruba os serviços do docker compose
+	docker compose down
+
+# --- DVC (requer: make install-dvc) -------------------------------------------
+dvc-repro:  ## Reexecuta o DAG (dvc.yaml), pulando estágios sem mudança em deps/params
+	uv run dvc repro
+
+dvc-dag:  ## Mostra o grafo de dependências dos estágios (dvc.yaml)
+	uv run dvc dag
+
+dvc-push:  ## Envia dados/modelos versionados para o remote configurado em .dvc/config
+	uv run dvc push
+
+dvc-pull:  ## Baixa dados/modelos versionados do remote configurado em .dvc/config
+	uv run dvc pull

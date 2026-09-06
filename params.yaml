@@ -1,0 +1,18 @@
+# =============================================================================
+# params.yaml — parâmetros de linha de comando interpolados em dvc.yaml
+# (sintaxe ${chave}). Ajuste antes de rodar `dvc repro`.
+# Hiperparâmetros de modelagem ficam em configs/*.yaml, não aqui.
+# =============================================================================
+
+# Estágio `ingestion` (src/main.py::_build_ingestion_stage_kwargs): caminho
+# pontilhado "modulo:funcao" de uma função de coleta implementada pelo
+# usuário (o projeto não fixa uma fonte de scraping por design — ver
+# src/data/downloader.py) e os termos de busca separados por espaço.
+scrape_func: ""
+queries: ""
+
+# Estágio `comparative_evaluation` (src/main.py::_build_comparative_evaluation_stage_kwargs):
+# caminho pontilhado "modulo:funcao" de uma função que retorna
+# (model_predictions, y_true), implementada pelo usuário a partir dos
+# modelos treinados/registrados no MLflow.
+predictions_func: ""

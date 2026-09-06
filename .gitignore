@@ -52,6 +52,7 @@ mlartifacts/
 /.dvc/cache
 /.dvc/tmp
 /.dvc/plots
+/.dvc/config.local
 # .dvc/config e os arquivos *.dvc são commitados.
 
 # --- Logs ------------------------------------------------------------------

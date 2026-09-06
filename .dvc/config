@@ -1,0 +1,10 @@
+[core]
+    remote = local
+    autostage = true
+# Remote padrão: diretório local fora do repositório, apenas para uso em
+# desenvolvimento (corpora somam vários GB — ver pyproject.toml, extra
+# `dvc`). Antes de compartilhar dados/modelos com terceiros, troque por um
+# remote de object storage (S3, GCS, Azure Blob) ou Google Drive e ajuste
+# as credenciais em `.dvc/config.local` (nunca commitado — ver .gitignore).
+['remote "local"']
+    url = ../dvc-storage/sentimento-ptbr-llm

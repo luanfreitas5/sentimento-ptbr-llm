@@ -7,12 +7,25 @@
 [project]
 name = "sentimento-ptbr-llm"
 version = "0.2.0"
-description = ""
+description = "Estudo comparativo entre ML clássico, Deep Learning/Transformers e LLMs locais para análise de sentimentos (positivo/negativo/neutro) em tweets em português brasileiro."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"  # numba (dependência transitiva do shap) ainda não suporta 3.14
 license = { text = "MIT" }
 authors = [{ name = "Luan Freitas", email = "luan.mgf@gmail.com" }]
 keywords = [
+    "nlp",
+    "sentiment-analysis",
+    "portuguese",
+    "pt-br",
+    "twitter",
+    "llm",
+    "transformers",
+    "bertimbau",
+    "machine-learning",
+    "deep-learning",
+    "langchain",
+    "ollama",
+    "mlops",
 ]
 classifiers = [ # https://pypi.org/classifiers/
     "Development Status :: 5 - Production/Stable",
@@ -28,30 +41,45 @@ classifiers = [ # https://pypi.org/classifiers/
 ]
 
 # --- Dependências de runtime (instale apenas o que o projeto precisar) -------
+# Organizadas por finalidade; dependências pesadas/específicas de uma etapa
+# (LLM, coleta, PLN, DVC, dashboard) ficam em [project.optional-dependencies].
 dependencies = [
-    "joblib>=1.6.0",                            # serialização de modelos scikit-learn
-    "markitdown[pptx]>=0.1.7",                  # renderização de Markdown em slides PowerPoint
-    "matplotlib>=3.10.9",                       # visualização de dados
-    "mlflow>=3.16.0",                           # gerenciamento de experimentos
-    "numpy>=2.2.6",                             # arrays e álgebra linear
-    "pandas>=2.3.3",                            # manipulação de dados tabulares
-    "pandera[polars]>=0.33.1",                  # validação de dados
-    "polars>=1.44.1",                           # manipulação de dados estruturados
-    "pyarrow>=25.0.1",                          # leitura e escrita de arquivos em formato Parquet
-    "pydantic>=2.13.5",                         # validação de dados
-    "pydantic-settings>=2.15.0",                # configuração de projeto
+    # Configuração, validação e ambiente (src/config/)
+    "pydantic>=2.13.5",                         # validação de dados e configurações
+    "pydantic-settings>=2.15.0",                # configuração de projeto via .env
     "python-dotenv>=1.2.3",                     # carregamento de variáveis de ambiente
-    "python-pptx>=1.0.2",                       # criação de apresentações PowerPoint
     "pyyaml>=6.0.3",                            # leitura e escrita de arquivos YAML
-    "rich>=15.0.0",                             # saída de terminal bonita e colorida
-    "scikit-learn>=1.7.2",                      # aprendizado de máquina
+
+    # Dados: manipulação, I/O e validação de schema
+    "joblib>=1.6.0",                            # serialização de modelos scikit-learn
+    "pandas>=2.3.3",                            # manipulação de dados tabulares
+    "pandera[polars]>=0.33.1",                  # validação de dados (contratos por estágio)
+    "polars>=1.44.1",                           # manipulação de dados estruturados (preferido sobre pandas)
+    "pyarrow>=25.0.1",                          # leitura e escrita de arquivos em formato Parquet
+
+    # Machine Learning, estatística e interpretabilidade
+    "numpy>=2.2.6",                             # arrays e álgebra linear
+    "scikit-learn>=1.7.2",                      # ML clássico (Regressão Logística, SVM, Random Forest etc.)
     "scipy>=1.15.3",                            # álgebra linear, estatística e otimização
+    "shap>=0.49.1",                             # interpretação de modelos (SHAP values)
+    "statsmodels>=0.15.0",                      # testes de significância estatística (Wilcoxon/Friedman)
+    "xgboost>=3.2.0",                           # Gradient Boosting
+
+    # Rastreamento de experimentos (MLflow — tracking + Model Registry)
+    "mlflow>=3.16.0",                           # gerenciamento de experimentos
+
+    # Visualização (reports/figures/, src/visualization/)
+    "matplotlib>=3.10.9",                       # visualização de dados
     "seaborn>=0.13.2",                          # visualização de dados estatísticos
-    "shap>=0.49.1",                             # interpretação de modelos de aprendizado de máquina
-    "statsmodels>=0.15.0",
+
+    # Terminal, progresso e geração de relatórios
+    "rich>=15.0.0",                             # saída de terminal bonita e colorida, logging
+    "tqdm>=4.70.0",                             # barras de progresso em laços simples
+    "markitdown[pptx]>=0.1.7",                  # renderização de Markdown em slides PowerPoint
+    "python-pptx>=1.0.2",                       # criação de apresentações PowerPoint
+
+    # Compatibilidade
     "tomli>=2.0.1; python_version < '3.11'",    # tomllib só existe na stdlib a partir do Python 3.11
-    "tqdm>=4.70.0",
-    "xgboost>=3.2.0",                           # aprendizado de máquina baseado em árvores de decisão
 ]
 
 [tool.uv]
@@ -100,55 +128,64 @@ torchaudio = { index = "pytorch-cu124" }
 
 # --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
 [project.optional-dependencies]
-# Dependências pesadas de LLM.
+# Recomendado para os estágios `llm_evaluation` e a análise HypotheSAEs
+# (`make install-llm`). Dependências pesadas (PyTorch + CUDA) — não instale
+# em ambientes que só rodam ML clássico/DL sobre embeddings estáticos.
 llm = [
-    "torch>=2.2",
-    "transformers>=4.44",
-    "accelerate>=0.33",
-    "datasets>=2.20",
-    "ollama>=0.3",
-    "sentencepiece>=0.2.2",
-    "tiktoken>=0.14.0",
-    "openai>=3.8.0",
-    "langchain-core>=0.3",      # orquestração LCEL (src/llm/chains.py)
-    "langchain-ollama>=0.2",    # backend Ollama via LangChain (src/llm/backends.py)
-    "langchain-huggingface>=0.1",  # backend Hugging Face via LangChain (src/llm/backends.py)
+    "torch>=2.2",                     # backend de tensores para Transformers/DL
+    "transformers>=4.44",             # checkpoints Hugging Face (BERTimbau, RoBERTa, DistilBERT, LLMs)
+    "accelerate>=0.33",               # execução eficiente de modelos Hugging Face (CPU/GPU)
+    "datasets>=2.20",                 # carregamento de datasets do Hugging Face Hub
+    "ollama>=0.3",                    # cliente Python do servidor Ollama (LLMs locais)
+    "sentencepiece>=0.2.2",           # tokenizador exigido por alguns checkpoints (ex.: RoBERTa/Llama)
+    "tiktoken>=0.14.0",               # tokenizador exigido pelo cliente OpenAI-compatível
+    "openai>=3.8.0",                  # cliente OpenAI-compatível (usado com o endpoint local do Ollama)
+    "langchain-core>=0.3",            # orquestração LCEL (src/llm/chains.py)
+    "langchain-ollama>=0.2",          # backend Ollama via LangChain (src/llm/backends.py)
+    "langchain-huggingface>=0.1",     # backend Hugging Face via LangChain (src/llm/backends.py)
 ]
 
-# Coleta no X/Twitter.
+# Recomendado apenas para o estágio `ingestion` (`make install-collect`).
+# Coleta de tweets no X/Twitter.
 collect = [
-    "twscrape>=0.13",
+    "twscrape>=0.13",                 # scraping assíncrono de tweets
 ]
 
-# Tokenização e lematização em pt-BR. O modelo `pt_core_news_sm` exige
-# download à parte (`make spacy-model`); sem ele o projeto cai no fallback
-# por regex, com aviso no log.
+# Recomendado para melhorar a tokenização/lematização em pt-BR no
+# pré-processamento (`make install-nlp`, que já baixa o modelo). O modelo
+# `pt_core_news_sm` exige download à parte (`make spacy-model`); sem ele o
+# projeto cai no fallback por regex, com aviso no log.
 nlp = [
-    "spacy>=3.7",
+    "spacy>=3.7",                     # tokenização/lematização em português
 ]
 
-# Figuras opcionais: nuvens de palavras, rede de similaridade e projeção
-# UMAP dos embeddings. Ausentes, as figuras correspondentes são puladas.
+# Recomendado ao gerar o relatório final de visualizações
+# (`src/visualization/`, `reports/figures/`). Ausentes, as figuras
+# correspondentes são puladas silenciosamente (com aviso no log).
 viz = [
-    "wordcloud>=1.9",
-    "networkx>=3.2",
-    "umap-learn>=0.5",
+    "wordcloud>=1.9",                 # nuvem de palavras por classe
+    "networkx>=3.2",                  # rede de similaridade entre termos/documentos
+    "umap-learn>=0.5",                # projeção UMAP dos embeddings/espaço latente
 ]
 
-# Extensão exploratória
+# Extensão exploratória — modelo adicional para comparação em notebooks,
+# fora do conjunto principal avaliado no protocolo comparativo.
 exploratory = [
-    "lightgbm>=4.5",
+    "lightgbm>=4.5",                  # Gradient Boosting alternativo ao XGBoost
 ]
 
-# Versionamento de dados/modelos (corpora somam vários GB)
+# Recomendado apenas se for versionar `data/`/`models/` fora do Git
+# (`make install-dvc` — corpora somam vários GB; ver dvc.yaml).
 dvc = [
-    "dvc>=3.51",
+    "dvc>=3.51",                      # versionamento de dados/modelos
 ]
 
-# Dashboard interativo de resultados (Streamlit + Plotly)
+# Recomendado apenas se for rodar o dashboard comparativo
+# (`make install-app`, `app/dashboard.py`) — não necessário para rodar o
+# pipeline de dados/treino/avaliação.
 app = [
-    "streamlit>=1.60.0",
-    "plotly>=5.24",
+    "streamlit>=1.60.0",              # dashboard interativo
+    "plotly>=5.24",                   # gráficos interativos do dashboard
 ]
 
 
@@ -256,6 +293,28 @@ ignore = [
 # `src/` é a raiz de importação, então os pacotes de primeira parte são os
 # diretórios dentro dele — não "src" em si.
 known-first-party = [
+    "config",
+    "constants",
+    "data",
+    "evaluation",
+    "exceptions",
+    "experiment",
+    "features",
+    "hypothesaes",
+    "inference",
+    "io_utils",
+    "labeling",
+    "llm",
+    "logging_utils",
+    "metrics",
+    "models",
+    "parallel",
+    "pipelines",
+    "preprocessing",
+    "schemas",
+    "training",
+    "utils",
+    "visualization",
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -380,13 +439,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 80
-show_missing = true
-exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:",
-    "raise NotImplementedError",
-]
+fail-under = 80
+show-missing = true
 
 # =============================================================================
 # INTERROGATE — cobertura de docstrings

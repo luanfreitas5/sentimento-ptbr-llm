@@ -1,0 +1,130 @@
+# =============================================================================
+# dvc.yaml — DAG reprodutível dos estágios de dados/modelagem.
+#
+# Espelha os estágios de `src/main.py --stage <nome>` (ver configs/config.yaml
+# -> stages e src/pipelines/workflow.py). O acoplamento entre estágios é o
+# sistema de arquivos (Parquet em data/, modelos em models/), então cada
+# estágio pode ser reexecutado isoladamente com `dvc repro <nome>`.
+#
+# Métricas de treino/avaliação (F1-macro, MCC, etc.) são registradas no
+# MLflow (mlruns/ — ver `Trainer(track_with_mlflow=True)`), não como
+# `metrics:` do DVC: o DVC aqui versiona dados e artefatos de modelo: o
+# MLflow é a fonte de verdade para comparar métricas entre execuções.
+# =============================================================================
+
+vars:
+  - params.yaml
+
+stages:
+  ingestion:
+    cmd: uv run python src/main.py --stage ingestion --scrape-func ${scrape_func} --queries ${queries}
+    deps:
+      - src/pipelines/ingestion.py
+      - src/data/downloader.py
+    outs:
+      - data/raw/tweets_coletados.parquet
+      - data/raw/catalog.json
+
+  preprocessing:
+    cmd: uv run python src/main.py --stage preprocessing
+    deps:
+      - src/pipelines/preprocessing.py
+      - src/preprocessing
+      - data/raw/tweets_coletados.parquet
+    outs:
+      - data/interim/corpus_normalizado.parquet
+
+  labeling:
+    cmd: uv run python src/main.py --stage labeling
+    deps:
+      - src/pipelines/labeling.py
+      - src/labeling
+      - data/interim/corpus_normalizado.parquet
+      - data/external/tweetsentbr.parquet
+      - data/external/repro.parquet
+    params:
+      - configs/labeling.yaml:
+    outs:
+      - data/processed/corpus_rotulado.parquet
+
+  features:
+    cmd: uv run python src/main.py --stage features
+    deps:
+      - src/pipelines/features.py
+      - src/features
+      - data/processed/corpus_rotulado.parquet
+    params:
+      - configs/config.yaml:
+          - data_split
+      - configs/model_params.yaml:
+          - embeddings
+    outs:
+      - data/processed/treino.parquet
+      - data/processed/validacao.parquet
+      - data/processed/teste.parquet
+      - data/processed/tfidf_features.parquet
+
+  training_classical:
+    cmd: uv run python src/main.py --stage training_classical
+    deps:
+      - src/pipelines/training_classical.py
+      - src/models
+      - src/training
+      - data/processed/treino.parquet
+      - data/processed/validacao.parquet
+    params:
+      - configs/model_params.yaml:
+          - classical
+    outs:
+      - models/checkpoints:
+          persist: true
+
+  training_deep_learning:
+    cmd: uv run python src/main.py --stage training_deep_learning
+    deps:
+      - src/pipelines/training_deep_learning.py
+      - src/models
+      - src/training
+      - data/processed/treino.parquet
+      - data/processed/validacao.parquet
+    params:
+      - configs/model_params.yaml:
+          - deep_learning
+          - transformers
+          - autoencoder
+    outs:
+      - models/checkpoints:
+          persist: true
+
+  llm_evaluation:
+    cmd: uv run python src/main.py --stage llm_evaluation
+    deps:
+      - src/pipelines/llm_evaluation.py
+      - src/llm
+      - data/processed/teste.parquet
+    params:
+      - configs/llm.yaml:
+
+  comparative_evaluation:
+    cmd: uv run python src/main.py --stage comparative_evaluation --predictions-func ${predictions_func}
+    deps:
+      - src/pipelines/comparative_evaluation.py
+      - src/evaluation
+      - data/processed/teste.parquet
+    params:
+      - configs/evaluation.yaml:
+    outs:
+      - reports/metrics/comparativo.csv:
+          cache: false
+
+  hypothesaes_analysis:
+    cmd: uv run python src/main.py --stage hypothesaes_analysis
+    deps:
+      - src/pipelines/hypothesaes_analysis.py
+      - src/hypothesaes
+      - data/processed/corpus_rotulado.parquet
+    params:
+      - configs/hypothesaes.yaml:
+    outs:
+      - reports/interpretability:
+          persist: true

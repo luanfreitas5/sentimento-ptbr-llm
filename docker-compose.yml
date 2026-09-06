@@ -1,0 +1,81 @@
+# =============================================================================
+# docker-compose.yml — serviços auxiliares do sentimento-ptbr-llm.
+#
+#   docker compose up mlflow              # UI do MLflow em http://localhost:5000
+#   docker compose --profile llm up ollama  # servidor Ollama local (LLMs)
+#   docker compose --profile app up app     # dashboard Streamlit (opcional)
+#   docker compose run --rm pipeline --stage preprocessing
+# =============================================================================
+
+services:
+  # Servidor de tracking do MLflow, com backend de artefatos/metadados em
+  # volume local (mlruns/) — ver configs/config.yaml -> experiment.
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.16.0
+    container_name: sentimento-ptbr-llm-mlflow
+    command: >
+      mlflow server
+      --backend-store-uri /mlruns
+      --default-artifact-root /mlruns
+      --host 0.0.0.0
+      --port 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlruns
+    restart: unless-stopped
+
+  # Servidor Ollama para inferência de LLMs locais (configs/llm.yaml ->
+  # backends.ollama). Ativado apenas sob demanda via `--profile llm`.
+  ollama:
+    image: ollama/ollama:0.5.7
+    container_name: sentimento-ptbr-llm-ollama
+    profiles: ["llm"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+
+  # Imagem do próprio pipeline (ver Dockerfile), para execução isolada de
+  # qualquer estágio via `--stage <nome>` sem instalar dependências localmente.
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentimento-ptbr-llm-pipeline
+    env_file:
+      - .env
+    environment:
+      SENTIMENTO_MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      SENTIMENTO_OLLAMA_BASE_URL: "http://ollama:11434"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    depends_on:
+      - mlflow
+    profiles: ["pipeline"]
+
+  # Dashboard Streamlit comparativo entre abordagens (app/dashboard.py) —
+  # desabilitado por padrão (configs/deploy.yaml -> dashboard.enabled: false).
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentimento-ptbr-llm-app
+    entrypoint: ["streamlit", "run", "app/dashboard.py", "--server.address=0.0.0.0"]
+    env_file:
+      - .env
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./reports:/app/reports
+      - ./models:/app/models
+    depends_on:
+      - mlflow
+    profiles: ["app"]
+
+volumes:
+  ollama_models:
