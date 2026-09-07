@@ -276,6 +276,26 @@ de implementação inclui:
   DataFrames/arquivos sintéticos pequenos via `tmp_path`, como já é padrão
   no projeto.
 
+## Addendum (durante o planejamento): pré-requisito de serialização de exceções
+
+Ao detalhar a implementação, foi encontrado um bug pré-existente que bloqueia
+diretamente a Decisão 3: toda exceção customizada do projeto herda de
+`ProjectError`, mas sobrescreve `__init__` com parâmetros próprios (ex.:
+`PipelineStageError(stage_name, detail)`). O pickle padrão do Python
+reconstrói uma exceção via `cls(*self.args)`, incompatível com esse padrão —
+confirmado empiricamente: levantar `PipelineStageError` dentro de um worker
+de `ProcessPoolExecutor` não propaga `PipelineStageError` ao processo pai,
+e sim `concurrent.futures.process.BrokenProcessPool`, quebrando o pool
+inteiro (violando a garantia de "isolar a falha de um único item" que
+`parallel/core.py` documenta e todo o projeto assume).
+
+Corrigido na raiz com um `ProjectError.__reduce__` que reconstrói a
+instância via `__new__` (sem chamar o `__init__` da subclasse) — sem
+mudança de comportamento para nenhum uso existente, apenas torna toda a
+hierarquia de exceções do projeto segura para atravessar um
+`ProcessPoolExecutor`. Vira o primeiro item do plano de implementação
+(pré-requisito da paralelização de `preprocessing/pipeline.py`).
+
 ## Riscos e mitigação
 
 - **Reordenação por conclusão em vez de submissão**: mitigado pelo padrão
