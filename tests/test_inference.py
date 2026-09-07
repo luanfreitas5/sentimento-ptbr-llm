@@ -53,14 +53,14 @@ class TestStandardizePredictionOutput:
 
     def test_normalizes_label_and_clips_confidence_above_one(self) -> None:
         """Um rótulo com variação de caixa deve ser normalizado; confiança > 1 deve ser 1.0."""
-        label, confidence = standardize_prediction_output(" Positivo ", 1.5)
+        label, confidence_score = standardize_prediction_output(" Positivo ", 1.5)
         assert label == "positivo"
-        assert confidence == 1.0
+        assert confidence_score == 1.0
 
     def test_clips_negative_confidence_to_zero(self) -> None:
         """Uma confiança negativa deve ser restrita a 0.0."""
-        _, confidence = standardize_prediction_output("negativo", -0.2)
-        assert confidence == 0.0
+        _, confidence_score = standardize_prediction_output("negativo", -0.2)
+        assert confidence_score == 0.0
 
     def test_raises_for_unknown_label(self) -> None:
         """Um rótulo fora das classes conhecidas deve levantar ``ValueError``."""
@@ -77,7 +77,7 @@ class TestBuildPredictionDataframe:
             ["1", "2"], ["bom dia", "péssimo dia"], ["positivo", "negativo"], [0.9, 0.8]
         )
         assert dataframe.height == 2
-        assert dataframe["confidence"].to_list() == [0.9, 0.8]
+        assert dataframe["confidence_score"].to_list() == [0.9, 0.8]
 
     def test_raises_for_empty_ids(self) -> None:
         """Um lote vazio deve levantar ``EmptyDatasetError``."""
@@ -100,7 +100,7 @@ class TestPredictor:
         predictor = Predictor(_FakeTextClassifier(), allowed_labels=("positivo", "negativo"))
         record = predictor.predict_one_from_features(["produto muito bom"])
         assert record["sentiment_label"] == "positivo"
-        assert record["confidence"] == pytest.approx(0.9)
+        assert record["confidence_score"] == pytest.approx(0.9)
         assert record["probabilities"]["positivo"] == pytest.approx(0.9)
 
     def test_predict_returns_validated_dataframe(self) -> None:

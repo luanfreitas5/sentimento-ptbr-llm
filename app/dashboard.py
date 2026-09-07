@@ -201,7 +201,9 @@ def _render_interactive_demo(deploy_config: dict[str, Any]) -> None:
         return
 
     st.metric(
-        "Sentimento predito", record["sentiment_label"], f"{record['confidence']:.1%} de confiança"
+        "Sentimento predito",
+        record["sentiment_label"],
+        f"{record['confidence_score']:.1%} de confiança",
     )
     st.bar_chart(pl.DataFrame([record["probabilities"]]).to_pandas().T, use_container_width=True)
 

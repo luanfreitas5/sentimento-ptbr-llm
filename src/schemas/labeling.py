@@ -21,7 +21,7 @@ class LabelingResultSchema(pa.DataFrameModel):
     id: Series[str]
     tagger: Series[str]
     sentiment_label: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
-    confidence: Series[float] = pa.Field(ge=0.0, le=1.0)
+    confidence_score: Series[float] = pa.Field(ge=0.0, le=1.0)
     weight: Series[float] = pa.Field(gt=0.0)
 
     class Config(BaseConfig):
@@ -50,15 +50,13 @@ def validate_labeling_result(dataframe: pl.DataFrame) -> pl.DataFrame:
 
     Examples
     --------
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "id": ["1"],
-    ...         "tagger": ["heuristica_lexica"],
-    ...         "sentiment_label": ["positivo"],
-    ...         "confidence": [0.9],
-    ...         "weight": [1.0],
-    ...     }
-    ... )
+    >>> df = pl.DataFrame({
+    ...     "id": ["1"],
+    ...     "tagger": ["heuristica_lexica"],
+    ...     "sentiment_label": ["positivo"],
+    ...     "confidence_score": [0.9],
+    ...     "weight": [1.0],
+    ... })
     >>> validate_labeling_result(df).height
     1
     """

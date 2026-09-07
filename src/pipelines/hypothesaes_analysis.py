@@ -6,7 +6,7 @@ stages``: treina um Sparse Autoencoder sobre embeddings do corpus rotulado
 sanidade (DESCOBERTA DE PADRÕES,
 :func:`hypothesaes.quickstart.interpret_sae`) e seleciona/interpreta os
 neurônios mais preditivos de rótulos de BAIXA confiança — a coluna
-``confidence`` produzida pela etapa ``labeling``
+``confidence_score`` produzida pela etapa ``labeling``
 (:func:`labeling.consensus.aggregate_by_weighted_majority_vote`) — como
 candidatos a INCONSISTÊNCIA DE ROTULAGEM
 (:func:`hypothesaes.quickstart.generate_hypotheses`). Ao final, consolida os
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 _ID_COLUMN = "id"
 _TEXT_COLUMN = "text"
 _LABEL_COLUMN = "sentiment_label"
-_CONFIDENCE_COLUMN = "confidence"
+_CONFIDENCE_COLUMN = "confidence_score"
 _SPLIT_COLUMN = "split"
 _LOW_CONFIDENCE_COLUMN = "low_confidence"
 
@@ -68,7 +68,7 @@ class HypothesaesArtifacts:
     Parameters
     ----------
     low_confidence_tweets : pl.DataFrame
-        Tweets com ``confidence`` abaixo do limiar configurado, ordenados
+        Tweets com ``confidence_score`` abaixo do limiar configurado, ordenados
         do menor para o maior score.
     patterns : pl.DataFrame
         Neurônios interpretados na descoberta de padrões (ver
@@ -120,7 +120,8 @@ def _prepare_corpus(
         )
 
     return (
-        labeled_corpus.filter(pl.col(text_column).str.strip_chars() != "")
+        labeled_corpus
+        .filter(pl.col(text_column).str.strip_chars() != "")
         .unique(subset=[text_column], keep="first")
         .with_columns(
             (pl.col(confidence_column) < score_threshold)
@@ -150,7 +151,8 @@ def _build_dataset_summary(
 ) -> dict[str, Any]:
     """Resume a distribuição de rótulos de baixa confiança no corpus preparado."""
     low_confidence_by_label = (
-        corpus.group_by(label_column)
+        corpus
+        .group_by(label_column)
         .agg(pl.col(_LOW_CONFIDENCE_COLUMN).mean().round(4).alias("frac_baixa_confianca"))
         .sort(label_column)
         .to_dicts()
@@ -216,7 +218,7 @@ def run_hypothesaes_analysis_stage(
     confidence_column : str, optional
         Coluna de confiança do rótulo de consenso (ver
         :func:`labeling.consensus.aggregate_by_weighted_majority_vote`), by
-        default "confidence".
+        default "confidence_score".
     score_threshold : float, optional
         Limiar de baixa confiança (``confidence_column < score_threshold``),
         by default 0.5.
@@ -300,7 +302,8 @@ def run_hypothesaes_analysis_stage(
     )
 
     low_confidence_tweets = (
-        corpus.filter(pl.col(_LOW_CONFIDENCE_COLUMN) == 1)
+        corpus
+        .filter(pl.col(_LOW_CONFIDENCE_COLUMN) == 1)
         .select([id_column, text_column, label_column, confidence_column])
         .sort(confidence_column)
     )
@@ -308,7 +311,7 @@ def run_hypothesaes_analysis_stage(
         low_confidence_tweets, paths.reports_interpretability_dir / _LOW_CONFIDENCE_TWEETS_FILE_NAME
     )
     logger.info(
-        "Tweets de baixa confiança (confidence < %.2f): %d/%d.",
+        "Tweets de baixa confiança (confidence_score < %.2f): %d/%d.",
         score_threshold,
         low_confidence_tweets.height,
         corpus.height,

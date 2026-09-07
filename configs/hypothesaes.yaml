@@ -5,7 +5,7 @@
 #
 # Fluxo: treina um SAE sobre embeddings do corpus rotulado, interpreta uma
 # amostra de neurônios (descoberta de padrões) e seleciona/interpreta os
-# neurônios mais preditivos de rótulos de BAIXA confiança (`confidence` <
+# neurônios mais preditivos de rótulos de BAIXA confiança (`confidence_score` <
 # low_confidence.score_threshold), candidatos a inconsistência de rotulagem.
 
 embedding:
@@ -18,7 +18,7 @@ sae:
   matryoshka_prefix_lengths: [32, 256]
 
 low_confidence:
-  # confidence (razão de concordância da etapa "labeling") abaixo deste
+  # confidence_score (razão de concordância da etapa "labeling") abaixo deste
   # limiar é tratada como rótulo de baixa confiança/potencial inconsistência.
   score_threshold: 0.5
 

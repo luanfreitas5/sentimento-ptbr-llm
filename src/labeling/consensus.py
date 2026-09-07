@@ -30,26 +30,25 @@ def aggregate_by_weighted_majority_vote(labeling_results: pl.DataFrame) -> pl.Da
     -------
     pl.DataFrame
         DataFrame com colunas ``id``, ``sentiment_label`` (rótulo de
-        consenso) e ``confidence`` (razão de concordância entre
+        consenso) e ``confidence_score`` (razão de concordância entre
         rotuladores, em ``[0.0, 1.0]``).
 
     Examples
     --------
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "id": ["1", "1"],
-    ...         "tagger": ["heuristica", "llm"],
-    ...         "sentiment_label": ["positivo", "positivo"],
-    ...         "confidence": [0.8, 0.9],
-    ...         "weight": [1.0, 2.0],
-    ...     }
-    ... )
+    >>> df = pl.DataFrame({
+    ...     "id": ["1", "1"],
+    ...     "tagger": ["heuristica", "llm"],
+    ...     "sentiment_label": ["positivo", "positivo"],
+    ...     "confidence_score": [0.8, 0.9],
+    ...     "weight": [1.0, 2.0],
+    ... })
     >>> aggregate_by_weighted_majority_vote(df)["sentiment_label"].to_list()
     ['positivo']
     """
-    result = calculate_agreement_ratio(labeling_results).rename(
-        {"consensus_label": "sentiment_label", "agreement_ratio": "confidence"}
-    )
+    result = calculate_agreement_ratio(labeling_results).rename({
+        "consensus_label": "sentiment_label",
+        "agreement_ratio": "confidence_score",
+    })
     logger.info(
         "Consenso por votação majoritária ponderada calculado para %d amostra(s).", result.height
     )
@@ -67,7 +66,7 @@ def merge_consensus_into_corpus(
         Corpus original, contendo ao menos ``id_column``.
     consensus : pl.DataFrame
         Saída de :func:`aggregate_by_weighted_majority_vote`, contendo
-        ``id_column``, ``sentiment_label`` e ``confidence``.
+        ``id_column``, ``sentiment_label`` e ``confidence_score``.
     id_column : str, optional
         Nome da coluna identificadora comum aos dois DataFrames,
         by default "id".
@@ -76,20 +75,24 @@ def merge_consensus_into_corpus(
     -------
     pl.DataFrame
         ``corpus`` acrescido das colunas ``sentiment_label`` e
-        ``confidence``. Amostras sem consenso correspondente recebem
+        ``confidence_score``. Amostras sem consenso correspondente recebem
         valores nulos nessas colunas (junção à esquerda).
 
     Examples
     --------
     >>> corpus = pl.DataFrame({"id": ["1", "2"], "text": ["ótimo", "sem opinião"]})
-    >>> consensus = pl.DataFrame(
-    ...     {"id": ["1"], "sentiment_label": ["positivo"], "confidence": [0.9]}
-    ... )
+    >>> consensus = pl.DataFrame({
+    ...     "id": ["1"],
+    ...     "sentiment_label": ["positivo"],
+    ...     "confidence_score": [0.9],
+    ... })
     >>> merge_consensus_into_corpus(corpus, consensus).sort("id")["sentiment_label"].to_list()
     ['positivo', None]
     """
     merged = corpus.join(
-        consensus.select([id_column, "sentiment_label", "confidence"]), on=id_column, how="left"
+        consensus.select([id_column, "sentiment_label", "confidence_score"]),
+        on=id_column,
+        how="left",
     )
     logger.info("Rótulos de consenso mesclados ao corpus: %d linha(s).", merged.height)
     return merged

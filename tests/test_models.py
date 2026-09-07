@@ -462,7 +462,7 @@ class TestBuildSentimentPrompt:
             allowed_labels=("positivo", "negativo"),
         )
         assert "exemplo bom" in prompt
-        assert '"sentimento": "positivo"' in prompt
+        assert '"sentiment_label": "positivo"' in prompt
 
 
 class TestParseLlmSentimentOutput:
@@ -470,11 +470,11 @@ class TestParseLlmSentimentOutput:
 
     def test_extracts_label_and_confidence_from_valid_json(self) -> None:
         """Uma resposta JSON válida deve ter rótulo e confiança extraídos corretamente."""
-        label, confidence = parse_llm_sentiment_output(
-            '{"sentimento": "positivo", "confianca": 0.9, "justificativa": "..."}'
+        label, confidence_score = parse_llm_sentiment_output(
+            '{"sentiment_label": "positivo", "confidence_score": 0.9, "justification": "..."}'
         )
         assert label == "positivo"
-        assert confidence == 0.9
+        assert confidence_score == 0.9
 
     def test_returns_none_for_text_without_json(self) -> None:
         """Uma resposta sem objeto JSON deve retornar ``(None, 0.0)``."""
@@ -482,22 +482,24 @@ class TestParseLlmSentimentOutput:
 
     def test_returns_none_for_label_outside_allowed(self) -> None:
         """Um rótulo fora das classes conhecidas deve retornar ``(None, 0.0)``."""
-        label, confidence = parse_llm_sentiment_output(
-            '{"sentimento": "desconhecido", "confianca": 0.9}'
+        label, confidence_score = parse_llm_sentiment_output(
+            '{"sentiment_label": "desconhecido", "confidence_score": 0.9}'
         )
         assert label is None
-        assert confidence == 0.0
+        assert confidence_score == 0.0
 
     def test_clips_confidence_to_unit_interval(self) -> None:
         """Uma confiança fora de ``[0, 1]`` deve ser recortada para o intervalo."""
-        _, confidence = parse_llm_sentiment_output('{"sentimento": "positivo", "confianca": 5.0}')
-        assert confidence == 1.0
+        _, confidence_score = parse_llm_sentiment_output(
+            '{"sentiment_label": "positivo", "confidence_score": 5.0}'
+        )
+        assert confidence_score == 1.0
 
     def test_defaults_confidence_to_zero_when_missing(self) -> None:
         """A ausência da chave ``confianca`` deve resultar em confiança 0.0."""
-        label, confidence = parse_llm_sentiment_output('{"sentimento": "neutro"}')
+        label, confidence_score = parse_llm_sentiment_output('{"sentiment_label": "neutro"}')
         assert label == "neutro"
-        assert confidence == 0.0
+        assert confidence_score == 0.0
 
 
 class TestSelectBalancedFewShotExamples:
@@ -522,14 +524,14 @@ class TestLLMSentimentClassifier:
 
     def test_predict_returns_parsed_labels(self) -> None:
         """O rótulo retornado deve ser o extraído da resposta do backend."""
-        backend = _FakeLLMBackend(['{"sentimento": "positivo", "confianca": 0.8}'])
+        backend = _FakeLLMBackend(['{"sentiment_label": "positivo", "confidence_score": 0.8}'])
         classifier = LLMSentimentClassifier(backend, few_shot=False)
         predictions = classifier.predict(["ótimo produto"])
         assert predictions.tolist() == ["positivo"]
 
     def test_predict_proba_assigns_confidence_to_predicted_class(self) -> None:
         """A confiança relatada pelo LLM deve ser atribuída à classe predita."""
-        backend = _FakeLLMBackend(['{"sentimento": "positivo", "confianca": 0.7}'])
+        backend = _FakeLLMBackend(['{"sentiment_label": "positivo", "confidence_score": 0.7}'])
         classifier = LLMSentimentClassifier(
             backend, few_shot=False, allowed_labels=("positivo", "negativo", "neutro")
         )
@@ -551,7 +553,7 @@ class TestLLMSentimentClassifier:
 
     def test_fit_selects_few_shot_examples_when_enabled(self) -> None:
         """Com ``few_shot=True``, ``fit`` deve selecionar exemplos balanceados."""
-        backend = _FakeLLMBackend(['{"sentimento": "positivo", "confianca": 1.0}'])
+        backend = _FakeLLMBackend(['{"sentiment_label": "positivo", "confidence_score": 1.0}'])
         classifier = LLMSentimentClassifier(backend, few_shot=True, n_examples_per_class=1)
         classifier.fit(["bom", "ruim", "ok"], ["positivo", "negativo", "neutro"])
         assert len(classifier._few_shot_examples) == 3

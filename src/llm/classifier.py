@@ -191,10 +191,10 @@ class LangChainSentimentClassifier:
         probabilities = np.zeros((len(X), n_classes), dtype=np.float64)
         for row_index, text in enumerate(X):
             output = self._classify_one(text)
-            predicted_index = self.allowed_labels.index(output.sentimento)
-            remaining_probability = (1.0 - output.confianca) / max(n_classes - 1, 1)
+            predicted_index = self.allowed_labels.index(output.sentiment_label)
+            remaining_probability = (1.0 - output.confidence_score) / max(n_classes - 1, 1)
             probabilities[row_index] = remaining_probability
-            probabilities[row_index, predicted_index] = output.confianca
+            probabilities[row_index, predicted_index] = output.confidence_score
         return probabilities
 
     def predict_with_justification(self, X: Sequence[str]) -> list[SentimentLLMOutput]:  # noqa: N803
@@ -215,9 +215,9 @@ class LangChainSentimentClassifier:
         --------
         >>> class _Backend:
         ...     def generate(self, prompt: str) -> str:
-        ...         return '{"sentimento": "positivo", "confianca": 0.9, "justificativa": "ok"}'
+        ...         return '{"sentiment_label": "positivo", "confidence_score": 0.9, "justification": "ok"}'
         >>> classificador = LangChainSentimentClassifier(_Backend(), strategy="zero_shot")
-        >>> classificador.predict_with_justification(["ótimo"])[0].justificativa
+        >>> classificador.predict_with_justification(["ótimo"])[0].justification
         'ok'
         """
         return [self._classify_one(text) for text in X]

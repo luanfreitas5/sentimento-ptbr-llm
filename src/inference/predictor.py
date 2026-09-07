@@ -95,18 +95,18 @@ class Predictor:
         -------
         dict[str, Any]
             Dicionário com as chaves ``"sentiment_label"``,
-            ``"confidence"`` e ``"probabilities"``.
+            ``"confidence_score"`` e ``"probabilities"``.
         """
         class_index = (
             self._classes.index(label) if label in self._classes else int(np.argmax(probabilities))
         )
-        confidence = float(probabilities[class_index])
+        confidence_score = float(probabilities[class_index])
         normalized_label, normalized_confidence = standardize_prediction_output(
-            label, confidence, allowed_labels=self.allowed_labels
+            label, confidence_score, allowed_labels=self.allowed_labels
         )
         return {
             "sentiment_label": normalized_label,
-            "confidence": normalized_confidence,
+            "confidence_score": normalized_confidence,
             "probabilities": dict(
                 zip(self._classes, (float(p) for p in probabilities), strict=True)
             ),
@@ -168,7 +168,7 @@ class Predictor:
         predicted_labels = [str(label) for label in self.model.predict(texts)]
         probabilities_matrix = np.asarray(self.model.predict_proba(texts))
         confidences = [
-            self._build_record(label, row)["confidence"]
+            self._build_record(label, row)["confidence_score"]
             for label, row in zip(predicted_labels, probabilities_matrix, strict=True)
         ]
         return build_prediction_dataframe(

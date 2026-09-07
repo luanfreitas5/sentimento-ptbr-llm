@@ -3,7 +3,7 @@
 Implementa a Fase 11 (``configs/llm.yaml -> parsing``): valida a resposta
 bruta de um backend LLM (``src/llm/backends.py``) contra
 :class:`SentimentLLMOutput` — o mesmo contrato JSON instruído em
-``src/llm/prompts.py`` (``sentimento``/``confianca``/``justificativa``) — e
+``src/llm/prompts.py`` (``sentiment_label``/``confidence_score``/``justification``) — e
 retenta a geração quando a resposta não é interpretável
 (``parsing.retry_on_invalid_json``), até ``parsing.max_retries`` tentativas,
 retornando um rótulo de fallback (``parsing.fallback_label``) caso todas
@@ -36,20 +36,20 @@ class SentimentLLMOutput(BaseModel):
 
     Parameters
     ----------
-    sentimento : str
+    sentiment_label : str
         Rótulo de sentimento predito, normalizado (minúsculas, sem espaços
         nas bordas).
-    confianca : float
+    confidence_score : float
         Confiança relatada pelo LLM, restrita a ``[0.0, 1.0]``.
-    justificativa : str
+    justification : str
         Justificativa textual, opcional.
     """
 
-    sentimento: str
-    confianca: float = Field(ge=0.0, le=1.0, default=0.0)
-    justificativa: str = ""
+    sentiment_label: str
+    confidence_score: float = Field(ge=0.0, le=1.0, default=0.0)
+    justification: str = ""
 
-    @field_validator("sentimento")
+    @field_validator("sentiment_label")
     @classmethod
     def normalize_sentiment_label(cls, value: str) -> str:
         """Normaliza o rótulo de sentimento para minúsculas, sem espaços nas bordas."""
@@ -98,8 +98,8 @@ def extract_json_object(raw_output: str) -> str | None:
 
     Examples
     --------
-    >>> extract_json_object('Raciocínio: ok\\nResposta: {"sentimento": "positivo"}')
-    '{"sentimento": "positivo"}'
+    >>> extract_json_object('Raciocínio: ok\\nResposta: {"sentiment_label": "positivo"}')
+    '{"sentiment_label": "positivo"}'
     >>> extract_json_object("sem json aqui") is None
     True
     """
@@ -131,8 +131,10 @@ def parse_structured_llm_output(
 
     Examples
     --------
-    >>> resultado = parse_structured_llm_output('{"sentimento": "positivo", "confianca": 0.9}')
-    >>> resultado.sentimento, resultado.confianca
+    >>> resultado = parse_structured_llm_output(
+    ...     '{"sentiment_label": "positivo", "confidence_score": 0.9}'
+    ... )
+    >>> resultado.sentiment_label, resultado.confidence_score
     ('positivo', 0.9)
     >>> parse_structured_llm_output("resposta sem json") is None
     True
@@ -149,9 +151,11 @@ def parse_structured_llm_output(
         logger.warning("Falha ao validar resposta estruturada do LLM: %s", exception)
         return None
 
-    if parsed_output.sentimento not in allowed_labels:
+    if parsed_output.sentiment_label not in allowed_labels:
         logger.warning(
-            "Rótulo '%s' fora das classes conhecidas %s.", parsed_output.sentimento, allowed_labels
+            "Rótulo '%s' fora das classes conhecidas %s.",
+            parsed_output.sentiment_label,
+            allowed_labels,
         )
         return None
     return parsed_output
@@ -193,7 +197,7 @@ def generate_and_parse_with_retry(
     -------
     SentimentLLMOutput
         A saída estruturada interpretada, ou um fallback com
-        ``sentimento=fallback_label`` e ``confianca=0.0`` se todas as
+        ``sentiment_label=fallback_label`` e ``confidence_score=0.0`` se todas as
         tentativas falharem.
 
     Raises
@@ -205,8 +209,8 @@ def generate_and_parse_with_retry(
     --------
     >>> class _Backend:
     ...     def generate(self, prompt: str) -> str:
-    ...         return '{"sentimento": "positivo", "confianca": 0.8}'
-    >>> generate_and_parse_with_retry(_Backend(), "texto qualquer").sentimento
+    ...         return '{"sentiment_label": "positivo", "confidence_score": 0.8}'
+    >>> generate_and_parse_with_retry(_Backend(), "texto qualquer").sentiment_label
     'positivo'
     """
     if max_retries < 1:
@@ -226,4 +230,6 @@ def generate_and_parse_with_retry(
         max_retries,
         fallback_label,
     )
-    return SentimentLLMOutput(sentimento=fallback_label, confianca=0.0, justificativa="")
+    return SentimentLLMOutput(
+        sentiment_label=fallback_label, confidence_score=0.0, justification=""
+    )

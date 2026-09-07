@@ -16,41 +16,35 @@ class TestDatasetSchemas:
 
     def test_validate_raw_tweet_dataset_accepts_valid_dataframe(self) -> None:
         """Um DataFrame com todas as colunas obrigatórias e id único deve ser aceito."""
-        df = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["ótimo produto", "não gostei"],
-                "data_source": ["scraping", "scraping"],
-                "data_collected": ["2026-01-01", "2026-01-02"],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1", "2"],
+            "text": ["ótimo produto", "não gostei"],
+            "data_source": ["scraping", "scraping"],
+            "data_collected": ["2026-01-01", "2026-01-02"],
+        })
         result = validate_raw_tweet_dataset(df)
         assert result.height == 2
 
     def test_validate_raw_tweet_dataset_rejects_extra_column(self) -> None:
         """Uma coluna extra não declarada deve ser rejeitada (schema strict)."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["ótimo produto"],
-                "data_source": ["scraping"],
-                "data_collected": ["2026-01-01"],
-                "extra_column": ["valor"],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "text": ["ótimo produto"],
+            "data_source": ["scraping"],
+            "data_collected": ["2026-01-01"],
+            "extra_column": ["valor"],
+        })
         with pytest.raises(DataValidationError):
             validate_raw_tweet_dataset(df)
 
     def test_validate_raw_tweet_dataset_rejects_duplicate_id(self) -> None:
         """Ids duplicados devem violar a restrição de unicidade."""
-        df = pl.DataFrame(
-            {
-                "id": ["1", "1"],
-                "text": ["a", "b"],
-                "data_source": ["scraping", "scraping"],
-                "data_collected": ["2026-01-01", "2026-01-02"],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1", "1"],
+            "text": ["a", "b"],
+            "data_source": ["scraping", "scraping"],
+            "data_collected": ["2026-01-01", "2026-01-02"],
+        })
         with pytest.raises(DataValidationError):
             validate_raw_tweet_dataset(df)
 
@@ -85,42 +79,36 @@ class TestLabelingResultSchema:
 
     def test_validate_labeling_result_accepts_valid_dataframe(self) -> None:
         """Um resultado de rotulagem válido deve ser aceito."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "tagger": ["heuristica_lexica"],
-                "sentiment_label": ["positivo"],
-                "confidence": [0.9],
-                "weight": [1.0],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "tagger": ["heuristica_lexica"],
+            "sentiment_label": ["positivo"],
+            "confidence_score": [0.9],
+            "weight": [1.0],
+        })
         assert validate_labeling_result(df).height == 1
 
     def test_validate_labeling_result_rejects_confidence_out_of_range(self) -> None:
         """Confiança fora do intervalo [0, 1] deve ser rejeitada."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "tagger": ["heuristica_lexica"],
-                "sentiment_label": ["positivo"],
-                "confidence": [1.5],
-                "weight": [1.0],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "tagger": ["heuristica_lexica"],
+            "sentiment_label": ["positivo"],
+            "confidence_score": [1.5],
+            "weight": [1.0],
+        })
         with pytest.raises(DataValidationError):
             validate_labeling_result(df)
 
     def test_validate_labeling_result_rejects_non_positive_weight(self) -> None:
         """Peso não positivo deve ser rejeitado."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "tagger": ["heuristica_lexica"],
-                "sentiment_label": ["positivo"],
-                "confidence": [0.9],
-                "weight": [0.0],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "tagger": ["heuristica_lexica"],
+            "sentiment_label": ["positivo"],
+            "confidence_score": [0.9],
+            "weight": [0.0],
+        })
         with pytest.raises(DataValidationError):
             validate_labeling_result(df)
 
@@ -130,26 +118,22 @@ class TestPredictionSchema:
 
     def test_validate_prediction_accepts_valid_dataframe(self) -> None:
         """Uma predição válida deve ser aceita."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["ótimo produto"],
-                "sentiment_label": ["positivo"],
-                "confidence": [0.95],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "text": ["ótimo produto"],
+            "sentiment_label": ["positivo"],
+            "confidence_score": [0.95],
+        })
         assert validate_prediction(df).height == 1
 
     def test_validate_prediction_rejects_unknown_label(self) -> None:
         """Um rótulo predito fora das classes conhecidas deve ser rejeitado."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["ótimo produto"],
-                "sentiment_label": ["desconhecido"],
-                "confidence": [0.95],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "text": ["ótimo produto"],
+            "sentiment_label": ["desconhecido"],
+            "confidence_score": [0.95],
+        })
         with pytest.raises(DataValidationError):
             validate_prediction(df)
 
@@ -159,26 +143,22 @@ class TestTrainingExampleSchema:
 
     def test_validate_training_example_accepts_valid_dataframe(self) -> None:
         """Um exemplo de treino válido deve ser aceito."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["ótimo produto"],
-                "sentiment_label": ["positivo"],
-                "split": ["treino"],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "text": ["ótimo produto"],
+            "sentiment_label": ["positivo"],
+            "split": ["treino"],
+        })
         assert validate_training_example(df).height == 1
 
     def test_validate_training_example_rejects_unknown_split(self) -> None:
         """Um valor de split fora de treino/validacao/teste deve ser rejeitado."""
-        df = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["ótimo produto"],
-                "sentiment_label": ["positivo"],
-                "split": ["outro"],
-            }
-        )
+        df = pl.DataFrame({
+            "id": ["1"],
+            "text": ["ótimo produto"],
+            "sentiment_label": ["positivo"],
+            "split": ["outro"],
+        })
         with pytest.raises(DataValidationError):
             validate_training_example(df)
 
@@ -188,29 +168,25 @@ class TestExperimentRunMetricSchema:
 
     def test_validate_experiment_run_metric_accepts_valid_dataframe(self) -> None:
         """Um registro de métrica válido deve ser aceito."""
-        df = pl.DataFrame(
-            {
-                "run_id": ["abc123"],
-                "model_name": ["logistic_regression"],
-                "metric_name": ["f1_macro"],
-                "metric_value": [0.82],
-                "git_sha": ["deadbeef"],
-                "dataset_hash": ["0f3123a4"],
-            }
-        )
+        df = pl.DataFrame({
+            "run_id": ["abc123"],
+            "model_name": ["logistic_regression"],
+            "metric_name": ["f1_macro"],
+            "metric_value": [0.82],
+            "git_sha": ["deadbeef"],
+            "dataset_hash": ["0f3123a4"],
+        })
         assert validate_experiment_run_metric(df).height == 1
 
     def test_validate_experiment_run_metric_rejects_unknown_metric_name(self) -> None:
         """Um nome de métrica não reconhecido deve ser rejeitado."""
-        df = pl.DataFrame(
-            {
-                "run_id": ["abc123"],
-                "model_name": ["logistic_regression"],
-                "metric_name": ["metrica_inexistente"],
-                "metric_value": [0.82],
-                "git_sha": ["deadbeef"],
-                "dataset_hash": ["0f3123a4"],
-            }
-        )
+        df = pl.DataFrame({
+            "run_id": ["abc123"],
+            "model_name": ["logistic_regression"],
+            "metric_name": ["metrica_inexistente"],
+            "metric_value": [0.82],
+            "git_sha": ["deadbeef"],
+            "dataset_hash": ["0f3123a4"],
+        })
         with pytest.raises(DataValidationError):
             validate_experiment_run_metric(df)

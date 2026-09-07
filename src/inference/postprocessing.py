@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def standardize_prediction_output(
-    label: str, confidence: float, *, allowed_labels: Sequence[str] = SENTIMENT_CLASSES
+    label: str, confidence_score: float, *, allowed_labels: Sequence[str] = SENTIMENT_CLASSES
 ) -> tuple[str, float]:
     """Normaliza um par rótulo/confiança bruto para o formato padrão do projeto.
 
@@ -32,7 +32,7 @@ def standardize_prediction_output(
     label : str
         Rótulo de sentimento bruto, possivelmente com variação de caixa
         e/ou espaços.
-    confidence : float
+    confidence_score : float
         Confiança bruta associada ao rótulo.
     allowed_labels : Sequence[str], optional
         Classes de sentimento aceitas, by default
@@ -60,7 +60,7 @@ def standardize_prediction_output(
         raise ValueError(
             f"Rótulo '{normalized_label}' não pertence às classes conhecidas {allowed_labels}."
         )
-    normalized_confidence = min(max(confidence, 0.0), 1.0)
+    normalized_confidence = min(max(confidence_score, 0.0), 1.0)
     return normalized_label, normalized_confidence
 
 
@@ -118,7 +118,7 @@ def build_prediction_dataframe(
         "id": ids,
         "text": texts,
         "sentiment_label": list(normalized_labels),
-        "confidence": list(normalized_confidences),
+        "confidence_score": list(normalized_confidences),
     }
     if extra_columns:
         data.update(extra_columns)

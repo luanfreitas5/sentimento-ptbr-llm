@@ -41,7 +41,7 @@ class OnlinePredictor:
         Returns
         -------
         dict[str, Any]
-            Registro com as chaves ``"sentiment_label"``, ``"confidence"``
+            Registro com as chaves ``"sentiment_label"``, ``"confidence_score"``
             e ``"probabilities"`` (ver
             :meth:`inference.predictor.Predictor._build_record`).
 

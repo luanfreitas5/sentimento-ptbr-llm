@@ -7,7 +7,7 @@ que uma futura mudança de template não quebre silenciosamente experimentos
 já registrados no MLflow (o texto do prompt usado deve poder ser
 rastreado até a versão do template que o gerou). Independente da
 estratégia, o LLM é instruído a responder em JSON estruturado
-(``sentimento``/``confianca``/``justificativa``), consumido por
+(``sentiment_label``/``confidence_score``/``justification``), consumido por
 ``src/llm/parsers.py``.
 
 Este módulo é puro Python (sem dependências pesadas/opcionais): pode ser
@@ -44,8 +44,8 @@ def _build_output_format_instructions(allowed_labels: Sequence[str]) -> str:
     return (
         "Classifique o sentimento do texto em português brasileiro abaixo em "
         f"uma das classes {labels_text}. Responda apenas com um objeto JSON "
-        'contendo as chaves "sentimento", "confianca" (entre 0.0 e 1.0) e '
-        '"justificativa".'
+        'contendo as chaves "sentiment_label", "confidence_score" (entre 0.0 e 1.0) e '
+        '"justification".'
     )
 
 
@@ -65,7 +65,7 @@ def _build_few_shot_examples_block(few_shot_examples: Sequence[tuple[str, str]])
     """
     return [
         f'Texto: "{example_text}"\nResposta: '
-        f'{{"sentimento": "{example_label}", "confianca": 1.0, "justificativa": "exemplo"}}'
+        f'{{"sentiment_label": "{example_label}", "confidence_score": 1.0, "justification": "exemplo"}}'
         for example_text, example_label in few_shot_examples
     ]
 

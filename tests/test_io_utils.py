@@ -71,7 +71,7 @@ class TestCsvIO:
     def test_write_then_read_roundtrip(self, tmp_path: Path) -> None:
         """Escrever e reler um CSV deve preservar os dados originais."""
         file_path = tmp_path / "exemplo.csv"
-        df = pl.DataFrame({"id": ["1", "2"], "sentimento": ["positivo", "negativo"]})
+        df = pl.DataFrame({"id": ["1", "2"], "sentiment_label": ["positivo", "negativo"]})
         write_csv(df, file_path)
         result = read_csv(file_path)
         assert result.to_dicts() == df.to_dicts()
@@ -88,7 +88,7 @@ class TestParquetIO:
     def test_write_then_read_roundtrip(self, tmp_path: Path) -> None:
         """Escrever e reler um Parquet deve preservar os dados originais."""
         file_path = tmp_path / "exemplo.parquet"
-        df = pl.DataFrame({"id": ["1", "2"], "confianca": [0.9, 0.8]})
+        df = pl.DataFrame({"id": ["1", "2"], "confidence_score": [0.9, 0.8]})
         write_parquet(df, file_path)
         result = read_parquet(file_path)
         assert result.to_dicts() == df.to_dicts()

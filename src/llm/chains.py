@@ -75,9 +75,9 @@ def build_sentiment_classification_chain(
     --------
     >>> class _Backend:
     ...     def generate(self, prompt: str) -> str:
-    ...         return '{"sentimento": "positivo", "confianca": 0.9}'
+    ...         return '{"sentiment_label": "positivo", "confidence_score": 0.9}'
     >>> chain = build_sentiment_classification_chain(_Backend())  # doctest: +SKIP
-    >>> chain.invoke("ótimo produto").sentimento  # doctest: +SKIP
+    >>> chain.invoke("ótimo produto").sentiment_label  # doctest: +SKIP
     'positivo'
     """
     try:
@@ -133,8 +133,8 @@ def run_chain_with_retry(
     Returns
     -------
     SentimentLLMOutput
-        Resultado interpretado, ou um fallback com ``sentimento=fallback_label``
-        e ``confianca=0.0`` se todas as tentativas falharem.
+        Resultado interpretado, ou um fallback com ``sentiment_label=fallback_label``
+        e ``confidence_score=0.0`` se todas as tentativas falharem.
 
     Raises
     ------
@@ -147,7 +147,7 @@ def run_chain_with_retry(
     ...     def generate(self, prompt: str) -> str:
     ...         return "resposta sem json"
     >>> chain = build_sentiment_classification_chain(_Backend())  # doctest: +SKIP
-    >>> run_chain_with_retry(chain, "texto", max_retries=1).sentimento  # doctest: +SKIP
+    >>> run_chain_with_retry(chain, "texto", max_retries=1).sentiment_label  # doctest: +SKIP
     'neutro'
     """
     if max_retries < 1:
@@ -168,4 +168,6 @@ def run_chain_with_retry(
         max_retries,
         fallback_label,
     )
-    return SentimentLLMOutput(sentimento=fallback_label, confianca=0.0, justificativa="")
+    return SentimentLLMOutput(
+        sentiment_label=fallback_label, confidence_score=0.0, justificativa=""
+    )

@@ -128,7 +128,25 @@ torchaudio = { index = "pytorch-cu124" }
 
 # --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
 [project.optional-dependencies]
-# Recomendado para os estágios `llm_evaluation` e a análise HypotheSAEs
+# Recomendado para os estágios `hypothesaes` e a análise HypotheSAEs
+# (`make install-hypothesaes`). Dependências pesadas (PyTorch + CUDA) — não instale
+# em ambientes que só rodam ML clássico/DL sobre embeddings estáticos.
+hypothesaes = [
+    "torch>=2.2",                     # backend de tensores para Transformers/DL
+    "transformers>=4.44",             # checkpoints Hugging Face (BERTimbau, RoBERTa, DistilBERT, LLMs)
+    "accelerate>=0.33",               # execução eficiente de modelos Hugging Face (CPU/GPU)
+    "datasets>=2.20",                 # carregamento de datasets do Hugging Face Hub
+    "ollama>=0.3",                    # cliente Python do servidor Ollama (LLMs locais)
+    "sentencepiece>=0.2.2",           # tokenizador exigido por alguns checkpoints (ex.: RoBERTa/Llama)
+    "tiktoken>=0.14.0",               # tokenizador exigido pelo cliente OpenAI-compatível
+    "openai>=3.8.0",                  # cliente OpenAI-compatível (usado com o endpoint local do Ollama)
+    "scikit-learn>=1.7.2",            # ML clássico (Regressão Logística, SVM, Random Forest etc.)
+    "scipy>=1.15.3",                  # álgebra linear, estatística e otimização
+    "statsmodels>=0.15.0",            # testes de significância estatística (Wilcoxon/Friedman)
+    "sentence-transformers>=2.7.0",   # embeddings semânticos para textos
+]
+
+# Recomendado para os estágios `llm_evaluation`
 # (`make install-llm`). Dependências pesadas (PyTorch + CUDA) — não instale
 # em ambientes que só rodam ML clássico/DL sobre embeddings estáticos.
 llm = [
@@ -446,7 +464,7 @@ show-missing = true
 # INTERROGATE — cobertura de docstrings
 # =============================================================================
 [tool.interrogate]
-fail-under = 50
+fail-under = 80
 ignore-init-method = true
 ignore-magic = true
 exclude = ["tests", "notebooks", "docs"]

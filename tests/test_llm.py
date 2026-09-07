@@ -93,13 +93,13 @@ class TestSentimentLLMOutput:
 
     def test_normalizes_label_casing_and_whitespace(self) -> None:
         """O rótulo deve ser normalizado para minúsculas, sem espaços nas bordas."""
-        output = SentimentLLMOutput(sentimento=" Positivo ", confianca=0.5)
-        assert output.sentimento == "positivo"
+        output = SentimentLLMOutput(sentiment_label=" Positivo ", confidence_score=0.5)
+        assert output.sentiment_label == "positivo"
 
     def test_rejects_confidence_out_of_range(self) -> None:
         """Uma confiança fora de ``[0.0, 1.0]`` deve levantar ``ValidationError``."""
         with pytest.raises(ValidationError):
-            SentimentLLMOutput(sentimento="positivo", confianca=1.5)
+            SentimentLLMOutput(sentiment_label="positivo", confidence_score=1.5)
 
 
 class TestExtractJsonObject:
@@ -107,8 +107,8 @@ class TestExtractJsonObject:
 
     def test_extracts_json_substring(self) -> None:
         """Deve extrair apenas o trecho JSON, ignorando texto ao redor."""
-        raw_output = 'Raciocínio: parece positivo\nResposta: {"sentimento": "positivo"}'
-        assert extract_json_object(raw_output) == '{"sentimento": "positivo"}'
+        raw_output = 'Raciocínio: parece positivo\nResposta: {"sentiment_label": "positivo"}'
+        assert extract_json_object(raw_output) == '{"sentiment_label": "positivo"}'
 
     def test_returns_none_without_json(self) -> None:
         """Deve retornar ``None`` quando não há nenhum objeto JSON no texto."""
@@ -121,25 +121,25 @@ class TestParseStructuredLLMOutput:
     def test_parses_valid_json(self) -> None:
         """Uma resposta JSON válida deve ser interpretada corretamente."""
         result = parse_structured_llm_output(
-            '{"sentimento": "positivo", "confianca": 0.9, "justificativa": "elogio"}'
+            '{"sentiment_label": "positivo", "confidence_score": 0.9, "justification": "elogio"}'
         )
         assert result is not None
-        assert result.sentimento == "positivo"
-        assert result.confianca == 0.9
-        assert result.justificativa == "elogio"
+        assert result.sentiment_label == "positivo"
+        assert result.confidence_score == 0.9
+        assert result.justification == "elogio"
 
     def test_returns_none_for_invalid_json(self) -> None:
         """Um JSON malformado deve resultar em ``None``, sem levantar exceção."""
-        assert parse_structured_llm_output('{"sentimento": "positivo",}') is None
+        assert parse_structured_llm_output('{"sentiment_label": "positivo",}') is None
 
     def test_returns_none_for_missing_sentiment_key(self) -> None:
-        """A ausência da chave obrigatória ``sentimento`` deve resultar em ``None``."""
-        assert parse_structured_llm_output('{"confianca": 0.5}') is None
+        """A ausência da chave obrigatória ``sentiment_label`` deve resultar em ``None``."""
+        assert parse_structured_llm_output('{"confidence_score": 0.5}') is None
 
     def test_returns_none_for_label_outside_allowed_labels(self) -> None:
         """Um rótulo fora das classes conhecidas deve resultar em ``None``."""
         result = parse_structured_llm_output(
-            '{"sentimento": "irritado"}', allowed_labels=("positivo", "negativo")
+            '{"sentiment_label": "irritado"}', allowed_labels=("positivo", "negativo")
         )
         assert result is None
 
@@ -149,16 +149,16 @@ class TestGenerateAndParseWithRetry:
 
     def test_returns_parsed_output_on_first_success(self) -> None:
         """Uma resposta interpretável na primeira tentativa não deve gerar retentativas."""
-        backend = _FakeLLMBackend(['{"sentimento": "positivo", "confianca": 0.9}'])
+        backend = _FakeLLMBackend(['{"sentiment_label": "positivo", "confidence_score": 0.9}'])
         result = generate_and_parse_with_retry(backend, "prompt")
-        assert result.sentimento == "positivo"
+        assert result.sentiment_label == "positivo"
         assert len(backend.calls) == 1
 
     def test_retries_until_success(self) -> None:
         """Deve retentar até obter uma resposta interpretável."""
-        backend = _FakeLLMBackend(["resposta inválida", '{"sentimento": "negativo"}'])
+        backend = _FakeLLMBackend(["resposta inválida", '{"sentiment_label": "negativo"}'])
         result = generate_and_parse_with_retry(backend, "prompt", max_retries=3)
-        assert result.sentimento == "negativo"
+        assert result.sentiment_label == "negativo"
         assert len(backend.calls) == 2
 
     def test_returns_fallback_after_exhausting_retries(self) -> None:
@@ -167,8 +167,8 @@ class TestGenerateAndParseWithRetry:
         result = generate_and_parse_with_retry(
             backend, "prompt", max_retries=2, fallback_label="neutro"
         )
-        assert result.sentimento == "neutro"
-        assert result.confianca == 0.0
+        assert result.sentiment_label == "neutro"
+        assert result.confidence_score == 0.0
         assert len(backend.calls) == 2
 
     def test_raises_for_invalid_max_retries(self) -> None:
@@ -233,11 +233,11 @@ class TestSentimentClassificationChain:
     def test_chain_classifies_text(self) -> None:
         """A cadeia deve compor prompt, geração e parsing, retornando a saída estruturada."""
         pytest.importorskip("langchain_core")
-        backend = _FakeLLMBackend(['{"sentimento": "positivo", "confianca": 0.8}'])
+        backend = _FakeLLMBackend(['{"sentiment_label": "positivo", "confidence_score": 0.8}'])
         chain = build_sentiment_classification_chain(backend, strategy="zero_shot")
         result = chain.invoke("ótimo produto")
         assert result is not None
-        assert result.sentimento == "positivo"
+        assert result.sentiment_label == "positivo"
 
     def test_run_chain_with_retry_returns_fallback_when_unparseable(self) -> None:
         """Deve retornar o fallback quando a cadeia nunca produz uma saída interpretável."""
@@ -245,7 +245,7 @@ class TestSentimentClassificationChain:
         backend = _FakeLLMBackend(["resposta sem json"])
         chain = build_sentiment_classification_chain(backend, strategy="zero_shot")
         result = run_chain_with_retry(chain, "texto", max_retries=2, fallback_label="neutro")
-        assert result.sentimento == "neutro"
+        assert result.sentiment_label == "neutro"
 
     def test_raises_for_invalid_max_retries(self) -> None:
         """``max_retries`` menor que 1 deve levantar ``ValueError``, mesmo sem invocar a cadeia."""
@@ -266,14 +266,14 @@ class TestLangChainSentimentClassifier:
 
     def test_predict_returns_labels(self) -> None:
         """``predict`` deve retornar um rótulo de sentimento por texto de entrada."""
-        backend = _FakeLLMBackend(['{"sentimento": "positivo", "confianca": 0.9}'])
+        backend = _FakeLLMBackend(['{"sentiment_label": "positivo", "confidence_score": 0.9}'])
         classifier = LangChainSentimentClassifier(backend, strategy="zero_shot")
         predictions = classifier.predict(["ótimo produto", "outro texto"])
         assert list(predictions) == ["positivo", "positivo"]
 
     def test_predict_proba_assigns_confidence_to_predicted_class(self) -> None:
         """A probabilidade da classe predita deve corresponder à confiança relatada pelo LLM."""
-        backend = _FakeLLMBackend(['{"sentimento": "positivo", "confianca": 0.9}'])
+        backend = _FakeLLMBackend(['{"sentiment_label": "positivo", "confidence_score": 0.9}'])
         classifier = LangChainSentimentClassifier(
             backend, strategy="zero_shot", allowed_labels=("positivo", "negativo")
         )
@@ -298,12 +298,12 @@ class TestLangChainSentimentClassifier:
 
     def test_predict_with_justification_preserves_justification(self) -> None:
         """A justificativa textual do LLM deve ser preservada na saída completa."""
-        backend = _FakeLLMBackend(
-            ['{"sentimento": "positivo", "confianca": 0.9, "justificativa": "elogio direto"}']
-        )
+        backend = _FakeLLMBackend([
+            '{"sentiment_label": "positivo", "confidence_score": 0.9, "justification": "elogio direto"}'
+        ])
         classifier = LangChainSentimentClassifier(backend, strategy="zero_shot")
         outputs = classifier.predict_with_justification(["ótimo produto"])
-        assert outputs[0].justificativa == "elogio direto"
+        assert outputs[0].justification == "elogio direto"
 
     def test_uses_fallback_label_after_unparseable_responses(self) -> None:
         """Quando o LLM nunca responde de forma interpretável, deve usar o rótulo de fallback."""

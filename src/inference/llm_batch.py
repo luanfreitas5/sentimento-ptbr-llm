@@ -116,6 +116,6 @@ def run_llm_batch_inference(
     output_ids = [item_id for _, item_id, _ in ordered_successes]
     output_texts = [texts[original_index] for original_index, _, _ in ordered_successes]
     output_labels = [record["sentiment_label"] for _, _, record in ordered_successes]
-    output_confidences = [record["confidence"] for _, _, record in ordered_successes]
+    output_confidences = [record["confidence_score"] for _, _, record in ordered_successes]
 
     return build_prediction_dataframe(output_ids, output_texts, output_labels, output_confidences)

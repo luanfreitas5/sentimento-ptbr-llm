@@ -118,14 +118,12 @@ class TestRunPreprocessingStage:
         self, pipeline_paths: ProjectPaths
     ) -> None:
         """Deve carregar o corpus bruto e gravar o corpus normalizado correspondente."""
-        raw_corpus = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["RT @a: muito bom!! 😍", "RT @b: péssimo produto"],
-                "data_source": ["scraping", "scraping"],
-                "data_collected": ["2026-01-01", "2026-01-01"],
-            }
-        )
+        raw_corpus = pl.DataFrame({
+            "id": ["1", "2"],
+            "text": ["RT @a: muito bom!! 😍", "RT @b: péssimo produto"],
+            "data_source": ["scraping", "scraping"],
+            "data_collected": ["2026-01-01", "2026-01-01"],
+        })
         write_dataset(raw_corpus, pipeline_paths.raw_tweets_file)
 
         normalized_path = run_preprocessing_stage(pipeline_paths, apply_inclusion_filters=False)
@@ -148,13 +146,11 @@ class TestRunLabelingStage:
         (nenhuma discordância possível), portanto nenhuma amostra deve ser
         sinalizada para validação humana.
         """
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["adorei o produto", "produto pessimo"],
-                "text_normalized": ["adorei o produto", "produto pessimo"],
-            }
-        )
+        normalized_corpus = pl.DataFrame({
+            "id": ["1", "2"],
+            "text": ["adorei o produto", "produto pessimo"],
+            "text_normalized": ["adorei o produto", "produto pessimo"],
+        })
         write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
 
         labeled_path = run_labeling_stage(
@@ -171,13 +167,11 @@ class TestRunLabelingStage:
     ) -> None:
         """Deve sobrescrever o rótulo por validação humana e apenas alertar
         em desacordo com o gold set."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["adorei o produto", "produto pessimo"],
-                "text_normalized": ["adorei o produto", "produto pessimo"],
-            }
-        )
+        normalized_corpus = pl.DataFrame({
+            "id": ["1", "2"],
+            "text": ["adorei o produto", "produto pessimo"],
+            "text_normalized": ["adorei o produto", "produto pessimo"],
+        })
         write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
         human_validation_labels = pl.DataFrame({"id": ["1"], "sentiment_label": ["neutro"]})
         gold_set = pl.DataFrame({"id": ["1", "2"], "sentiment_label": ["positivo", "negativo"]})
@@ -203,17 +197,15 @@ class TestRunFeaturesStage:
     def test_writes_split_corpora_and_tfidf_features(self, pipeline_paths: ProjectPaths) -> None:
         """Deve particionar o corpus rotulado e calcular a matriz TF-IDF do conjunto de treino."""
         n_rows = 10
-        labeled_corpus = pl.DataFrame(
-            {
-                "id": [str(index) for index in range(n_rows)],
-                "text": [
-                    "bom produto" if index % 2 == 0 else "produto ruim" for index in range(n_rows)
-                ],
-                "sentiment_label": [
-                    "positivo" if index % 2 == 0 else "negativo" for index in range(n_rows)
-                ],
-            }
-        )
+        labeled_corpus = pl.DataFrame({
+            "id": [str(index) for index in range(n_rows)],
+            "text": [
+                "bom produto" if index % 2 == 0 else "produto ruim" for index in range(n_rows)
+            ],
+            "sentiment_label": [
+                "positivo" if index % 2 == 0 else "negativo" for index in range(n_rows)
+            ],
+        })
         write_labeled_corpus(labeled_corpus, pipeline_paths.labeled_corpus_file)
 
         artifacts = run_features_stage(
@@ -354,13 +346,11 @@ class TestRunLlmEvaluationStage:
 
     def test_classifies_and_evaluates_with_fake_classifier(self) -> None:
         """Deve classificar e avaliar o conjunto de teste usando um classificador injetado."""
-        test_dataframe = pl.DataFrame(
-            {
-                "id": ["1", "2", "3"],
-                "text": ["produto muito bom", "isso é ruim", "texto qualquer"],
-                "sentiment_label": ["positivo", "negativo", "neutro"],
-            }
-        )
+        test_dataframe = pl.DataFrame({
+            "id": ["1", "2", "3"],
+            "text": ["produto muito bom", "isso é ruim", "texto qualquer"],
+            "sentiment_label": ["positivo", "negativo", "neutro"],
+        })
 
         predictions, evaluation_result = run_llm_evaluation_stage(
             test_dataframe, classifier=_FakeSentimentClassifier(), max_workers=1
@@ -468,13 +458,11 @@ def _fake_interpret_sae(**kwargs: Any) -> pd.DataFrame:
 def _fake_generate_hypotheses(*, selection_method: str, **kwargs: Any) -> pd.DataFrame:
     """Dublê de :func:`hypothesaes.quickstart.generate_hypotheses`: duas
     hipóteses fixas, sem LLM."""
-    return pd.DataFrame(
-        {
-            "neuron_idx": [0, 1],
-            f"target_{selection_method}": [0.5, -0.3],
-            "interpretation": ["hipótese de baixa confiança", "hipótese de alta confiança"],
-        }
-    )
+    return pd.DataFrame({
+        "neuron_idx": [0, 1],
+        f"target_{selection_method}": [0.5, -0.3],
+        "interpretation": ["hipótese de baixa confiança", "hipótese de alta confiança"],
+    })
 
 
 def _fake_evaluate_hypotheses(**kwargs: Any) -> tuple[dict[str, Any], pd.DataFrame]:
@@ -497,16 +485,14 @@ class TestRunHypothesaesAnalysisStage:
     @staticmethod
     def _labeled_corpus_with_confidence(n_rows: int = 20) -> pl.DataFrame:
         """Corpus rotulado sintético, com 1/4 das amostras marcadas como baixa confiança."""
-        return pl.DataFrame(
-            {
-                "id": [str(index) for index in range(n_rows)],
-                "text": [f"tweet numero {index}" for index in range(n_rows)],
-                "sentiment_label": [
-                    "positivo" if index % 2 == 0 else "negativo" for index in range(n_rows)
-                ],
-                "confidence": [0.2 if index % 4 == 0 else 0.9 for index in range(n_rows)],
-            }
-        )
+        return pl.DataFrame({
+            "id": [str(index) for index in range(n_rows)],
+            "text": [f"tweet numero {index}" for index in range(n_rows)],
+            "sentiment_label": [
+                "positivo" if index % 2 == 0 else "negativo" for index in range(n_rows)
+            ],
+            "confidence_score": [0.2 if index % 4 == 0 else 0.9 for index in range(n_rows)],
+        })
 
     def _apply_fakes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
@@ -545,9 +531,11 @@ class TestRunHypothesaesAnalysisStage:
 
     def test_raises_when_confidence_column_is_missing(self, pipeline_paths: ProjectPaths) -> None:
         """Deve levantar ``DataValidationError`` quando a coluna de confiança está ausente."""
-        labeled_corpus = pl.DataFrame(
-            {"id": ["1"], "text": ["tweet"], "sentiment_label": ["positivo"]}
-        )
+        labeled_corpus = pl.DataFrame({
+            "id": ["1"],
+            "text": ["tweet"],
+            "sentiment_label": ["positivo"],
+        })
         with pytest.raises(DataValidationError):
             run_hypothesaes_analysis_stage(labeled_corpus, pipeline_paths)
 
@@ -558,7 +546,7 @@ class TestRunHypothesaesAnalysisStage:
                 "id": pl.Utf8,
                 "text": pl.Utf8,
                 "sentiment_label": pl.Utf8,
-                "confidence": pl.Float64,
+                "confidence_score": pl.Float64,
             }
         )
         with pytest.raises(EmptyDatasetError):

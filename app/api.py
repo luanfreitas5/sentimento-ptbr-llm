@@ -89,7 +89,7 @@ class PredictionResponse(BaseModel):
     """Corpo da resposta de uma predição de sentimento para um único texto."""
 
     sentiment_label: str
-    confidence: float
+    confidence_score: float
     probabilities: dict[str, float]
 
 
@@ -99,7 +99,7 @@ class BatchPredictionItem(BaseModel):
     id: str
     text: str
     sentiment_label: str
-    confidence: float
+    confidence_score: float
 
 
 def _read_deploy_config() -> dict[str, Any]:

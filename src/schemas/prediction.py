@@ -21,7 +21,7 @@ class PredictionSchema(pa.DataFrameModel):
     id: Series[str]
     text: Series[str]
     sentiment_label: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
-    confidence: Series[float] = pa.Field(ge=0.0, le=1.0)
+    confidence_score: Series[float] = pa.Field(ge=0.0, le=1.0)
 
     class Config(BaseConfig):
         """Configuração do schema: permite colunas extras (ex.: probabilidades por classe)."""
@@ -49,14 +49,12 @@ def validate_prediction(dataframe: pl.DataFrame) -> pl.DataFrame:
 
     Examples
     --------
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "id": ["1"],
-    ...         "text": ["ótimo produto"],
-    ...         "sentiment_label": ["positivo"],
-    ...         "confidence": [0.95],
-    ...     }
-    ... )
+    >>> df = pl.DataFrame({
+    ...     "id": ["1"],
+    ...     "text": ["ótimo produto"],
+    ...     "sentiment_label": ["positivo"],
+    ...     "confidence_score": [0.95],
+    ... })
     >>> validate_prediction(df).height
     1
     """

@@ -34,79 +34,75 @@ _WORD_PATTERN = re.compile(r"\w+")
 # Avoid" -> dependências sem justificativa): serve como sinal heurístico
 # leve e determinístico, um dos rotuladores da cascata definida em
 # ``configs/labeling.yaml``.
-POSITIVE_WORDS: frozenset[str] = frozenset(
-    {
-        "bom",
-        "boa",
-        "otimo",
-        "ótimo",
-        "otima",
-        "ótima",
-        "excelente",
-        "adorei",
-        "amei",
-        "maravilhoso",
-        "maravilhosa",
-        "incrivel",
-        "incrível",
-        "perfeito",
-        "perfeita",
-        "recomendo",
-        "sensacional",
-        "show",
-        "top",
-        "gostei",
-        "feliz",
-        "melhor",
-        "lindo",
-        "linda",
-        "sucesso",
-        "eficiente",
-        "satisfeito",
-        "satisfeita",
-        "confiavel",
-        "confiável",
-        "rapido",
-        "rápido",
-        "agradavel",
-        "agradável",
-    }
-)
+POSITIVE_WORDS: frozenset[str] = frozenset({
+    "bom",
+    "boa",
+    "otimo",
+    "ótimo",
+    "otima",
+    "ótima",
+    "excelente",
+    "adorei",
+    "amei",
+    "maravilhoso",
+    "maravilhosa",
+    "incrivel",
+    "incrível",
+    "perfeito",
+    "perfeita",
+    "recomendo",
+    "sensacional",
+    "show",
+    "top",
+    "gostei",
+    "feliz",
+    "melhor",
+    "lindo",
+    "linda",
+    "sucesso",
+    "eficiente",
+    "satisfeito",
+    "satisfeita",
+    "confiavel",
+    "confiável",
+    "rapido",
+    "rápido",
+    "agradavel",
+    "agradável",
+})
 
-NEGATIVE_WORDS: frozenset[str] = frozenset(
-    {
-        "pessimo",
-        "péssimo",
-        "pessima",
-        "péssima",
-        "ruim",
-        "horrivel",
-        "horrível",
-        "odeio",
-        "detestei",
-        "decepcao",
-        "decepção",
-        "lixo",
-        "pior",
-        "triste",
-        "raiva",
-        "problema",
-        "reclamacao",
-        "reclamação",
-        "cancelei",
-        "chateado",
-        "chateada",
-        "revoltante",
-        "decepcionante",
-        "lento",
-        "lenta",
-        "arrependimento",
-        "insatisfeito",
-        "insatisfeita",
-        "nojento",
-        "nojenta",
-    }
-)
+NEGATIVE_WORDS: frozenset[str] = frozenset({
+    "pessimo",
+    "péssimo",
+    "pessima",
+    "péssima",
+    "ruim",
+    "horrivel",
+    "horrível",
+    "odeio",
+    "detestei",
+    "decepcao",
+    "decepção",
+    "lixo",
+    "pior",
+    "triste",
+    "raiva",
+    "problema",
+    "reclamacao",
+    "reclamação",
+    "cancelei",
+    "chateado",
+    "chateada",
+    "revoltante",
+    "decepcionante",
+    "lento",
+    "lenta",
+    "arrependimento",
+    "insatisfeito",
+    "insatisfeita",
+    "nojento",
+    "nojenta",
+})
 
 
 class SentimentLabeler(Protocol):
@@ -267,7 +263,7 @@ def run_cascade_labeling(
     -------
     pl.DataFrame
         DataFrame no formato longo (``id``, ``tagger``, ``sentiment_label``,
-        ``confidence``, ``weight``), validado contra
+        ``confidence_score``, ``weight``), validado contra
         :class:`schemas.labeling.LabelingResultSchema`.
 
     Raises
@@ -300,22 +296,20 @@ def run_cascade_labeling(
         dataframe[id_column].to_list(), dataframe[text_column].to_list(), strict=True
     ):
         for tagger_name, labeler in labelers.items():
-            sentiment_label, confidence = labeler.label(text)
+            sentiment_label, confidence_score = labeler.label(text)
             ids.append(row_id)
             taggers.append(tagger_name)
             sentiment_labels.append(sentiment_label)
-            confidences.append(confidence)
+            confidences.append(confidence_score)
             label_weights.append(resolved_weights.get(tagger_name, 1.0))
 
-    result = pl.DataFrame(
-        {
-            "id": ids,
-            "tagger": taggers,
-            "sentiment_label": sentiment_labels,
-            "confidence": confidences,
-            "weight": label_weights,
-        }
-    )
+    result = pl.DataFrame({
+        "id": ids,
+        "tagger": taggers,
+        "sentiment_label": sentiment_labels,
+        "confidence_score": confidences,
+        "weight": label_weights,
+    })
     logger.info(
         "Rotulagem em cascata concluída: %d amostra(s) x %d rotulador(es) = %d resultado(s).",
         dataframe.height,

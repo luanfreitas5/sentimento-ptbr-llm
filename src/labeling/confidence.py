@@ -32,7 +32,7 @@ def calculate_weighted_label_scores(labeling_results: pl.DataFrame) -> pl.DataFr
     -------
     pl.DataFrame
         DataFrame com colunas ``id``, ``sentiment_label`` e
-        ``weighted_score`` (soma de ``confidence * weight`` de todos os
+        ``weighted_score`` (soma de ``confidence_score * weight`` de todos os
         rotuladores que atribuíram aquele rótulo à amostra).
 
     Raises
@@ -44,22 +44,20 @@ def calculate_weighted_label_scores(labeling_results: pl.DataFrame) -> pl.DataFr
 
     Examples
     --------
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "id": ["1", "1", "1"],
-    ...         "tagger": ["heuristica", "llm", "modelo"],
-    ...         "sentiment_label": ["positivo", "positivo", "negativo"],
-    ...         "confidence": [0.8, 0.6, 0.9],
-    ...         "weight": [1.0, 2.0, 2.0],
-    ...     }
-    ... )
+    >>> df = pl.DataFrame({
+    ...     "id": ["1", "1", "1"],
+    ...     "tagger": ["heuristica", "llm", "modelo"],
+    ...     "sentiment_label": ["positivo", "positivo", "negativo"],
+    ...     "confidence_score": [0.8, 0.6, 0.9],
+    ...     "weight": [1.0, 2.0, 2.0],
+    ... })
     >>> calculate_weighted_label_scores(df).sort("sentiment_label")["weighted_score"].to_list()
     [1.8, 2.0]
     """
     validate_not_empty_collection(labeling_results, collection_name="labeling_results")
     return (
         validate_labeling_result(labeling_results)
-        .with_columns((pl.col("confidence") * pl.col("weight")).alias("weighted_score"))
+        .with_columns((pl.col("confidence_score") * pl.col("weight")).alias("weighted_score"))
         .group_by(["id", "sentiment_label"])
         .agg(pl.col("weighted_score").sum())
     )
@@ -87,15 +85,13 @@ def calculate_agreement_ratio(labeling_results: pl.DataFrame) -> pl.DataFrame:
 
     Examples
     --------
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "id": ["1", "1", "1"],
-    ...         "tagger": ["heuristica", "llm", "modelo"],
-    ...         "sentiment_label": ["positivo", "positivo", "negativo"],
-    ...         "confidence": [0.8, 0.6, 0.9],
-    ...         "weight": [1.0, 2.0, 2.0],
-    ...     }
-    ... )
+    >>> df = pl.DataFrame({
+    ...     "id": ["1", "1", "1"],
+    ...     "tagger": ["heuristica", "llm", "modelo"],
+    ...     "sentiment_label": ["positivo", "positivo", "negativo"],
+    ...     "confidence_score": [0.8, 0.6, 0.9],
+    ...     "weight": [1.0, 2.0, 2.0],
+    ... })
     >>> resultado = calculate_agreement_ratio(df)
     >>> resultado["consensus_label"].to_list()
     ['positivo']
@@ -105,9 +101,11 @@ def calculate_agreement_ratio(labeling_results: pl.DataFrame) -> pl.DataFrame:
     scores = calculate_weighted_label_scores(labeling_results)
     totals = scores.group_by("id").agg(pl.col("weighted_score").sum().alias("total_score"))
     result = (
-        scores.group_by("id")
+        scores
+        .group_by("id")
         .agg(
-            pl.col("sentiment_label")
+            pl
+            .col("sentiment_label")
             .sort_by("weighted_score", descending=True)
             .first()
             .alias("consensus_label"),
@@ -137,15 +135,13 @@ def calculate_discordance_score(labeling_results: pl.DataFrame) -> pl.DataFrame:
 
     Examples
     --------
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "id": ["1", "1", "1"],
-    ...         "tagger": ["heuristica", "llm", "modelo"],
-    ...         "sentiment_label": ["positivo", "positivo", "negativo"],
-    ...         "confidence": [0.8, 0.6, 0.9],
-    ...         "weight": [1.0, 2.0, 2.0],
-    ...     }
-    ... )
+    >>> df = pl.DataFrame({
+    ...     "id": ["1", "1", "1"],
+    ...     "tagger": ["heuristica", "llm", "modelo"],
+    ...     "sentiment_label": ["positivo", "positivo", "negativo"],
+    ...     "confidence_score": [0.8, 0.6, 0.9],
+    ...     "weight": [1.0, 2.0, 2.0],
+    ... })
     >>> round(calculate_discordance_score(df)["discordance_score"].to_list()[0], 4)
     0.4737
     """
@@ -163,7 +159,7 @@ def flag_low_confidence_samples(
     """Sinaliza amostras candidatas à validação humana por baixa concordância ou alta discordância.
 
     Limiares padrão refletem ``configs/labeling.yaml`` (seção
-    ``confidence``): ``low_confidence_threshold`` corresponde a
+    ``confidence_score``): ``low_confidence_threshold`` corresponde a
     ``low_confidence_threshold`` e ``discordance_threshold`` a
     ``discordance_threshold``.
 
@@ -187,15 +183,13 @@ def flag_low_confidence_samples(
 
     Examples
     --------
-    >>> df = pl.DataFrame(
-    ...     {
-    ...         "id": ["1", "1", "1"],
-    ...         "tagger": ["heuristica", "llm", "modelo"],
-    ...         "sentiment_label": ["positivo", "positivo", "negativo"],
-    ...         "confidence": [0.8, 0.6, 0.9],
-    ...         "weight": [1.0, 2.0, 2.0],
-    ...     }
-    ... )
+    >>> df = pl.DataFrame({
+    ...     "id": ["1", "1", "1"],
+    ...     "tagger": ["heuristica", "llm", "modelo"],
+    ...     "sentiment_label": ["positivo", "positivo", "negativo"],
+    ...     "confidence_score": [0.8, 0.6, 0.9],
+    ...     "weight": [1.0, 2.0, 2.0],
+    ... })
     >>> discordancia = calculate_discordance_score(df)
     >>> flag_low_confidence_samples(discordancia)["requires_human_validation"].to_list()
     [True]
