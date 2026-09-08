@@ -11,6 +11,7 @@ from parallel.core import ParallelExecutionResult, execute_parallel_tasks
 from parallel.data_loading import run_parallel_parquet_loading
 from parallel.experiments import run_parallel_experiments
 from parallel.inference import run_parallel_predictions
+from parallel.labeling import run_parallel_sentiment_labeling
 from parallel.preprocessing import run_parallel_text_cleaning
 from parallel.scraping import run_parallel_scraping
 
@@ -62,6 +63,13 @@ def _fail_on_specific_query(query: str) -> str:
     if query == "falha":
         raise ValueError("consulta inválida")
     return query.upper()
+
+
+def _label_or_fail(text: str) -> str:
+    """Retorna o texto em maiúsculas, ou levanta ValueError para o texto 'erro'."""
+    if text == "erro":
+        raise ValueError("texto inválido")
+    return text.upper()
 
 
 class TestExecuteParallelTasks:
@@ -253,3 +261,24 @@ class TestRunParallelParquetLoading:
         assert len(result.successes) == 1
         assert len(result.failures) == 1
         assert result.failures[0].item == missing_file
+
+
+class TestRunParallelSentimentLabeling:
+    """Testes da paralelização de rotulagem de sentimento (``parallel.labeling``)."""
+
+    def test_labels_all_items_successfully(self) -> None:
+        """Todos os itens devem ser rotulados com sucesso quando não há erro."""
+        result = run_parallel_sentiment_labeling(
+            str.upper, ["a", "b"], show_progress=False, max_workers=1
+        )
+        assert sorted(result.successes) == ["A", "B"]
+        assert result.failures == []
+
+    def test_isolates_failure_per_item(self) -> None:
+        """A falha de rotulagem de um item não deve interromper os demais."""
+        result = run_parallel_sentiment_labeling(
+            _label_or_fail, ["ok", "erro"], show_progress=False, max_workers=1
+        )
+        assert result.successes == ["OK"]
+        assert len(result.failures) == 1
+        assert result.failures[0].item == "erro"
