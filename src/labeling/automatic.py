@@ -15,6 +15,7 @@ em ``src/labeling/consensus.py``.
 import functools
 import logging
 import operator
+import os
 import re
 from collections.abc import Mapping
 from typing import Protocol
@@ -22,12 +23,45 @@ from typing import Protocol
 import polars as pl
 
 from constants.labels import NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL
+from exceptions.pipeline import PipelineStageError
 from parallel.labeling import run_parallel_sentiment_labeling
 from preprocessing.emojis import calculate_emoji_sentiment_counts
 from schemas.labeling import validate_labeling_result
 from utils.validation import validate_not_empty_collection
 
 logger = logging.getLogger(__name__)
+
+# Abaixo deste número de linhas, cada rotulador da cascata roda em um laço
+# serial puro (sem executor): o custo fixo de inicializar um
+# ProcessPoolExecutor supera qualquer ganho de paralelismo para lotes
+# pequenos (ver docs/superpowers/specs/2026-09-07-batch-raw-tweet-pipeline-
+# design.md, revisão final).
+_SERIAL_EXECUTION_THRESHOLD = 2000
+
+
+def _calculate_chunk_size(n_items: int, max_workers: int | None) -> int:
+    """Calcula o tamanho de lote (chunk) usado na rotulagem paralela em larga escala.
+
+    Mesma lógica de ``preprocessing.pipeline._calculate_chunk_size``: evita
+    lotes minúsculos (overhead de round-trip por item) e lotes grandes
+    demais (menos lotes que workers disponíveis).
+
+    Parameters
+    ----------
+    n_items : int
+        Número total de itens a rotular.
+    max_workers : int | None
+        Número máximo de processos configurado pelo chamador; ``None``
+        usa ``os.cpu_count()`` (ou 4, se indisponível) como estimativa.
+
+    Returns
+    -------
+    int
+        Tamanho de lote a repassar a ``run_parallel_sentiment_labeling``.
+    """
+    workers = max_workers or (os.cpu_count() or 4)
+    return max(50, n_items // (workers * 4))
+
 
 _WORD_PATTERN = re.compile(r"\w+")
 
@@ -143,6 +177,43 @@ _IndexedText = tuple[int, str]
 _IndexedLabel = tuple[int, str, float]
 
 
+def _label_row_text(text: str, *, labeler: SentimentLabeler) -> tuple[str, float]:
+    """Classifica um texto individual, convertendo falhas em ``PipelineStageError``.
+
+    Espelha o padrão de ``preprocessing.pipeline._normalize_row_text``:
+    sem esta conversão, uma exceção de terceiros levantada por um
+    rotulador (ex.: um futuro rotulador via LLM de ``configs/labeling.yaml``)
+    poderia não ser picklable, quebrando o ``ProcessPoolExecutor`` inteiro
+    (``BrokenProcessPool``) em vez de isolar a falha de um único item — o
+    mesmo problema que motivou o ``ProjectError.__reduce__`` (ver
+    ``src/exceptions/base.py``).
+
+    Parameters
+    ----------
+    text : str
+        Texto a ser classificado.
+    labeler : SentimentLabeler
+        Rotulador aplicado ao texto.
+
+    Returns
+    -------
+    tuple[str, float]
+        Par ``(rótulo_de_sentimento, confiança)``.
+
+    Raises
+    ------
+    PipelineStageError
+        Se a classificação falhar para o texto informado.
+    """
+    try:
+        return labeler.label(text)
+    except Exception as exception:  # captura ampla e proposital: isola a falha de um único item
+        logger.exception("Falha ao classificar o sentimento de um texto")
+        raise PipelineStageError(
+            stage_name="rotulagem_cascata", detail=str(exception)
+        ) from exception
+
+
 def _label_indexed_item(item: _IndexedText, *, labeler: SentimentLabeler) -> _IndexedLabel:
     """Classifica um texto indexado, preservando sua posição original na lista de entrada.
 
@@ -160,9 +231,15 @@ def _label_indexed_item(item: _IndexedText, *, labeler: SentimentLabeler) -> _In
     -------
     tuple[int, str, float]
         Tripla ``(índice_original, rótulo_de_sentimento, confiança)``.
+
+    Raises
+    ------
+    PipelineStageError
+        Se a classificação falhar para o texto informado (ver
+        :func:`_label_row_text`).
     """
     original_index, text = item
-    sentiment_label, confidence_score = labeler.label(text)
+    sentiment_label, confidence_score = _label_row_text(text, labeler=labeler)
     return original_index, sentiment_label, confidence_score
 
 
@@ -301,7 +378,13 @@ def run_cascade_labeling(
         ausentes do mapeamento recebem peso 1.0, by default None.
     max_workers : int | None, optional
         Número máximo de processos usados por rotulador, by default None
-        (o executor escolhe automaticamente).
+        (o executor escolhe automaticamente). Abaixo de
+        ``_SERIAL_EXECUTION_THRESHOLD`` amostras, a rotulagem roda em um
+        laço serial (sem executor) independentemente deste valor — o custo
+        fixo de inicializar um ``ProcessPoolExecutor`` não compensa para
+        lotes pequenos. Acima do limiar, os textos são agrupados em lotes
+        (``chunk_size`` calculado automaticamente) e uma ``Future`` é
+        submetida por lote, não por texto, para amortizar o overhead de IPC.
     show_progress : bool, optional
         Se ``True``, exibe uma barra de progresso no console por
         rotulador, by default True.
@@ -320,6 +403,10 @@ def run_cascade_labeling(
     DataValidationError
         Se algum resultado produzido violar o contrato de dados (ex.:
         rótulo fora de :data:`constants.labels.SENTIMENT_CLASSES`).
+    PipelineStageError
+        Se a classificação de algum texto falhar em algum rotulador (ver
+        :func:`_label_row_text`) — propagada a partir da primeira falha
+        (fail-fast), sem descartar silenciosamente nenhuma linha.
 
     Examples
     --------
@@ -336,7 +423,7 @@ def run_cascade_labeling(
     resolved_weights = weights or {}
 
     row_ids = dataframe[id_column].to_list()
-    indexed_texts = list(enumerate(dataframe[text_column].to_list()))
+    texts = dataframe[text_column].to_list()
 
     ids: list[str] = []
     taggers: list[str] = []
@@ -345,18 +432,33 @@ def run_cascade_labeling(
     label_weights: list[float] = []
 
     for tagger_name, labeler in labelers.items():
-        labeling_result = run_parallel_sentiment_labeling(
-            functools.partial(_label_indexed_item, labeler=labeler),
-            indexed_texts,
-            max_workers=max_workers,
-            show_progress=show_progress,
-        )
-        if labeling_result.failures:
-            raise labeling_result.failures[0].error
-        for original_index, sentiment_label, confidence_score in sorted(
-            labeling_result.successes, key=operator.itemgetter(0)
-        ):
-            ids.append(row_ids[original_index])
+        if len(texts) < _SERIAL_EXECUTION_THRESHOLD:
+            # Lote pequeno: laço serial puro, sem executor (mesmo
+            # comportamento de antes da Task 9 introduzir paralelismo).
+            labeled_rows = [
+                (row_ids[index], *_label_row_text(text, labeler=labeler))
+                for index, text in enumerate(texts)
+            ]
+        else:
+            indexed_texts = list(enumerate(texts))
+            labeling_result = run_parallel_sentiment_labeling(
+                functools.partial(_label_indexed_item, labeler=labeler),
+                indexed_texts,
+                max_workers=max_workers,
+                show_progress=show_progress,
+                chunk_size=_calculate_chunk_size(len(indexed_texts), max_workers),
+            )
+            if labeling_result.failures:
+                raise labeling_result.failures[0].error
+            labeled_rows = [
+                (row_ids[original_index], sentiment_label, confidence_score)
+                for original_index, sentiment_label, confidence_score in sorted(
+                    labeling_result.successes, key=operator.itemgetter(0)
+                )
+            ]
+
+        for row_id, sentiment_label, confidence_score in labeled_rows:
+            ids.append(row_id)
             taggers.append(tagger_name)
             sentiment_labels.append(sentiment_label)
             confidences.append(confidence_score)

@@ -21,6 +21,7 @@ def run_parallel_sentiment_labeling(
     *,
     max_workers: int | None = None,
     show_progress: bool = True,
+    chunk_size: int | None = None,
 ) -> ParallelExecutionResult[ItemType, ResultType]:
     """Aplica uma função de rotulagem de sentimento a múltiplos itens em paralelo.
 
@@ -39,6 +40,11 @@ def run_parallel_sentiment_labeling(
     show_progress : bool, optional
         Se ``True``, exibe uma barra de progresso no console, by default
         True.
+    chunk_size : int | None, optional
+        Repassado a :func:`parallel.core.execute_parallel_tasks`: agrupa
+        os itens em lotes desse tamanho, uma ``Future`` por lote, reduzindo
+        o overhead de IPC por item em corpora grandes, by default None
+        (uma ``Future`` por item, comportamento original).
 
     Returns
     -------
@@ -57,4 +63,5 @@ def run_parallel_sentiment_labeling(
         max_workers=max_workers,
         task_description="Rotulagem paralela de sentimento",
         show_progress=show_progress,
+        chunk_size=chunk_size,
     )

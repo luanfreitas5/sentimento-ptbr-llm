@@ -7,8 +7,10 @@ from hypothesis import strategies as st
 
 from constants.labels import SENTIMENT_CLASSES
 from exceptions.data import DataValidationError, EmptyDatasetError
+from exceptions.pipeline import PipelineStageError
 from labeling.automatic import (
     LexicalHeuristicLabeler,
+    _label_indexed_item,
     calculate_lexicon_sentiment_counts,
     classify_by_lexical_heuristic,
     run_cascade_labeling,
@@ -39,6 +41,14 @@ class _FakeInvalidLabeler:
     def label(self, text: str) -> tuple[str, float]:
         """Retorna um rótulo inválido, ignorando o texto de entrada."""
         return "muito_positivo", 0.9
+
+
+class _FakeRaisingLabeler:
+    """Rotulador de teste que sempre levanta uma exceção genérica ao classificar."""
+
+    def label(self, text: str) -> tuple[str, float]:
+        """Levanta ``ValueError``, ignorando o texto de entrada."""
+        raise ValueError("falha simulada do rotulador")
 
 
 class TestCalculateLexiconSentimentCounts:
@@ -115,7 +125,7 @@ class TestRunCascadeLabeling:
         """Cada combinação de amostra e rotulador deve gerar uma linha de resultado."""
         df = pl.DataFrame({"id": ["1", "2"], "text": ["adorei o produto", "péssimo, é um lixo"]})
         labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
-        result = run_cascade_labeling(df, labelers)
+        result = run_cascade_labeling(df, labelers, show_progress=False, max_workers=1)
         assert result.height == 2
         assert set(result.columns) == {
             "id",
@@ -129,33 +139,65 @@ class TestRunCascadeLabeling:
         """O peso de cada rotulador deve ser repassado ao resultado, com padrão 1.0."""
         df = pl.DataFrame({"id": ["1"], "text": ["adorei o produto"]})
         labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
-        result = run_cascade_labeling(df, labelers, weights={"heuristica_lexica": 2.0})
+        result = run_cascade_labeling(
+            df, labelers, weights={"heuristica_lexica": 2.0}, show_progress=False, max_workers=1
+        )
         assert result["weight"].to_list() == [2.0]
 
     def test_defaults_weight_to_one_when_not_configured(self) -> None:
         """Um rotulador ausente de ``weights`` deve receber peso padrão 1.0."""
         df = pl.DataFrame({"id": ["1"], "text": ["adorei o produto"]})
         labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
-        result = run_cascade_labeling(df, labelers)
+        result = run_cascade_labeling(df, labelers, show_progress=False, max_workers=1)
         assert result["weight"].to_list() == [1.0]
 
     def test_raises_for_empty_dataframe(self) -> None:
         """Um DataFrame vazio deve levantar ``EmptyDatasetError``."""
         df = pl.DataFrame({"id": [], "text": []}, schema={"id": pl.Utf8, "text": pl.Utf8})
         with pytest.raises(EmptyDatasetError):
-            run_cascade_labeling(df, {"heuristica_lexica": LexicalHeuristicLabeler()})
+            run_cascade_labeling(
+                df,
+                {"heuristica_lexica": LexicalHeuristicLabeler()},
+                show_progress=False,
+                max_workers=1,
+            )
 
     def test_raises_for_empty_labelers(self) -> None:
         """Um mapeamento de rotuladores vazio deve levantar ``EmptyDatasetError``."""
         df = pl.DataFrame({"id": ["1"], "text": ["adorei o produto"]})
         with pytest.raises(EmptyDatasetError):
-            run_cascade_labeling(df, {})
+            run_cascade_labeling(df, {}, show_progress=False, max_workers=1)
 
     def test_raises_data_validation_error_for_invalid_labeler_output(self) -> None:
         """Um rótulo fora das classes conhecidas deve violar o contrato de dados."""
         df = pl.DataFrame({"id": ["1"], "text": ["qualquer texto"]})
         with pytest.raises(DataValidationError):
-            run_cascade_labeling(df, {"rotulador_invalido": _FakeInvalidLabeler()})
+            run_cascade_labeling(
+                df,
+                {"rotulador_invalido": _FakeInvalidLabeler()},
+                show_progress=False,
+                max_workers=1,
+            )
+
+    def test_raises_pipeline_stage_error_when_labeler_raises(self) -> None:
+        """Uma exceção levantada pelo rotulador deve virar ``PipelineStageError``.
+
+        Necessário mesmo para o rotulador heurístico-lexical atual (que só
+        levanta exceções builtin, sempre picklable) porque
+        ``configs/labeling.yaml`` antecipa rotuladores futuros baseados em
+        LLM: uma exceção de terceiros não picklable levantada dentro de um
+        worker de ``ProcessPoolExecutor`` quebraria o pool inteiro
+        (``BrokenProcessPool``) em vez de isolar a falha de um único item —
+        ver ``_label_row_text``.
+        """
+        df = pl.DataFrame({"id": ["1"], "text": ["qualquer texto"]})
+        with pytest.raises(PipelineStageError):
+            run_cascade_labeling(
+                df,
+                {"rotulador_com_erro": _FakeRaisingLabeler()},
+                show_progress=False,
+                max_workers=1,
+            )
 
     def test_produces_same_result_with_and_without_parallelism(self) -> None:
         """A rotulagem paralela deve produzir exatamente o mesmo resultado que a execução padrão.
@@ -183,6 +225,18 @@ class TestRunCascadeLabeling:
         result_parallel = run_cascade_labeling(df, labelers, max_workers=4, show_progress=False)
 
         assert result_sequential.sort("id").to_dicts() == result_parallel.sort("id").to_dicts()
+
+
+class TestLabelIndexedItem:
+    """Testes diretos de ``_label_indexed_item`` (wrapper indexado usado no lote paralelo)."""
+
+    def test_preserves_original_index(self) -> None:
+        """O índice original deve passar intacto pela classificação."""
+        assert _label_indexed_item((7, "adorei o produto"), labeler=LexicalHeuristicLabeler()) == (
+            7,
+            "positivo",
+            1.0,
+        )
 
 
 class TestCalculateWeightedLabelScores:

@@ -150,6 +150,110 @@ def _collect_results(
             progress.update(task_id, advance=1)
 
 
+def _split_into_chunks(items_list: list[ItemType], chunk_size: int) -> list[list[ItemType]]:
+    """Divide uma lista em sublistas (lotes/chunks) de tamanho no máximo ``chunk_size``.
+
+    Parameters
+    ----------
+    items_list : list[ItemType]
+        Lista completa de itens a dividir.
+    chunk_size : int
+        Tamanho máximo de cada lote.
+
+    Returns
+    -------
+    list[list[ItemType]]
+        Lista de lotes, na mesma ordem dos itens originais.
+    """
+    return [
+        items_list[start : start + chunk_size] for start in range(0, len(items_list), chunk_size)
+    ]
+
+
+def _run_chunk_of_items(
+    func: Callable[[ItemType], ResultType], chunk_items: list[ItemType]
+) -> list[tuple[ItemType, ResultType | None, Exception | None]]:
+    """Aplica ``func`` a cada item de um lote (chunk), isolando a falha de cada item.
+
+    Função de nível de módulo (não uma closure/lambda), exigida para ser
+    serializável e submetida como uma única tarefa por ``Future`` ao
+    executor (ver ``execute_parallel_tasks`` com ``chunk_size`` informado):
+    amortiza o custo fixo de IPC por item (dominante para tarefas baratas —
+    ex.: contagem léxica/regex em um único tweet), mantendo o isolamento de
+    falha por item dentro do próprio lote.
+
+    Parameters
+    ----------
+    func : Callable[[ItemType], ResultType]
+        Função aplicada a cada item do lote.
+    chunk_items : list[ItemType]
+        Itens do lote a processar.
+
+    Returns
+    -------
+    list[tuple[ItemType, ResultType | None, Exception | None]]
+        Uma tripla por item de entrada: ``(item, resultado, None)`` em caso
+        de sucesso, ou ``(item, None, exceção)`` em caso de falha.
+    """
+    outcomes: list[tuple[ItemType, ResultType | None, Exception | None]] = []
+    for item in chunk_items:
+        try:
+            outcomes.append((item, func(item), None))
+        except Exception as exception:  # captura ampla e proposital: isola a falha de um único item
+            outcomes.append((item, None, exception))
+    return outcomes
+
+
+def _collect_chunked_results(
+    futures: dict[
+        Future[list[tuple[ItemType, ResultType | None, Exception | None]]], list[ItemType]
+    ],
+    result: ParallelExecutionResult[ItemType, ResultType],
+    progress: Progress | None,
+    task_id: TaskID | None,
+    task_description: str,
+) -> None:
+    """Aguarda a conclusão dos lotes (chunks) e agrega sucessos/falhas por item.
+
+    A barra de progresso avança pelo tamanho do lote de uma só vez, quando
+    o ``Future`` do lote inteiro é concluído — os itens de um mesmo lote
+    terminam atomicamente do ponto de vista do executor, não um a um.
+
+    Parameters
+    ----------
+    futures : dict[Future[...], list[ItemType]]
+        Mapeamento de cada ``Future`` de lote (retornando a lista de triplas
+        produzida por :func:`_run_chunk_of_items`) à lista de itens
+        originais daquele lote.
+    result : ParallelExecutionResult[ItemType, ResultType]
+        Objeto de resultado, atualizado in-place com cada sucesso ou falha.
+    progress : Progress | None
+        Barra de progresso a ser atualizada a cada lote concluído, ou
+        ``None`` se a exibição de progresso estiver desabilitada.
+    task_id : TaskID | None
+        Identificador da tarefa na barra de progresso, ou ``None`` se a
+        exibição de progresso estiver desabilitada.
+    task_description : str
+        Descrição da tarefa, usada nas mensagens de log de falha.
+    """
+    for future in as_completed(futures):
+        chunk_items = futures[future]
+        try:
+            chunk_outcomes = future.result()
+        except Exception as exception:  # captura ampla e proposital: isola a falha do lote inteiro
+            logger.exception("Falha ao processar lote (chunk) em '%s'", task_description)
+            for item in chunk_items:
+                result.failures.append(ParallelTaskFailure(item=item, error=exception))
+        else:
+            for item, item_result, error in chunk_outcomes:
+                if error is not None:
+                    result.failures.append(ParallelTaskFailure(item=item, error=error))
+                else:
+                    result.successes.append(item_result)  # type: ignore[arg-type]
+        if progress is not None and task_id is not None:
+            progress.update(task_id, advance=len(chunk_items))
+
+
 def execute_parallel_tasks(
     func: Callable[[ItemType], ResultType],
     items: Iterable[ItemType],
@@ -158,6 +262,7 @@ def execute_parallel_tasks(
     max_workers: int | None = None,
     task_description: str = "Processando itens em paralelo",
     show_progress: bool = True,
+    chunk_size: int | None = None,
 ) -> ParallelExecutionResult[ItemType, ResultType]:
     """Aplica uma função a múltiplos itens em paralelo, isolando falhas por item.
 
@@ -165,6 +270,16 @@ def execute_parallel_tasks(
     item específico é registrada em log e armazenada em
     :attr:`ParallelExecutionResult.failures`, sem interromper o
     processamento dos demais itens do lote.
+
+    Por padrão (``chunk_size=None``), submete uma ``Future`` por item —
+    adequado quando o trabalho por item já é caro o bastante para amortizar
+    o custo fixo de round-trip do executor (serialização/IPC). Para itens
+    muito baratos (ex.: contagem léxica/regex em um único tweet), esse
+    custo fixo passa a dominar e a paralelização por item fica mais lenta
+    que a execução serial, piorando com a escala — nesse caso, informe
+    ``chunk_size`` para agrupar vários itens por ``Future`` (ver
+    :func:`_run_chunk_of_items`), amortizando o custo fixo por lote em vez
+    de por item, mantendo o isolamento de falha por item dentro do lote.
 
     Parameters
     ----------
@@ -190,6 +305,13 @@ def execute_parallel_tasks(
     show_progress : bool, optional
         Se ``True``, exibe uma barra de progresso no console, by default
         True.
+    chunk_size : int | None, optional
+        Se informado (e maior que 1), agrupa os itens em lotes desse
+        tamanho e submete uma ``Future`` por lote em vez de uma por item,
+        reduzindo o overhead de IPC/serialização por item — recomendado
+        para itens de processamento muito barato em grande volume. Por
+        padrão ``None``: comportamento idêntico ao existente antes deste
+        parâmetro (uma ``Future`` por item).
 
     Returns
     -------
@@ -200,7 +322,8 @@ def execute_parallel_tasks(
     Raises
     ------
     ValueError
-        Se ``max_workers`` for informado e for menor que 1.
+        Se ``max_workers`` for informado e for menor que 1, ou se
+        ``chunk_size`` for informado e for menor que 1.
 
     Examples
     --------
@@ -212,6 +335,8 @@ def execute_parallel_tasks(
     """
     if max_workers is not None and max_workers < 1:
         raise ValueError(f"max_workers deve ser >= 1, recebido: {max_workers}")
+    if chunk_size is not None and chunk_size < 1:
+        raise ValueError(f"chunk_size deve ser >= 1, recebido: {chunk_size}")
 
     items_list = list(items)
     result: ParallelExecutionResult[ItemType, ResultType] = ParallelExecutionResult()
@@ -224,12 +349,23 @@ def execute_parallel_tasks(
     progress_context = progress if progress is not None else nullcontext()
 
     with measure_execution_time() as tempo, executor_class(max_workers=max_workers) as executor:
-        futures = {executor.submit(func, item): item for item in items_list}
-        with progress_context:
-            task_id = (
-                progress.add_task(task_description, total=len(items_list)) if progress else None
-            )
-            _collect_results(futures, result, progress, task_id, task_description)
+        if chunk_size is None:
+            futures = {executor.submit(func, item): item for item in items_list}
+            with progress_context:
+                task_id = (
+                    progress.add_task(task_description, total=len(items_list)) if progress else None
+                )
+                _collect_results(futures, result, progress, task_id, task_description)
+        else:
+            chunks = _split_into_chunks(items_list, chunk_size)
+            chunk_futures = {
+                executor.submit(_run_chunk_of_items, func, chunk): chunk for chunk in chunks
+            }
+            with progress_context:
+                task_id = (
+                    progress.add_task(task_description, total=len(items_list)) if progress else None
+                )
+                _collect_chunked_results(chunk_futures, result, progress, task_id, task_description)
 
     result.elapsed_seconds = tempo.elapsed_seconds
     logger.info(

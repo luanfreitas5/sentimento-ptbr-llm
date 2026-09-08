@@ -72,6 +72,13 @@ def _label_or_fail(text: str) -> str:
     return text.upper()
 
 
+def _fail_on_multiples_of_five(value: int) -> int:
+    """Retorna o valor recebido, ou levanta ValueError se for múltiplo de 5."""
+    if value % 5 == 0:
+        raise ValueError(f"valor inválido (múltiplo de 5): {value}")
+    return value * 2
+
+
 class TestExecuteParallelTasks:
     """Testes do motor genérico de execução paralela (``parallel.core``)."""
 
@@ -280,3 +287,66 @@ class TestRunParallelSentimentLabeling:
         assert result.successes == ["OK"]
         assert len(result.failures) == 1
         assert result.failures[0].item == "erro"
+
+
+class TestExecuteParallelTasksChunkSize:
+    """Testes do agrupamento em lotes (``chunk_size``) de ``execute_parallel_tasks``.
+
+    Cobre a correção do Achado Crítico 1 da revisão final: submeter uma
+    ``Future`` por item é mais lento que a execução serial para itens
+    baratos, e piora com a escala (custo fixo de IPC dominando o trabalho
+    real) — ``chunk_size`` agrupa vários itens por ``Future``, mantendo o
+    isolamento de falha por item.
+    """
+
+    def test_chunked_execution_matches_unchunked_successes(self) -> None:
+        """A execução em lotes deve produzir exatamente os mesmos sucessos que a não agrupada."""
+        items = list(range(1, 51))
+        unchunked = execute_parallel_tasks(_double, items, show_progress=False, max_workers=2)
+        chunked = execute_parallel_tasks(
+            _double, items, show_progress=False, max_workers=2, chunk_size=7
+        )
+        assert sorted(chunked.successes) == sorted(unchunked.successes)
+        assert chunked.failures == []
+
+    def test_chunked_execution_with_process_pool_matches_unchunked(self) -> None:
+        """O agrupamento em lotes deve funcionar com ``ProcessPoolExecutor`` (uso real)."""
+        items = list(range(1, 31))
+        chunked = execute_parallel_tasks(
+            _double,
+            items,
+            executor_class=ProcessPoolExecutor,
+            show_progress=False,
+            max_workers=2,
+            chunk_size=4,
+        )
+        assert sorted(chunked.successes) == sorted(item * 2 for item in items)
+        assert chunked.failures == []
+
+    def test_isolates_failure_within_a_chunk_without_failing_the_chunk(self) -> None:
+        """Um item que falha não deve derrubar os demais itens do mesmo lote nem de outros lotes."""
+        items = list(range(1, 21))  # múltiplos de 5: 5, 10, 15, 20 (4 falhas esperadas)
+        result = execute_parallel_tasks(
+            _fail_on_multiples_of_five,
+            items,
+            show_progress=False,
+            max_workers=2,
+            chunk_size=5,
+        )
+        expected_failures = {5, 10, 15, 20}
+        expected_successes = sorted(value * 2 for value in items if value not in expected_failures)
+        assert sorted(result.successes) == expected_successes
+        assert {failure.item for failure in result.failures} == expected_failures
+        assert all(isinstance(failure.error, ValueError) for failure in result.failures)
+        assert result.total_items == len(items)
+
+    def test_rejects_invalid_chunk_size(self) -> None:
+        """``chunk_size`` menor que 1 deve levantar ``ValueError`` antes de iniciar a execução."""
+        with pytest.raises(ValueError):
+            execute_parallel_tasks(_double, [1, 2], chunk_size=0, show_progress=False)
+
+    def test_chunk_size_none_preserves_default_behavior(self) -> None:
+        """``chunk_size=None`` (padrão) deve manter o comportamento original, sem agrupamento."""
+        result = execute_parallel_tasks(_double, [1, 2, 3], show_progress=False, max_workers=2)
+        assert sorted(result.successes) == [2, 4, 6]
+        assert result.failures == []

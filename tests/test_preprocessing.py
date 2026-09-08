@@ -26,7 +26,11 @@ from preprocessing.filtering import (
     filter_spam_like_rows,
     remove_duplicate_text_rows,
 )
-from preprocessing.pipeline import normalize_tweet_text, run_preprocessing_pipeline
+from preprocessing.pipeline import (
+    _normalize_indexed_row_text,
+    normalize_tweet_text,
+    run_preprocessing_pipeline,
+)
 from preprocessing.text import (
     normalize_hashtags,
     normalize_mentions,
@@ -494,6 +498,16 @@ class TestRunPreprocessingPipeline:
         for index in range(n_rows):
             row = result.filter(pl.col("id") == str(index))
             assert f"numero {index}" in row["text_normalized"].to_list()[0]
+
+
+class TestNormalizeIndexedRowText:
+    """Testes diretos de ``_normalize_indexed_row_text`` (wrapper indexado do lote paralelo)."""
+
+    def test_preserves_original_index(self) -> None:
+        """O índice original deve passar intacto pela normalização."""
+        assert _normalize_indexed_row_text(
+            (3, "RT @a: muito bom!! 😍"), keep_hashtag_word=True
+        ) == (3, "muito bom!! [EMOJI_POSITIVO]")
 
 
 class TestPreprocessingProperties:
