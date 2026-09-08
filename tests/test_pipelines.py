@@ -7,6 +7,7 @@ para que os testes permaneçam rápidos e determinísticos (ver CLAUDE.md,
 """
 
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -114,24 +115,59 @@ class TestRunIngestionStage:
 class TestRunPreprocessingStage:
     """Testes de :func:`pipelines.preprocessing.run_preprocessing_stage`."""
 
-    def test_writes_normalized_corpus_with_normalized_text_column(
+    def test_loads_raw_batch_and_writes_normalized_corpus(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Deve carregar o corpus bruto e gravar o corpus normalizado correspondente."""
-        raw_corpus = pl.DataFrame({
-            "id": ["1", "2"],
+        """Deve carregar o lote bruto de data/raw/ e gravar o corpus normalizado correspondente."""
+        raw_batch = pl.DataFrame({
+            "tweet_id": ["1", "2"],
+            "user_id": ["u1", "u1"],
             "text": ["RT @a: muito bom!! 😍", "RT @b: péssimo produto"],
-            "data_source": ["scraping", "scraping"],
-            "data_collected": ["2026-01-01", "2026-01-01"],
+            "created_at": [datetime(2026, 1, 1), datetime(2026, 1, 1)],
+            "language": ["pt", "pt"],
+            "is_reply": [False, False],
+            "is_retweet": [False, False],
+            "like_count": [0, 0],
+            "reply_count": [0, 0],
+            "retweet_count": [0, 0],
+            "quote_count": [0, 0],
+            "source_query": ["teste", "teste"],
+            "source_group": ["teste", "teste"],
         })
-        write_dataset(raw_corpus, pipeline_paths.raw_tweets_file)
+        write_dataset(raw_batch, pipeline_paths.data_raw_dir / "usuario_teste.parquet")
 
-        normalized_path = run_preprocessing_stage(pipeline_paths, apply_inclusion_filters=False)
+        normalized_path = run_preprocessing_stage(
+            pipeline_paths, show_progress=False, apply_inclusion_filters=False
+        )
 
         assert normalized_path == pipeline_paths.normalized_corpus_file
         normalized_corpus = read_dataset_file(normalized_path)
         assert normalized_corpus.height == 2
         assert "text_normalized" in normalized_corpus.columns
+
+    def test_excludes_retweets_before_normalization(self, pipeline_paths: ProjectPaths) -> None:
+        """Um tweet marcado como retweet deve ser removido antes da normalização."""
+        raw_batch = pl.DataFrame({
+            "tweet_id": ["1", "2"],
+            "user_id": ["u1", "u1"],
+            "text": ["muito bom o produto", "RT texto duplicado"],
+            "created_at": [datetime(2026, 1, 1), datetime(2026, 1, 1)],
+            "language": ["pt", "pt"],
+            "is_reply": [False, False],
+            "is_retweet": [False, True],
+            "like_count": [0, 0],
+            "reply_count": [0, 0],
+            "retweet_count": [0, 0],
+            "quote_count": [0, 0],
+            "source_query": ["teste", "teste"],
+            "source_group": ["teste", "teste"],
+        })
+        write_dataset(raw_batch, pipeline_paths.data_raw_dir / "usuario_teste.parquet")
+
+        run_preprocessing_stage(pipeline_paths, show_progress=False, apply_inclusion_filters=False)
+
+        normalized_corpus = read_dataset_file(pipeline_paths.normalized_corpus_file)
+        assert normalized_corpus.height == 1
 
 
 class TestRunLabelingStage:
