@@ -157,6 +157,31 @@ class TestRunCascadeLabeling:
         with pytest.raises(DataValidationError):
             run_cascade_labeling(df, {"rotulador_invalido": _FakeInvalidLabeler()})
 
+    def test_produces_same_result_with_and_without_parallelism(self) -> None:
+        """A rotulagem paralela deve produzir exatamente o mesmo resultado que a execução padrão.
+
+        Verifica em particular que a ordem/correspondência amostra->rótulo
+        não se perde ao coletar resultados em ProcessPoolExecutor (ver
+        _label_indexed_item / operator.itemgetter(0)).
+        """
+        df = pl.DataFrame({
+            "id": [str(i) for i in range(6)],
+            "text": [
+                "adorei o produto",
+                "péssimo atendimento",
+                "chegou no prazo",
+                "excelente experiência",
+                "produto horrível",
+                "sem opinião formada",
+            ],
+        })
+        labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
+
+        result_sequential = run_cascade_labeling(df, labelers, max_workers=1, show_progress=False)
+        result_parallel = run_cascade_labeling(df, labelers, max_workers=4, show_progress=False)
+
+        assert result_sequential.sort("id").to_dicts() == result_parallel.sort("id").to_dicts()
+
 
 class TestCalculateWeightedLabelScores:
     """Testes da soma de scores ponderados por amostra e rótulo candidato."""

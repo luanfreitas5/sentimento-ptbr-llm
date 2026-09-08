@@ -12,7 +12,9 @@ formato longo validado por ``src/schemas/labeling.py``
 em ``src/labeling/consensus.py``.
 """
 
+import functools
 import logging
+import operator
 import re
 from collections.abc import Mapping
 from typing import Protocol
@@ -20,6 +22,7 @@ from typing import Protocol
 import polars as pl
 
 from constants.labels import NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL
+from parallel.labeling import run_parallel_sentiment_labeling
 from preprocessing.emojis import calculate_emoji_sentiment_counts
 from schemas.labeling import validate_labeling_result
 from utils.validation import validate_not_empty_collection
@@ -132,6 +135,33 @@ class SentimentLabeler(Protocol):
         ...
 
 
+_IndexedText = tuple[int, str]
+_IndexedLabel = tuple[int, str, float]
+
+
+def _label_indexed_item(item: _IndexedText, *, labeler: SentimentLabeler) -> _IndexedLabel:
+    """Classifica um texto indexado, preservando sua posição original na lista de entrada.
+
+    Necessário porque a execução paralela (``ProcessPoolExecutor``) coleta
+    resultados na ordem de conclusão, não na ordem de submissão.
+
+    Parameters
+    ----------
+    item : tuple[int, str]
+        Par ``(índice_original, texto)``.
+    labeler : SentimentLabeler
+        Rotulador aplicado ao texto.
+
+    Returns
+    -------
+    tuple[int, str, float]
+        Tripla ``(índice_original, rótulo_de_sentimento, confiança)``.
+    """
+    original_index, text = item
+    sentiment_label, confidence_score = labeler.label(text)
+    return original_index, sentiment_label, confidence_score
+
+
 def calculate_lexicon_sentiment_counts(text: str) -> dict[str, int]:
     """Conta palavras do léxico de sentimento positivo/negativo presentes no texto.
 
@@ -234,12 +264,19 @@ def run_cascade_labeling(
     id_column: str = "id",
     text_column: str = "text",
     weights: Mapping[str, float] | None = None,
+    max_workers: int | None = None,
+    show_progress: bool = True,
 ) -> pl.DataFrame:
     """Executa a cascata de rotuladores sobre um corpus, produzindo candidatos por amostra.
 
     Cada combinação (amostra, rotulador) gera uma linha no formato longo
     exigido por :class:`schemas.labeling.LabelingResultSchema`, insumo de
-    ``src/labeling/consensus.py`` e ``src/labeling/confidence.py``.
+    ``src/labeling/consensus.py`` e ``src/labeling/confidence.py``. Para
+    cada rotulador, todos os textos são classificados em paralelo (ver
+    :func:`parallel.labeling.run_parallel_sentiment_labeling`), com os
+    resultados reordenados pelo índice original antes de montar as
+    colunas — a coleta paralela retorna na ordem de conclusão, não na
+    ordem de submissão.
 
     Parameters
     ----------
@@ -258,6 +295,12 @@ def run_cascade_labeling(
         Peso de cada rotulador pelo nome usado em ``labelers``, repassado a
         ``src/labeling/consensus.py`` na agregação ponderada. Rotuladores
         ausentes do mapeamento recebem peso 1.0, by default None.
+    max_workers : int | None, optional
+        Número máximo de processos usados por rotulador, by default None
+        (o executor escolhe automaticamente).
+    show_progress : bool, optional
+        Se ``True``, exibe uma barra de progresso no console por
+        rotulador, by default True.
 
     Returns
     -------
@@ -278,7 +321,9 @@ def run_cascade_labeling(
     --------
     >>> df = pl.DataFrame({"id": ["1"], "text": ["adorei o produto"]})
     >>> labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
-    >>> resultado = run_cascade_labeling(df, labelers, weights={"heuristica_lexica": 1.0})
+    >>> resultado = run_cascade_labeling(
+    ...     df, labelers, weights={"heuristica_lexica": 1.0}, show_progress=False
+    ... )
     >>> resultado["sentiment_label"].to_list()
     ['positivo']
     """
@@ -286,18 +331,28 @@ def run_cascade_labeling(
     validate_not_empty_collection(labelers, collection_name="labelers")
     resolved_weights = weights or {}
 
+    row_ids = dataframe[id_column].to_list()
+    indexed_texts = list(enumerate(dataframe[text_column].to_list()))
+
     ids: list[str] = []
     taggers: list[str] = []
     sentiment_labels: list[str] = []
     confidences: list[float] = []
     label_weights: list[float] = []
 
-    for row_id, text in zip(
-        dataframe[id_column].to_list(), dataframe[text_column].to_list(), strict=True
-    ):
-        for tagger_name, labeler in labelers.items():
-            sentiment_label, confidence_score = labeler.label(text)
-            ids.append(row_id)
+    for tagger_name, labeler in labelers.items():
+        labeling_result = run_parallel_sentiment_labeling(
+            functools.partial(_label_indexed_item, labeler=labeler),
+            indexed_texts,
+            max_workers=max_workers,
+            show_progress=show_progress,
+        )
+        if labeling_result.failures:
+            raise labeling_result.failures[0].error
+        for original_index, sentiment_label, confidence_score in sorted(
+            labeling_result.successes, key=operator.itemgetter(0)
+        ):
+            ids.append(row_ids[original_index])
             taggers.append(tagger_name)
             sentiment_labels.append(sentiment_label)
             confidences.append(confidence_score)
