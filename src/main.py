@@ -126,7 +126,8 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Número máximo de threads/processos paralelos (etapas "
-            "`ingestion`/`preprocessing`/`labeling`/`llm_evaluation`)."
+            "`ingestion`/`preprocessing`/`labeling`/`llm_evaluation`/"
+            "`hypothesaes_analysis`)."
         ),
     )
     parser.add_argument(
