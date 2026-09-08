@@ -62,6 +62,16 @@ def run_features_stage(
 ) -> FeatureArtifacts:
     """Executa o split estratificado do corpus rotulado e a extração de features TF-IDF.
 
+    Esta etapa não paraleliza o cálculo do TF-IDF: ele já é vetorizado em
+    C via ``scikit-learn`` (rápido mesmo para grandes lotes) e não lê
+    ``data/raw`` em nenhum momento — o ganho de paralelismo para grandes
+    volumes de tweets de usuários acontece a montante, no carregamento do
+    lote bruto e na normalização/rotulagem por linha (ver
+    ``pipelines.preprocessing.run_preprocessing_stage`` e
+    ``pipelines.labeling.run_labeling_stage``). Envolver a chamada ao
+    ``scikit-learn`` em um ``ProcessPoolExecutor`` só adicionaria overhead
+    de serialização sem ganho real.
+
     Parameters
     ----------
     paths : ProjectPaths

@@ -100,6 +100,8 @@ def run_labeling_stage(
     human_validation_labels: pl.DataFrame | None = None,
     gold_set: pl.DataFrame | None = None,
     minimum_kappa: float = 0.6,
+    max_workers: int | None = None,
+    show_progress: bool = True,
 ) -> Path:
     """Executa a etapa de rotulagem em cascata sobre o corpus normalizado.
 
@@ -136,6 +138,12 @@ def run_labeling_stage(
     minimum_kappa : float, optional
         Repassado a :func:`labeling.validation.evaluate_against_gold_set`,
         by default 0.6.
+    max_workers : int | None, optional
+        Repassado a :func:`labeling.automatic.run_cascade_labeling`, by
+        default None (o executor escolhe automaticamente).
+    show_progress : bool, optional
+        Se ``True``, exibe uma barra de progresso no console, by default
+        True.
 
     Returns
     -------
@@ -159,7 +167,12 @@ def run_labeling_stage(
     normalized_corpus = read_dataset_file(paths.normalized_corpus_file)
 
     labeling_results = run_cascade_labeling(
-        normalized_corpus, labelers, text_column=text_column, weights=weights
+        normalized_corpus,
+        labelers,
+        text_column=text_column,
+        weights=weights,
+        max_workers=max_workers,
+        show_progress=show_progress,
     )
     consensus = aggregate_by_weighted_majority_vote(labeling_results)
     labeled_corpus = merge_consensus_into_corpus(normalized_corpus, consensus)

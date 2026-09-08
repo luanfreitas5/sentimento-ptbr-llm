@@ -226,6 +226,25 @@ class TestRunLabelingStage:
             "negativo"
         ]
 
+    def test_accepts_max_workers_and_show_progress(self, pipeline_paths: ProjectPaths) -> None:
+        """Deve aceitar e repassar max_workers/show_progress sem alterar o resultado."""
+        normalized_corpus = pl.DataFrame({
+            "id": ["1", "2"],
+            "text": ["adorei o produto", "produto pessimo"],
+            "text_normalized": ["adorei o produto", "produto pessimo"],
+        })
+        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+
+        labeled_path = run_labeling_stage(
+            pipeline_paths,
+            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            max_workers=2,
+            show_progress=False,
+        )
+
+        labeled_corpus = read_dataset_file(labeled_path)
+        assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
+
 
 class TestRunFeaturesStage:
     """Testes de :func:`pipelines.features.run_features_stage`."""
