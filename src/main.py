@@ -124,7 +124,10 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--max-workers",
         type=int,
         default=None,
-        help="Número máximo de threads paralelas (etapas `ingestion`/`llm_evaluation`).",
+        help=(
+            "Número máximo de threads/processos paralelos (etapas "
+            "`ingestion`/`preprocessing`/`labeling`/`llm_evaluation`)."
+        ),
     )
     parser.add_argument(
         "--model-names",
@@ -343,16 +346,15 @@ def _build_preprocessing_stage_kwargs(
         Configurações sensíveis ao ambiente, não utilizadas diretamente
         nesta etapa.
     args : argparse.Namespace
-        Argumentos de linha de comando, não utilizados diretamente nesta
-        etapa.
+        Argumentos de linha de comando (``--max-workers``).
 
     Returns
     -------
     dict[str, Any]
         Argumentos nomeados para :func:`pipelines.preprocessing.run_preprocessing_stage`.
     """
-    del general_config, settings, args
-    return {"paths": paths}
+    del general_config, settings
+    return {"paths": paths, "max_workers": args.max_workers}
 
 
 def _build_labeling_stage_kwargs(
@@ -376,15 +378,14 @@ def _build_labeling_stage_kwargs(
         Configurações sensíveis ao ambiente, não utilizadas diretamente
         nesta etapa.
     args : argparse.Namespace
-        Argumentos de linha de comando, não utilizados diretamente nesta
-        etapa.
+        Argumentos de linha de comando (``--max-workers``).
 
     Returns
     -------
     dict[str, Any]
         Argumentos nomeados para :func:`pipelines.labeling.run_labeling_stage`.
     """
-    del general_config, settings, args
+    del general_config, settings
     labeling_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["labeling"])
     labelers: dict[str, SentimentLabeler] = {"heuristica_lexica": LexicalHeuristicLabeler()}
     weights = {
@@ -403,6 +404,7 @@ def _build_labeling_stage_kwargs(
         "weights": weights,
         "human_validation_sample_size": labeling_config["human_validation"]["sample_size"],
         "minimum_kappa": labeling_config["validation"]["minimum_agreement"],
+        "max_workers": args.max_workers,
     }
 
 
