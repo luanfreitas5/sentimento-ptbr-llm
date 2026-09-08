@@ -41,7 +41,7 @@ class TestProjectError:
             raise ProjectError("erro")
 
     def test_survives_pickling_roundtrip_for_subclass_with_custom_init(self) -> None:
-        """Uma subclasse com __init__ próprio (ex.: PipelineStageError) deve sobreviver a pickle/unpickle.
+        """Uma subclasse com __init__ próprio (ex.: PipelineStageError) sobrevive a pickle/unpickle.
 
         Necessário para propagar corretamente a exceção original quando ela é
         levantada dentro de um worker de ``ProcessPoolExecutor`` (ver

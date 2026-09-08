@@ -52,25 +52,28 @@ def _scrape_always_fails(query: str) -> list[dict[str, str]]:
 def _build_raw_tweet_batch(tweet_ids: list[str], *, language: str = "pt") -> pl.DataFrame:
     """Constrói um DataFrame de tweets brutos válido, para testes de carregamento em lote."""
     n = len(tweet_ids)
-    df = pl.DataFrame({
-        "tweet_id": tweet_ids,
-        "user_id": ["u1"] * n,
-        "text": [f"texto {tweet_id}" for tweet_id in tweet_ids],
-        "created_at": [datetime(2026, 1, 1)] * n,
-        "language": [language] * n,
-        "is_reply": [False] * n,
-        "is_retweet": [False] * n,
-        "like_count": [0] * n,
-        "reply_count": [0] * n,
-        "retweet_count": [0] * n,
-        "quote_count": [0] * n,
-    })
+    df = pl.DataFrame(
+        {
+            "tweet_id": tweet_ids,
+            "user_id": ["u1"] * n,
+            "text": [f"texto {tweet_id}" for tweet_id in tweet_ids],
+            "created_at": [datetime(2026, 1, 1)] * n,
+            "language": [language] * n,
+            "is_reply": [False] * n,
+            "is_retweet": [False] * n,
+            "like_count": [0] * n,
+            "reply_count": [0] * n,
+            "retweet_count": [0] * n,
+            "quote_count": [0] * n,
+        }
+    )
     # Adiciona colunas nullable string para source_query e source_group
-    df = df.with_columns([
-        pl.lit(None, dtype=pl.String).alias("source_query"),
-        pl.lit(None, dtype=pl.String).alias("source_group"),
-    ])
-    return df
+    return df.with_columns(
+        [
+            pl.lit(None, dtype=pl.String).alias("source_query"),
+            pl.lit(None, dtype=pl.String).alias("source_group"),
+        ]
+    )
 
 
 class TestReadDatasetFile:
@@ -123,9 +126,7 @@ class TestLoadRawTweetBatch:
         with pytest.raises(EmptyDatasetError):
             load_raw_tweet_batch(tmp_path, show_progress=False)
 
-    def test_isolates_corrupted_file_and_validates_remaining_batch(
-        self, tmp_path: Path
-    ) -> None:
+    def test_isolates_corrupted_file_and_validates_remaining_batch(self, tmp_path: Path) -> None:
         """Um arquivo corrompido não deve impedir a validação dos demais arquivos do lote."""
         write_parquet(_build_raw_tweet_batch(["1", "2"]), tmp_path / "usuario_valido.parquet")
         (tmp_path / "usuario_corrompido.parquet").write_bytes(b"nao e um parquet valido")
@@ -135,7 +136,7 @@ class TestLoadRawTweetBatch:
         assert result.height == 2
 
     def test_rejects_duplicate_tweet_id_across_files(self, tmp_path: Path) -> None:
-        """Um tweet_id duplicado entre dois arquivos diferentes deve violar a unicidade do schema."""
+        """Um tweet_id duplicado entre dois arquivos diferentes deve violar unicidade do schema."""
         write_parquet(_build_raw_tweet_batch(["1"]), tmp_path / "usuario_a.parquet")
         write_parquet(_build_raw_tweet_batch(["1"]), tmp_path / "usuario_b.parquet")
 

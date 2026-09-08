@@ -240,9 +240,7 @@ class TestRunParallelParquetLoading:
         write_parquet(pl.DataFrame({"valor": [1]}), file_a)
         write_parquet(pl.DataFrame({"valor": [2]}), file_b)
 
-        result = run_parallel_parquet_loading(
-            [file_a, file_b], show_progress=False, max_workers=2
-        )
+        result = run_parallel_parquet_loading([file_a, file_b], show_progress=False, max_workers=2)
 
         assert result.failures == []
         valores = sorted(df["valor"].to_list()[0] for df in result.successes)

@@ -164,17 +164,19 @@ class TestRunCascadeLabeling:
         não se perde ao coletar resultados em ProcessPoolExecutor (ver
         _label_indexed_item / operator.itemgetter(0)).
         """
-        df = pl.DataFrame({
-            "id": [str(i) for i in range(6)],
-            "text": [
-                "adorei o produto",
-                "péssimo atendimento",
-                "chegou no prazo",
-                "excelente experiência",
-                "produto horrível",
-                "sem opinião formada",
-            ],
-        })
+        df = pl.DataFrame(
+            {
+                "id": [str(i) for i in range(6)],
+                "text": [
+                    "adorei o produto",
+                    "péssimo atendimento",
+                    "chegou no prazo",
+                    "excelente experiência",
+                    "produto horrível",
+                    "sem opinião formada",
+                ],
+            }
+        )
         labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
 
         result_sequential = run_cascade_labeling(df, labelers, max_workers=1, show_progress=False)
@@ -188,13 +190,15 @@ class TestCalculateWeightedLabelScores:
 
     def test_sums_confidence_times_weight_per_label(self) -> None:
         """O score ponderado deve ser a soma de confiança x peso por rótulo."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         result = calculate_weighted_label_scores(df).sort("sentiment_label")
         assert result["weighted_score"].to_list() == pytest.approx([1.8, 2.0])
 
@@ -219,26 +223,30 @@ class TestCalculateAgreementRatio:
 
     def test_picks_label_with_highest_weighted_score(self) -> None:
         """O rótulo com maior score ponderado deve vencer como consenso."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         result = calculate_agreement_ratio(df)
         assert result["consensus_label"].to_list() == ["positivo"]
         assert result["agreement_ratio"].to_list()[0] == pytest.approx(0.5263, abs=1e-4)
 
     def test_computes_independently_per_sample(self) -> None:
         """A razão de concordância deve ser calculada separadamente para cada amostra."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "2", "2", "2"],
-            "tagger": ["a", "b", "a", "b", "c"],
-            "sentiment_label": ["positivo", "positivo", "negativo", "positivo", "positivo"],
-            "confidence_score": [1.0, 1.0, 1.0, 1.0, 1.0],
-            "weight": [1.0, 1.0, 1.0, 1.0, 1.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "2", "2", "2"],
+                "tagger": ["a", "b", "a", "b", "c"],
+                "sentiment_label": ["positivo", "positivo", "negativo", "positivo", "positivo"],
+                "confidence_score": [1.0, 1.0, 1.0, 1.0, 1.0],
+                "weight": [1.0, 1.0, 1.0, 1.0, 1.0],
+            }
+        )
         result = calculate_agreement_ratio(df).sort("id")
         assert result["consensus_label"].to_list() == ["positivo", "positivo"]
         assert result["agreement_ratio"].to_list() == pytest.approx([1.0, 0.6667], abs=1e-4)
@@ -249,13 +257,15 @@ class TestCalculateDiscordanceScore:
 
     def test_is_complement_of_agreement_ratio(self) -> None:
         """A discordância deve ser o complemento (1 - concordância) da razão de concordância."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         result = calculate_discordance_score(df)
         assert result["discordance_score"].to_list()[0] == pytest.approx(0.4737, abs=1e-4)
 
@@ -265,39 +275,45 @@ class TestFlagLowConfidenceSamples:
 
     def test_flags_sample_above_discordance_threshold(self) -> None:
         """Uma amostra com discordância acima do limiar deve ser sinalizada."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         discordance = calculate_discordance_score(df)
         result = flag_low_confidence_samples(discordance)
         assert result["requires_human_validation"].to_list() == [True]
 
     def test_does_not_flag_sample_with_full_agreement(self) -> None:
         """Uma amostra com concordância total não deve ser sinalizada."""
-        df = pl.DataFrame({
-            "id": ["1", "1"],
-            "tagger": ["heuristica", "llm"],
-            "sentiment_label": ["positivo", "positivo"],
-            "confidence_score": [1.0, 1.0],
-            "weight": [1.0, 1.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1"],
+                "tagger": ["heuristica", "llm"],
+                "sentiment_label": ["positivo", "positivo"],
+                "confidence_score": [1.0, 1.0],
+                "weight": [1.0, 1.0],
+            }
+        )
         discordance = calculate_discordance_score(df)
         result = flag_low_confidence_samples(discordance)
         assert result["requires_human_validation"].to_list() == [False]
 
     def test_respects_custom_thresholds(self) -> None:
         """Limiares customizados devem ser respeitados."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         discordance = calculate_discordance_score(df)
         result = flag_low_confidence_samples(
             discordance, low_confidence_threshold=0.0, discordance_threshold=1.0
@@ -310,13 +326,15 @@ class TestAggregateByWeightedMajorityVote:
 
     def test_produces_sentiment_label_and_confidence_columns(self) -> None:
         """O resultado deve conter as colunas ``sentiment_label`` e ``confidence_score``."""
-        df = pl.DataFrame({
-            "id": ["1", "1"],
-            "tagger": ["heuristica", "llm"],
-            "sentiment_label": ["positivo", "positivo"],
-            "confidence_score": [0.8, 0.9],
-            "weight": [1.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1"],
+                "tagger": ["heuristica", "llm"],
+                "sentiment_label": ["positivo", "positivo"],
+                "confidence_score": [0.8, 0.9],
+                "weight": [1.0, 2.0],
+            }
+        )
         result = aggregate_by_weighted_majority_vote(df)
         assert result["sentiment_label"].to_list() == ["positivo"]
         assert set(result.columns) == {"id", "sentiment_label", "confidence_score"}
@@ -328,22 +346,26 @@ class TestMergeConsensusIntoCorpus:
     def test_merges_matching_ids(self) -> None:
         """Amostras com consenso correspondente devem receber o rótulo mesclado."""
         corpus = pl.DataFrame({"id": ["1", "2"], "text": ["ótimo", "sem opinião"]})
-        consensus = pl.DataFrame({
-            "id": ["1"],
-            "sentiment_label": ["positivo"],
-            "confidence_score": [0.9],
-        })
+        consensus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "sentiment_label": ["positivo"],
+                "confidence_score": [0.9],
+            }
+        )
         result = merge_consensus_into_corpus(corpus, consensus).sort("id")
         assert result["sentiment_label"].to_list() == ["positivo", None]
 
     def test_preserves_original_row_count(self) -> None:
         """A junção à esquerda não deve alterar o número de linhas do corpus original."""
         corpus = pl.DataFrame({"id": ["1", "2"], "text": ["a", "b"]})
-        consensus = pl.DataFrame({
-            "id": ["1"],
-            "sentiment_label": ["positivo"],
-            "confidence_score": [0.9],
-        })
+        consensus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "sentiment_label": ["positivo"],
+                "confidence_score": [0.9],
+            }
+        )
         assert merge_consensus_into_corpus(corpus, consensus).height == 2
 
 
@@ -368,12 +390,14 @@ class TestSelectSamplesForHumanValidation:
 
     def test_selects_only_flagged_samples(self) -> None:
         """Apenas amostras sinalizadas para validação humana devem ser candidatas."""
-        df = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "consensus_label": ["positivo", "negativo", "neutro"],
-            "agreement_ratio": [0.2, 0.9, 0.4],
-            "requires_human_validation": [True, False, True],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "consensus_label": ["positivo", "negativo", "neutro"],
+                "agreement_ratio": [0.2, 0.9, 0.4],
+                "requires_human_validation": [True, False, True],
+            }
+        )
         result = select_samples_for_human_validation(
             df, sample_size=10, stratify_by_confidence=False
         )
@@ -382,24 +406,28 @@ class TestSelectSamplesForHumanValidation:
 
     def test_stratifies_by_confidence_bucket(self) -> None:
         """A amostragem estratificada deve manter representantes de cada faixa de confiança."""
-        df = pl.DataFrame({
-            "id": [str(i) for i in range(6)],
-            "consensus_label": ["positivo"] * 3 + ["negativo"] * 3,
-            "agreement_ratio": [0.2, 0.25, 0.28, 0.35, 0.4, 0.45],
-            "requires_human_validation": [True] * 6,
-        })
+        df = pl.DataFrame(
+            {
+                "id": [str(i) for i in range(6)],
+                "consensus_label": ["positivo"] * 3 + ["negativo"] * 3,
+                "agreement_ratio": [0.2, 0.25, 0.28, 0.35, 0.4, 0.45],
+                "requires_human_validation": [True] * 6,
+            }
+        )
         result = select_samples_for_human_validation(df, sample_size=6)
         assert result.height == 6
         assert "confidence_bucket" not in result.columns
 
     def test_raises_when_no_sample_is_flagged(self) -> None:
         """Se nenhuma amostra estiver sinalizada, deve levantar ``EmptyDatasetError``."""
-        df = pl.DataFrame({
-            "id": ["1"],
-            "consensus_label": ["positivo"],
-            "agreement_ratio": [0.9],
-            "requires_human_validation": [False],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1"],
+                "consensus_label": ["positivo"],
+                "agreement_ratio": [0.9],
+                "requires_human_validation": [False],
+            }
+        )
         with pytest.raises(EmptyDatasetError):
             select_samples_for_human_validation(df)
 
@@ -517,14 +545,18 @@ class TestEvaluateAgainstGoldSet:
 
     def test_meets_minimum_agreement_with_high_kappa(self) -> None:
         """Concordância alta com o gold set deve atender ao limiar mínimo padrão."""
-        predicted = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "positivo"],
-        })
-        gold = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "positivo"],
-        })
+        predicted = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "positivo"],
+            }
+        )
+        gold = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "positivo"],
+            }
+        )
         result = evaluate_against_gold_set(predicted, gold)
         assert result.n_samples == 3
         assert result.meets_minimum_agreement is True
@@ -532,14 +564,18 @@ class TestEvaluateAgainstGoldSet:
 
     def test_does_not_meet_minimum_agreement_with_low_kappa(self) -> None:
         """Concordância abaixo do limiar mínimo não deve ser aprovada."""
-        predicted = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "positivo"],
-        })
-        gold = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "negativo"],
-        })
+        predicted = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "positivo"],
+            }
+        )
+        gold = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "negativo"],
+            }
+        )
         result = evaluate_against_gold_set(predicted, gold)
         assert result.cohen_kappa == pytest.approx(0.4, abs=1e-4)
         assert result.meets_minimum_agreement is False
