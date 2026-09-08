@@ -143,6 +143,32 @@ class TestLoadRawTweetBatch:
         with pytest.raises(DataValidationError):
             load_raw_tweet_batch(tmp_path, show_progress=False, max_workers=2)
 
+    def test_raises_data_error_for_schema_mismatched_file_in_batch_directory(
+        self, tmp_path: Path
+    ) -> None:
+        """Um arquivo com esquema incompatível (ex.: saída antiga de ``ingestion``) falha tipado.
+
+        Reproduz a colisão encontrada na revisão final: se o arquivo
+        consolidado de ``ingestion`` (schema mínimo de 4 colunas:
+        ``id``/``text``/``data_source``/``data_collected``) acabar no mesmo
+        diretório do lote bruto por usuário, ``pl.concat`` levanta um
+        ``polars.exceptions.ShapeError`` não tratado — deve virar
+        ``DataError`` tipado em vez disso.
+        """
+        write_parquet(_build_raw_tweet_batch(["1"]), tmp_path / "usuario_a.parquet")
+        legacy_ingestion_output = pl.DataFrame(
+            {
+                "id": ["99"],
+                "text": ["texto antigo"],
+                "data_source": ["scraping"],
+                "data_collected": ["2026-01-01"],
+            }
+        )
+        write_parquet(legacy_ingestion_output, tmp_path / "tweets_coletados.parquet")
+
+        with pytest.raises(DataError):
+            load_raw_tweet_batch(tmp_path, show_progress=False, max_workers=2)
+
 
 class TestLoadLabeledCorpus:
     """Testes de carregamento e validação do corpus rotulado."""

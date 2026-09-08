@@ -9,7 +9,13 @@ data:
   processed: "data/processed"
 
 data_files:
-  raw_tweets: "data/raw/tweets_coletados.parquet"
+  # Fora de data/raw/ propositalmente: preprocessing.run_preprocessing_stage
+  # (via data.loader.load_raw_tweet_batch) faz glob em data/raw/*.parquet
+  # esperando o lote de tweets brutos coletados por usuário (RawTweetSchema,
+  # 13 colunas); o arquivo consolidado de ingestion tem um schema mínimo
+  # incompatível (id/text/data_source/data_collected) e colidiria com esse
+  # glob, quebrando `--stage all` com um ShapeError do polars.
+  raw_tweets: "data/interim/tweets_coletados.parquet"
   tweetsentbr: "data/external/tweetsentbr.parquet"
   repro: "data/external/repro.parquet"
   corpus_normalizado: "data/interim/corpus_normalizado.parquet"

@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 
 import polars as pl
+from polars.exceptions import PolarsError
 
 from constants.columns import ID_COLUMN, TWEET_ID_COLUMN
 from exceptions.data import DataError
@@ -97,6 +98,11 @@ def load_raw_tweet_batch(
     EmptyDatasetError
         Se o diretório não contiver nenhum arquivo ``*.parquet``, ou se
         todos os arquivos encontrados falharem na leitura.
+    DataError
+        Se os arquivos lidos tiverem esquemas incompatíveis entre si (ex.:
+        um arquivo produzido por uma versão antiga de ``ingestion``,
+        indevidamente colocado no mesmo diretório do lote bruto por
+        usuário), impedindo a concatenação em um único DataFrame.
     DataValidationError
         Se o lote concatenado violar o contrato de dados.
 
@@ -116,7 +122,22 @@ def load_raw_tweet_batch(
         )
     validate_not_empty_collection(loading_result.successes, collection_name=str(directory))
 
-    raw_batch = pl.concat(loading_result.successes, how="vertical")
+    try:
+        raw_batch = pl.concat(loading_result.successes, how="vertical")
+    except PolarsError as exception:
+        # Isolar por arquivo aqui exigiria refazer a leitura par a par (ou
+        # inspecionar schemas individualmente) só para atribuir a mensagem
+        # a um arquivo específico; uma mensagem genérica identificando o
+        # diretório é suficiente para orientar o diagnóstico (ver docstring).
+        logger.exception(
+            "Falha ao concatenar o lote bruto de '%s': esquemas incompatíveis entre arquivos",
+            directory,
+        )
+        raise DataError(
+            f"arquivo(s) em '{directory}' têm esquema incompatível com o lote — "
+            "verifique se algum arquivo não segue o formato de tweet bruto por usuário",
+            context={"directory": str(directory)},
+        ) from exception
     validated_batch = validate_raw_tweet_dataset(raw_batch).rename({TWEET_ID_COLUMN: ID_COLUMN})
 
     logger.info(
