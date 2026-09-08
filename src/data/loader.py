@@ -12,11 +12,14 @@ from pathlib import Path
 
 import polars as pl
 
+from constants.columns import ID_COLUMN, TWEET_ID_COLUMN
 from exceptions.data import DataError
 from io_utils.csv import read_csv
 from io_utils.parquet import read_parquet
+from parallel.data_loading import run_parallel_parquet_loading
 from schemas.dataset import validate_labeled_corpus, validate_raw_tweet_dataset
 from schemas.training import validate_training_example
+from utils.validation import validate_not_empty_collection
 
 logger = logging.getLogger(__name__)
 
@@ -59,35 +62,71 @@ def read_dataset_file(file_path: Path) -> pl.DataFrame:
     )
 
 
-def load_raw_tweet_dataset(file_path: Path) -> pl.DataFrame:
-    """Carrega e valida um dataset de tweets brutos contra :class:`schemas.dataset.RawTweetSchema`.
+def load_raw_tweet_batch(
+    directory: Path, *, max_workers: int | None = None, show_progress: bool = True
+) -> pl.DataFrame:
+    """Carrega, concatena e valida o lote de tweets brutos coletados por usuário.
+
+    Lê em paralelo todos os arquivos ``*.parquet`` do diretório informado
+    (um por usuário coletado — ver ``data/raw/``), isolando a falha de
+    leitura de um arquivo corrompido sem abortar os demais (ver
+    :func:`parallel.data_loading.run_parallel_parquet_loading`). A
+    validação contra :class:`schemas.dataset.RawTweetSchema` ocorre uma
+    única vez, sobre o lote já concatenado — não por arquivo — de forma
+    que um ``tweet_id`` duplicado entre dois arquivos diferentes também
+    seja detectado.
 
     Parameters
     ----------
-    file_path : Path
-        Caminho do arquivo em ``data/raw`` ou ``data/external``.
+    directory : Path
+        Diretório contendo os arquivos Parquet brutos (``paths.data_raw_dir``).
+    max_workers : int | None, optional
+        Repassado a :func:`parallel.data_loading.run_parallel_parquet_loading`,
+        by default None (o executor escolhe automaticamente).
+    show_progress : bool, optional
+        Se ``True``, exibe uma barra de progresso no console, by default True.
 
     Returns
     -------
     pl.DataFrame
-        DataFrame validado de tweets brutos.
+        Lote de tweets brutos validado, com ``tweet_id`` renomeado para
+        ``id`` (contrato usado pelo restante do pipeline).
 
     Raises
     ------
-    DataNotFoundError
-        Se o arquivo não existir.
+    EmptyDatasetError
+        Se o diretório não contiver nenhum arquivo ``*.parquet``, ou se
+        todos os arquivos encontrados falharem na leitura.
     DataValidationError
-        Se o conteúdo não satisfizer o contrato de dados.
+        Se o lote concatenado violar o contrato de dados.
 
     Examples
     --------
-    >>> load_raw_tweet_dataset(Path("data/raw/tweets_coletados.parquet"))  # doctest: +SKIP
+    >>> load_raw_tweet_batch(Path("data/raw"))  # doctest: +SKIP
     """
-    validated_df = validate_raw_tweet_dataset(read_dataset_file(file_path))
-    logger.info(
-        "Dataset de tweets brutos carregado: %s (%d linhas)", file_path, validated_df.height
+    file_paths = sorted(directory.glob("*.parquet"))
+    validate_not_empty_collection(file_paths, collection_name=str(directory))
+
+    loading_result = run_parallel_parquet_loading(
+        file_paths, max_workers=max_workers, show_progress=show_progress
     )
-    return validated_df
+    for failure in loading_result.failures:
+        logger.warning(
+            "Falha ao ler arquivo Parquet do lote bruto: %s (%s)", failure.item, failure.error
+        )
+    validate_not_empty_collection(loading_result.successes, collection_name=str(directory))
+
+    raw_batch = pl.concat(loading_result.successes, how="vertical")
+    validated_batch = validate_raw_tweet_dataset(raw_batch).rename({TWEET_ID_COLUMN: ID_COLUMN})
+
+    logger.info(
+        "Lote de tweets brutos carregado: %d/%d arquivo(s), %d linha(s) (%s).",
+        len(loading_result.successes),
+        len(file_paths),
+        validated_batch.height,
+        directory,
+    )
+    return validated_batch
 
 
 def load_labeled_corpus(file_path: Path) -> pl.DataFrame:
