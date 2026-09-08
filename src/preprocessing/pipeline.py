@@ -9,11 +9,14 @@ resultado a um corpus inteiro, junto aos critérios de inclusão/exclusão
 usado pelas etapas seguintes (rotulagem e extração de features).
 """
 
+import functools
 import logging
+import operator
 
 import polars as pl
 
 from exceptions.pipeline import PipelineStageError
+from parallel.preprocessing import run_parallel_text_cleaning
 from preprocessing.cleaning import clean_tweet_text
 from preprocessing.emojis import normalize_emojis
 from preprocessing.filtering import filter_by_inclusion_criteria
@@ -28,6 +31,8 @@ from utils.text import normalize_whitespace
 from utils.validation import validate_not_empty_collection
 
 logger = logging.getLogger(__name__)
+
+_IndexedText = tuple[int, str]
 
 
 def normalize_tweet_text(text: str, *, keep_hashtag_word: bool = True) -> str:
@@ -96,6 +101,30 @@ def _normalize_row_text(text: str, *, keep_hashtag_word: bool) -> str:
         ) from exception
 
 
+def _normalize_indexed_row_text(item: _IndexedText, *, keep_hashtag_word: bool) -> _IndexedText:
+    """Normaliza um texto indexado, preservando sua posição original na lista de entrada.
+
+    Necessário porque a execução paralela (``ProcessPoolExecutor``) coleta
+    resultados na ordem de conclusão, não na ordem de submissão — sem o
+    índice original, a coluna resultante ficaria desalinhada em relação às
+    demais linhas do DataFrame.
+
+    Parameters
+    ----------
+    item : tuple[int, str]
+        Par ``(índice_original, texto_bruto)``.
+    keep_hashtag_word : bool
+        Repassado a :func:`_normalize_row_text`.
+
+    Returns
+    -------
+    tuple[int, str]
+        Par ``(índice_original, texto_normalizado)``.
+    """
+    original_index, text = item
+    return original_index, _normalize_row_text(text, keep_hashtag_word=keep_hashtag_word)
+
+
 def run_preprocessing_pipeline(
     dataframe: pl.DataFrame,
     *,
@@ -111,6 +140,8 @@ def run_preprocessing_pipeline(
     minimum_portuguese_ratio: float = 0.15,
     max_repeated_word_ratio: float = 0.5,
     drop_duplicate_text: bool = True,
+    max_workers: int | None = None,
+    show_progress: bool = True,
 ) -> pl.DataFrame:
     """Executa o pipeline reprodutível de pré-processamento sobre um corpus de tweets.
 
@@ -136,6 +167,12 @@ def run_preprocessing_pipeline(
         executada, by default None.
     keep_hashtag_word : bool, optional
         Repassado a :func:`normalize_tweet_text`, by default True.
+    max_workers : int | None, optional
+        Número máximo de processos usados na normalização paralela, by
+        default None (o executor escolhe automaticamente).
+    show_progress : bool, optional
+        Se ``True``, exibe uma barra de progresso no console, by default
+        True.
     expand_slang : bool, optional
         Repassado a :func:`preprocessing.tokenization.tokenize_and_normalize`,
         usado apenas quando ``tokens_column`` é informado, by default True.
@@ -180,9 +217,17 @@ def run_preprocessing_pipeline(
     """
     validate_not_empty_collection(dataframe, collection_name="dataframe")
 
+    indexed_texts = list(enumerate(dataframe[text_column].to_list()))
+    normalization_result = run_parallel_text_cleaning(
+        functools.partial(_normalize_indexed_row_text, keep_hashtag_word=keep_hashtag_word),
+        indexed_texts,
+        max_workers=max_workers,
+        show_progress=show_progress,
+    )
+    if normalization_result.failures:
+        raise normalization_result.failures[0].error
     normalized_texts = [
-        _normalize_row_text(text, keep_hashtag_word=keep_hashtag_word)
-        for text in dataframe[text_column].to_list()
+        text for _, text in sorted(normalization_result.successes, key=operator.itemgetter(0))
     ]
     result = dataframe.with_columns(pl.Series(normalized_text_column, normalized_texts))
 
