@@ -11,6 +11,7 @@ import logging
 
 import polars as pl
 
+from constants.columns import IS_RETWEET_COLUMN, LANGUAGE_COLUMN
 from preprocessing.cleaning import (
     is_minimum_length_content,
     is_probable_portuguese_text,
@@ -239,4 +240,59 @@ def filter_by_inclusion_criteria(
         filtered.height,
         dataframe.height,
     )
+    return filtered
+
+
+def filter_by_raw_metadata(
+    dataframe: pl.DataFrame,
+    *,
+    exclude_retweets: bool = True,
+    required_language: str | None = "pt",
+) -> pl.DataFrame:
+    """Remove retweets e/ou linhas fora do idioma alvo, usando metadados da coleta.
+
+    Aplicado antes da normalização por linha (mais barato: usa colunas já
+    tipadas da coleta, não exige inspecionar o texto). Replies
+    (``is_reply``) não são afetadas por este filtro — ainda expressam
+    opinião original do autor, diferente de um retweet (texto duplicado
+    de outro usuário).
+
+    Parameters
+    ----------
+    dataframe : pl.DataFrame
+        DataFrame de entrada, contendo ao menos ``is_retweet`` (bool) e,
+        quando ``required_language`` não for ``None``, ``language`` (str).
+    exclude_retweets : bool, optional
+        Se ``True``, remove linhas com ``is_retweet=True``, by default True.
+    required_language : str | None, optional
+        Idioma exigido (comparação exata com a coluna ``language``); ``None``
+        desliga o filtro de idioma, by default "pt".
+
+    Returns
+    -------
+    pl.DataFrame
+        Subconjunto do DataFrame original que atende aos critérios habilitados.
+
+    Examples
+    --------
+    >>> df = pl.DataFrame(
+    ...     {"text": ["a", "b"], "is_retweet": [True, False], "language": ["pt", "pt"]}
+    ... )
+    >>> filter_by_raw_metadata(df)["text"].to_list()
+    ['b']
+    """
+    filtered = dataframe
+    if exclude_retweets:
+        before = filtered.height
+        filtered = filtered.filter(~pl.col(IS_RETWEET_COLUMN))
+        logger.info("Filtro de retweet: %d/%d linha(s) mantida(s)", filtered.height, before)
+    if required_language is not None:
+        before = filtered.height
+        filtered = filtered.filter(pl.col(LANGUAGE_COLUMN) == required_language)
+        logger.info(
+            "Filtro de idioma ('%s'): %d/%d linha(s) mantida(s)",
+            required_language,
+            filtered.height,
+            before,
+        )
     return filtered

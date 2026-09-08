@@ -22,6 +22,7 @@ from preprocessing.filtering import (
     filter_by_inclusion_criteria,
     filter_by_minimum_length,
     filter_by_portuguese_language,
+    filter_by_raw_metadata,
     filter_spam_like_rows,
     remove_duplicate_text_rows,
 )
@@ -365,6 +366,51 @@ class TestFilterByInclusionCriteria:
         """Com ``drop_duplicate_text=False``, duplicatas devem ser mantidas."""
         df = pl.DataFrame({"text": ["muito bom o produto", "muito bom o produto"]})
         result = filter_by_inclusion_criteria(df, text_column="text", drop_duplicate_text=False)
+        assert result.height == 2
+
+
+class TestFilterByRawMetadata:
+    """Testes do filtro de metadados brutos (retweet/idioma) em nível de DataFrame."""
+
+    def test_excludes_retweets_by_default(self) -> None:
+        """Por padrão, linhas com is_retweet=True devem ser removidas."""
+        df = pl.DataFrame({
+            "text": ["a", "b"],
+            "is_retweet": [True, False],
+            "language": ["pt", "pt"],
+        })
+        result = filter_by_raw_metadata(df)
+        assert result["text"].to_list() == ["b"]
+
+    def test_keeps_replies(self) -> None:
+        """Replies (is_reply=True) não devem ser removidas pelo filtro de retweet."""
+        df = pl.DataFrame({
+            "text": ["a"],
+            "is_retweet": [False],
+            "language": ["pt"],
+            "is_reply": [True],
+        })
+        result = filter_by_raw_metadata(df)
+        assert result.height == 1
+
+    def test_filters_by_required_language(self) -> None:
+        """Linhas fora do idioma exigido devem ser removidas."""
+        df = pl.DataFrame({
+            "text": ["a", "b"],
+            "is_retweet": [False, False],
+            "language": ["pt", "en"],
+        })
+        result = filter_by_raw_metadata(df)
+        assert result["text"].to_list() == ["a"]
+
+    def test_can_disable_both_filters(self) -> None:
+        """Com ambos os filtros desligados, nenhuma linha deve ser removida."""
+        df = pl.DataFrame({
+            "text": ["a", "b"],
+            "is_retweet": [True, False],
+            "language": ["en", "pt"],
+        })
+        result = filter_by_raw_metadata(df, exclude_retweets=False, required_language=None)
         assert result.height == 2
 
 
