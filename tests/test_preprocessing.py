@@ -22,10 +22,15 @@ from preprocessing.filtering import (
     filter_by_inclusion_criteria,
     filter_by_minimum_length,
     filter_by_portuguese_language,
+    filter_by_raw_metadata,
     filter_spam_like_rows,
     remove_duplicate_text_rows,
 )
-from preprocessing.pipeline import normalize_tweet_text, run_preprocessing_pipeline
+from preprocessing.pipeline import (
+    _normalize_indexed_row_text,
+    normalize_tweet_text,
+    run_preprocessing_pipeline,
+)
 from preprocessing.text import (
     normalize_hashtags,
     normalize_mentions,
@@ -368,6 +373,59 @@ class TestFilterByInclusionCriteria:
         assert result.height == 2
 
 
+class TestFilterByRawMetadata:
+    """Testes do filtro de metadados brutos (retweet/idioma) em nível de DataFrame."""
+
+    def test_excludes_retweets_by_default(self) -> None:
+        """Por padrão, linhas com is_retweet=True devem ser removidas."""
+        df = pl.DataFrame(
+            {
+                "text": ["a", "b"],
+                "is_retweet": [True, False],
+                "language": ["pt", "pt"],
+            }
+        )
+        result = filter_by_raw_metadata(df)
+        assert result["text"].to_list() == ["b"]
+
+    def test_keeps_replies(self) -> None:
+        """Replies (is_reply=True) não devem ser removidas pelo filtro de retweet."""
+        df = pl.DataFrame(
+            {
+                "text": ["a"],
+                "is_retweet": [False],
+                "language": ["pt"],
+                "is_reply": [True],
+            }
+        )
+        result = filter_by_raw_metadata(df)
+        assert result.height == 1
+
+    def test_filters_by_required_language(self) -> None:
+        """Linhas fora do idioma exigido devem ser removidas."""
+        df = pl.DataFrame(
+            {
+                "text": ["a", "b"],
+                "is_retweet": [False, False],
+                "language": ["pt", "en"],
+            }
+        )
+        result = filter_by_raw_metadata(df)
+        assert result["text"].to_list() == ["a"]
+
+    def test_can_disable_both_filters(self) -> None:
+        """Com ambos os filtros desligados, nenhuma linha deve ser removida."""
+        df = pl.DataFrame(
+            {
+                "text": ["a", "b"],
+                "is_retweet": [True, False],
+                "language": ["en", "pt"],
+            }
+        )
+        result = filter_by_raw_metadata(df, exclude_retweets=False, required_language=None)
+        assert result.height == 2
+
+
 class TestNormalizeTweetText:
     """Testes da composição completa de normalização de um único tweet."""
 
@@ -414,6 +472,42 @@ class TestRunPreprocessingPipeline:
         df = pl.DataFrame({"id": ["1"], "text": [None]}, schema={"id": pl.Utf8, "text": pl.Utf8})
         with pytest.raises(PipelineStageError):
             run_preprocessing_pipeline(df)
+
+    def test_normalization_stays_aligned_to_original_rows_under_parallelism(self) -> None:
+        """A normalização paralela não deve embaralhar a correspondência texto->linha.
+
+        Com vários workers, a coleta de resultados termina na ordem de
+        conclusão, não na ordem de submissão (ver ``parallel/core.py``) —
+        sem reordenar pelo índice original, a coluna ``text_normalized``
+        ficaria associada à linha errada.
+        """
+        n_rows = 20
+        df = pl.DataFrame(
+            {
+                "id": [str(index) for index in range(n_rows)],
+                "text": [
+                    f"RT @user{index}: mensagem numero {index} muito boa" for index in range(n_rows)
+                ],
+            }
+        )
+
+        result = run_preprocessing_pipeline(
+            df, apply_inclusion_filters=False, max_workers=4, show_progress=False
+        )
+
+        for index in range(n_rows):
+            row = result.filter(pl.col("id") == str(index))
+            assert f"numero {index}" in row["text_normalized"].to_list()[0]
+
+
+class TestNormalizeIndexedRowText:
+    """Testes diretos de ``_normalize_indexed_row_text`` (wrapper indexado do lote paralelo)."""
+
+    def test_preserves_original_index(self) -> None:
+        """O índice original deve passar intacto pela normalização."""
+        assert _normalize_indexed_row_text(
+            (3, "RT @a: muito bom!! 😍"), keep_hashtag_word=True
+        ) == (3, "muito bom!! [EMOJI_POSITIVO]")
 
 
 class TestPreprocessingProperties:

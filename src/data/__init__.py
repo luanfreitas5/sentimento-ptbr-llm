@@ -32,7 +32,7 @@ from data.catalog import (
 from data.downloader import collect_tweets_by_query, download_external_dataset
 from data.loader import (
     load_labeled_corpus,
-    load_raw_tweet_dataset,
+    load_raw_tweet_batch,
     load_training_example_dataset,
     read_dataset_file,
 )
@@ -48,7 +48,7 @@ __all__: list[str] = [
     "create_stratified_split",
     "download_external_dataset",
     "load_labeled_corpus",
-    "load_raw_tweet_dataset",
+    "load_raw_tweet_batch",
     "load_training_example_dataset",
     "read_dataset_file",
     "sample_random_subset",

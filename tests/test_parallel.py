@@ -1,12 +1,17 @@
 """Testes dos utilitários de execução paralela do projeto."""
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from pathlib import Path
 
+import polars as pl
 import pytest
 
+from io_utils.parquet import write_parquet
 from parallel.core import ParallelExecutionResult, execute_parallel_tasks
+from parallel.data_loading import run_parallel_parquet_loading
 from parallel.experiments import run_parallel_experiments
 from parallel.inference import run_parallel_predictions
+from parallel.labeling import run_parallel_sentiment_labeling
 from parallel.preprocessing import run_parallel_text_cleaning
 from parallel.scraping import run_parallel_scraping
 
@@ -58,6 +63,20 @@ def _fail_on_specific_query(query: str) -> str:
     if query == "falha":
         raise ValueError("consulta inválida")
     return query.upper()
+
+
+def _label_or_fail(text: str) -> str:
+    """Retorna o texto em maiúsculas, ou levanta ValueError para o texto 'erro'."""
+    if text == "erro":
+        raise ValueError("texto inválido")
+    return text.upper()
+
+
+def _fail_on_multiples_of_five(value: int) -> int:
+    """Retorna o valor recebido, ou levanta ValueError se for múltiplo de 5."""
+    if value % 5 == 0:
+        raise ValueError(f"valor inválido (múltiplo de 5): {value}")
+    return value * 2
 
 
 class TestExecuteParallelTasks:
@@ -216,3 +235,118 @@ class TestRunParallelScraping:
         assert result.successes == ["OK"]
         assert len(result.failures) == 1
         assert result.failures[0].item == "falha"
+
+
+class TestRunParallelParquetLoading:
+    """Testes da leitura paralela de lote Parquet (``parallel.data_loading``)."""
+
+    def test_reads_all_files_successfully(self, tmp_path: Path) -> None:
+        """Todos os arquivos devem ser lidos com sucesso quando não há erro."""
+        file_a = tmp_path / "a.parquet"
+        file_b = tmp_path / "b.parquet"
+        write_parquet(pl.DataFrame({"valor": [1]}), file_a)
+        write_parquet(pl.DataFrame({"valor": [2]}), file_b)
+
+        result = run_parallel_parquet_loading([file_a, file_b], show_progress=False, max_workers=2)
+
+        assert result.failures == []
+        valores = sorted(df["valor"].to_list()[0] for df in result.successes)
+        assert valores == [1, 2]
+
+    def test_isolates_failure_for_missing_file(self, tmp_path: Path) -> None:
+        """A falha de leitura de um arquivo não deve interromper a leitura dos demais."""
+        file_ok = tmp_path / "ok.parquet"
+        write_parquet(pl.DataFrame({"valor": [1]}), file_ok)
+        missing_file = tmp_path / "inexistente.parquet"
+
+        result = run_parallel_parquet_loading(
+            [file_ok, missing_file], show_progress=False, max_workers=2
+        )
+
+        assert len(result.successes) == 1
+        assert len(result.failures) == 1
+        assert result.failures[0].item == missing_file
+
+
+class TestRunParallelSentimentLabeling:
+    """Testes da paralelização de rotulagem de sentimento (``parallel.labeling``)."""
+
+    def test_labels_all_items_successfully(self) -> None:
+        """Todos os itens devem ser rotulados com sucesso quando não há erro."""
+        result = run_parallel_sentiment_labeling(
+            str.upper, ["a", "b"], show_progress=False, max_workers=1
+        )
+        assert sorted(result.successes) == ["A", "B"]
+        assert result.failures == []
+
+    def test_isolates_failure_per_item(self) -> None:
+        """A falha de rotulagem de um item não deve interromper os demais."""
+        result = run_parallel_sentiment_labeling(
+            _label_or_fail, ["ok", "erro"], show_progress=False, max_workers=1
+        )
+        assert result.successes == ["OK"]
+        assert len(result.failures) == 1
+        assert result.failures[0].item == "erro"
+
+
+class TestExecuteParallelTasksChunkSize:
+    """Testes do agrupamento em lotes (``chunk_size``) de ``execute_parallel_tasks``.
+
+    Cobre a correção do Achado Crítico 1 da revisão final: submeter uma
+    ``Future`` por item é mais lento que a execução serial para itens
+    baratos, e piora com a escala (custo fixo de IPC dominando o trabalho
+    real) — ``chunk_size`` agrupa vários itens por ``Future``, mantendo o
+    isolamento de falha por item.
+    """
+
+    def test_chunked_execution_matches_unchunked_successes(self) -> None:
+        """A execução em lotes deve produzir exatamente os mesmos sucessos que a não agrupada."""
+        items = list(range(1, 51))
+        unchunked = execute_parallel_tasks(_double, items, show_progress=False, max_workers=2)
+        chunked = execute_parallel_tasks(
+            _double, items, show_progress=False, max_workers=2, chunk_size=7
+        )
+        assert sorted(chunked.successes) == sorted(unchunked.successes)
+        assert chunked.failures == []
+
+    def test_chunked_execution_with_process_pool_matches_unchunked(self) -> None:
+        """O agrupamento em lotes deve funcionar com ``ProcessPoolExecutor`` (uso real)."""
+        items = list(range(1, 31))
+        chunked = execute_parallel_tasks(
+            _double,
+            items,
+            executor_class=ProcessPoolExecutor,
+            show_progress=False,
+            max_workers=2,
+            chunk_size=4,
+        )
+        assert sorted(chunked.successes) == sorted(item * 2 for item in items)
+        assert chunked.failures == []
+
+    def test_isolates_failure_within_a_chunk_without_failing_the_chunk(self) -> None:
+        """Um item que falha não deve derrubar os demais itens do mesmo lote nem de outros lotes."""
+        items = list(range(1, 21))  # múltiplos de 5: 5, 10, 15, 20 (4 falhas esperadas)
+        result = execute_parallel_tasks(
+            _fail_on_multiples_of_five,
+            items,
+            show_progress=False,
+            max_workers=2,
+            chunk_size=5,
+        )
+        expected_failures = {5, 10, 15, 20}
+        expected_successes = sorted(value * 2 for value in items if value not in expected_failures)
+        assert sorted(result.successes) == expected_successes
+        assert {failure.item for failure in result.failures} == expected_failures
+        assert all(isinstance(failure.error, ValueError) for failure in result.failures)
+        assert result.total_items == len(items)
+
+    def test_rejects_invalid_chunk_size(self) -> None:
+        """``chunk_size`` menor que 1 deve levantar ``ValueError`` antes de iniciar a execução."""
+        with pytest.raises(ValueError):
+            execute_parallel_tasks(_double, [1, 2], chunk_size=0, show_progress=False)
+
+    def test_chunk_size_none_preserves_default_behavior(self) -> None:
+        """``chunk_size=None`` (padrão) deve manter o comportamento original, sem agrupamento."""
+        result = execute_parallel_tasks(_double, [1, 2, 3], show_progress=False, max_workers=2)
+        assert sorted(result.successes) == [2, 4, 6]
+        assert result.failures == []

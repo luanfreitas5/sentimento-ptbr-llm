@@ -13,8 +13,8 @@ O acoplamento entre estágios é o sistema de arquivos (Parquet em `data/`, chec
 
 | Estágio | Atalho `make` | Módulo | Entrada | Saída |
 |---|---|---|---|---|
-| `ingestion` | `pipeline-ingestion` | `src/pipelines/ingestion.py` | função de coleta definida pelo usuário (`--scrape-func`) | `data/raw/tweets_coletados.parquet` |
-| `preprocessing` | `pipeline-preprocessing` | `src/pipelines/preprocessing.py` | `data/raw/tweets_coletados.parquet` | `data/interim/corpus_normalizado.parquet` |
+| `ingestion` | `pipeline-ingestion` | `src/pipelines/ingestion.py` | função de coleta definida pelo usuário (`--scrape-func`) | `data/interim/tweets_coletados.parquet` |
+| `preprocessing` | `pipeline-preprocessing` | `src/pipelines/preprocessing.py` | lote de tweets brutos coletados por usuário, `data/raw/*.parquet` (ver `src/data/loader.py::load_raw_tweet_batch`) | `data/interim/corpus_normalizado.parquet` |
 | `labeling` | `pipeline-labeling` | `src/pipelines/labeling.py` | corpus normalizado + gold sets (`data/external/`) | `data/processed/corpus_rotulado.parquet` |
 | `features` | `pipeline-features` | `src/pipelines/features.py` | corpus rotulado | splits treino/validação/teste + features TF-IDF |
 | `training_classical` | `pipeline-training-classical` | `src/pipelines/training_classical.py` | splits + features | checkpoints em `models/checkpoints/` |

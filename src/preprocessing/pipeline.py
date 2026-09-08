@@ -9,11 +9,15 @@ resultado a um corpus inteiro, junto aos critérios de inclusão/exclusão
 usado pelas etapas seguintes (rotulagem e extração de features).
 """
 
+import functools
 import logging
+import operator
+import os
 
 import polars as pl
 
 from exceptions.pipeline import PipelineStageError
+from parallel.preprocessing import run_parallel_text_cleaning
 from preprocessing.cleaning import clean_tweet_text
 from preprocessing.emojis import normalize_emojis
 from preprocessing.filtering import filter_by_inclusion_criteria
@@ -28,6 +32,42 @@ from utils.text import normalize_whitespace
 from utils.validation import validate_not_empty_collection
 
 logger = logging.getLogger(__name__)
+
+_IndexedText = tuple[int, str]
+
+# Abaixo deste número de linhas, a normalização roda em um laço serial puro
+# (sem executor): o custo fixo de inicializar um ProcessPoolExecutor supera
+# qualquer ganho de paralelismo para lotes pequenos (ver docs/superpowers/
+# specs/2026-09-07-batch-raw-tweet-pipeline-design.md, revisão final).
+_SERIAL_EXECUTION_THRESHOLD = 2000
+
+
+def _calculate_chunk_size(n_items: int, max_workers: int | None) -> int:
+    """Calcula o tamanho de lote (chunk) usado na normalização paralela em larga escala.
+
+    Um chunk pequeno demais reintroduz o overhead de round-trip por item
+    que a paralelização em lotes existe para eliminar; um chunk grande
+    demais reduz o número de lotes abaixo do número de workers disponíveis,
+    deixando-os ociosos. ``max(50, ...)`` evita lotes minúsculos quando
+    ``n_items`` é apenas um pouco maior que o limiar serial; dividir por
+    ``workers * 4`` produz lotes suficientes para balancear o trabalho
+    entre os workers mesmo com alguma variação de duração por item.
+
+    Parameters
+    ----------
+    n_items : int
+        Número total de itens a processar.
+    max_workers : int | None
+        Número máximo de processos configurado pelo chamador; ``None``
+        usa ``os.cpu_count()`` (ou 4, se indisponível) como estimativa.
+
+    Returns
+    -------
+    int
+        Tamanho de lote a repassar a ``run_parallel_text_cleaning``.
+    """
+    workers = max_workers or (os.cpu_count() or 4)
+    return max(50, n_items // (workers * 4))
 
 
 def normalize_tweet_text(text: str, *, keep_hashtag_word: bool = True) -> str:
@@ -96,6 +136,30 @@ def _normalize_row_text(text: str, *, keep_hashtag_word: bool) -> str:
         ) from exception
 
 
+def _normalize_indexed_row_text(item: _IndexedText, *, keep_hashtag_word: bool) -> _IndexedText:
+    """Normaliza um texto indexado, preservando sua posição original na lista de entrada.
+
+    Necessário porque a execução paralela (``ProcessPoolExecutor``) coleta
+    resultados na ordem de conclusão, não na ordem de submissão — sem o
+    índice original, a coluna resultante ficaria desalinhada em relação às
+    demais linhas do DataFrame.
+
+    Parameters
+    ----------
+    item : tuple[int, str]
+        Par ``(índice_original, texto_bruto)``.
+    keep_hashtag_word : bool
+        Repassado a :func:`_normalize_row_text`.
+
+    Returns
+    -------
+    tuple[int, str]
+        Par ``(índice_original, texto_normalizado)``.
+    """
+    original_index, text = item
+    return original_index, _normalize_row_text(text, keep_hashtag_word=keep_hashtag_word)
+
+
 def run_preprocessing_pipeline(
     dataframe: pl.DataFrame,
     *,
@@ -111,6 +175,8 @@ def run_preprocessing_pipeline(
     minimum_portuguese_ratio: float = 0.15,
     max_repeated_word_ratio: float = 0.5,
     drop_duplicate_text: bool = True,
+    max_workers: int | None = None,
+    show_progress: bool = True,
 ) -> pl.DataFrame:
     """Executa o pipeline reprodutível de pré-processamento sobre um corpus de tweets.
 
@@ -136,6 +202,18 @@ def run_preprocessing_pipeline(
         executada, by default None.
     keep_hashtag_word : bool, optional
         Repassado a :func:`normalize_tweet_text`, by default True.
+    max_workers : int | None, optional
+        Número máximo de processos usados na normalização paralela, by
+        default None (o executor escolhe automaticamente). Abaixo de
+        ``_SERIAL_EXECUTION_THRESHOLD`` linhas, a normalização roda em um
+        laço serial (sem executor) independentemente deste valor — o custo
+        fixo de inicializar um ``ProcessPoolExecutor`` não compensa para
+        lotes pequenos. Acima do limiar, os itens são agrupados em lotes
+        (``chunk_size`` calculado automaticamente) e uma ``Future`` é
+        submetida por lote, não por item, para amortizar o overhead de IPC.
+    show_progress : bool, optional
+        Se ``True``, exibe uma barra de progresso no console, by default
+        True.
     expand_slang : bool, optional
         Repassado a :func:`preprocessing.tokenization.tokenize_and_normalize`,
         usado apenas quando ``tokens_column`` é informado, by default True.
@@ -180,10 +258,28 @@ def run_preprocessing_pipeline(
     """
     validate_not_empty_collection(dataframe, collection_name="dataframe")
 
-    normalized_texts = [
-        _normalize_row_text(text, keep_hashtag_word=keep_hashtag_word)
-        for text in dataframe[text_column].to_list()
-    ]
+    raw_texts = dataframe[text_column].to_list()
+    if len(raw_texts) < _SERIAL_EXECUTION_THRESHOLD:
+        # Lote pequeno: laço serial puro, sem executor (mesmo comportamento
+        # de antes das Tasks 6/9 introduzirem paralelismo) — o overhead fixo
+        # de inicializar um ProcessPoolExecutor não compensa para poucos itens.
+        normalized_texts = [
+            _normalize_row_text(text, keep_hashtag_word=keep_hashtag_word) for text in raw_texts
+        ]
+    else:
+        indexed_texts = list(enumerate(raw_texts))
+        normalization_result = run_parallel_text_cleaning(
+            functools.partial(_normalize_indexed_row_text, keep_hashtag_word=keep_hashtag_word),
+            indexed_texts,
+            max_workers=max_workers,
+            show_progress=show_progress,
+            chunk_size=_calculate_chunk_size(len(indexed_texts), max_workers),
+        )
+        if normalization_result.failures:
+            raise normalization_result.failures[0].error
+        normalized_texts = [
+            text for _, text in sorted(normalization_result.successes, key=operator.itemgetter(0))
+        ]
     result = dataframe.with_columns(pl.Series(normalized_text_column, normalized_texts))
 
     if apply_inclusion_filters:

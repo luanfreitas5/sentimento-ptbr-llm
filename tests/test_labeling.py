@@ -7,8 +7,10 @@ from hypothesis import strategies as st
 
 from constants.labels import SENTIMENT_CLASSES
 from exceptions.data import DataValidationError, EmptyDatasetError
+from exceptions.pipeline import PipelineStageError
 from labeling.automatic import (
     LexicalHeuristicLabeler,
+    _label_indexed_item,
     calculate_lexicon_sentiment_counts,
     classify_by_lexical_heuristic,
     run_cascade_labeling,
@@ -39,6 +41,14 @@ class _FakeInvalidLabeler:
     def label(self, text: str) -> tuple[str, float]:
         """Retorna um rótulo inválido, ignorando o texto de entrada."""
         return "muito_positivo", 0.9
+
+
+class _FakeRaisingLabeler:
+    """Rotulador de teste que sempre levanta uma exceção genérica ao classificar."""
+
+    def label(self, text: str) -> tuple[str, float]:
+        """Levanta ``ValueError``, ignorando o texto de entrada."""
+        raise ValueError("falha simulada do rotulador")
 
 
 class TestCalculateLexiconSentimentCounts:
@@ -115,7 +125,7 @@ class TestRunCascadeLabeling:
         """Cada combinação de amostra e rotulador deve gerar uma linha de resultado."""
         df = pl.DataFrame({"id": ["1", "2"], "text": ["adorei o produto", "péssimo, é um lixo"]})
         labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
-        result = run_cascade_labeling(df, labelers)
+        result = run_cascade_labeling(df, labelers, show_progress=False, max_workers=1)
         assert result.height == 2
         assert set(result.columns) == {
             "id",
@@ -129,33 +139,104 @@ class TestRunCascadeLabeling:
         """O peso de cada rotulador deve ser repassado ao resultado, com padrão 1.0."""
         df = pl.DataFrame({"id": ["1"], "text": ["adorei o produto"]})
         labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
-        result = run_cascade_labeling(df, labelers, weights={"heuristica_lexica": 2.0})
+        result = run_cascade_labeling(
+            df, labelers, weights={"heuristica_lexica": 2.0}, show_progress=False, max_workers=1
+        )
         assert result["weight"].to_list() == [2.0]
 
     def test_defaults_weight_to_one_when_not_configured(self) -> None:
         """Um rotulador ausente de ``weights`` deve receber peso padrão 1.0."""
         df = pl.DataFrame({"id": ["1"], "text": ["adorei o produto"]})
         labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
-        result = run_cascade_labeling(df, labelers)
+        result = run_cascade_labeling(df, labelers, show_progress=False, max_workers=1)
         assert result["weight"].to_list() == [1.0]
 
     def test_raises_for_empty_dataframe(self) -> None:
         """Um DataFrame vazio deve levantar ``EmptyDatasetError``."""
         df = pl.DataFrame({"id": [], "text": []}, schema={"id": pl.Utf8, "text": pl.Utf8})
         with pytest.raises(EmptyDatasetError):
-            run_cascade_labeling(df, {"heuristica_lexica": LexicalHeuristicLabeler()})
+            run_cascade_labeling(
+                df,
+                {"heuristica_lexica": LexicalHeuristicLabeler()},
+                show_progress=False,
+                max_workers=1,
+            )
 
     def test_raises_for_empty_labelers(self) -> None:
         """Um mapeamento de rotuladores vazio deve levantar ``EmptyDatasetError``."""
         df = pl.DataFrame({"id": ["1"], "text": ["adorei o produto"]})
         with pytest.raises(EmptyDatasetError):
-            run_cascade_labeling(df, {})
+            run_cascade_labeling(df, {}, show_progress=False, max_workers=1)
 
     def test_raises_data_validation_error_for_invalid_labeler_output(self) -> None:
         """Um rótulo fora das classes conhecidas deve violar o contrato de dados."""
         df = pl.DataFrame({"id": ["1"], "text": ["qualquer texto"]})
         with pytest.raises(DataValidationError):
-            run_cascade_labeling(df, {"rotulador_invalido": _FakeInvalidLabeler()})
+            run_cascade_labeling(
+                df,
+                {"rotulador_invalido": _FakeInvalidLabeler()},
+                show_progress=False,
+                max_workers=1,
+            )
+
+    def test_raises_pipeline_stage_error_when_labeler_raises(self) -> None:
+        """Uma exceção levantada pelo rotulador deve virar ``PipelineStageError``.
+
+        Necessário mesmo para o rotulador heurístico-lexical atual (que só
+        levanta exceções builtin, sempre picklable) porque
+        ``configs/labeling.yaml`` antecipa rotuladores futuros baseados em
+        LLM: uma exceção de terceiros não picklable levantada dentro de um
+        worker de ``ProcessPoolExecutor`` quebraria o pool inteiro
+        (``BrokenProcessPool``) em vez de isolar a falha de um único item —
+        ver ``_label_row_text``.
+        """
+        df = pl.DataFrame({"id": ["1"], "text": ["qualquer texto"]})
+        with pytest.raises(PipelineStageError):
+            run_cascade_labeling(
+                df,
+                {"rotulador_com_erro": _FakeRaisingLabeler()},
+                show_progress=False,
+                max_workers=1,
+            )
+
+    def test_produces_same_result_with_and_without_parallelism(self) -> None:
+        """A rotulagem paralela deve produzir exatamente o mesmo resultado que a execução padrão.
+
+        Verifica em particular que a ordem/correspondência amostra->rótulo
+        não se perde ao coletar resultados em ProcessPoolExecutor (ver
+        _label_indexed_item / operator.itemgetter(0)).
+        """
+        df = pl.DataFrame(
+            {
+                "id": [str(i) for i in range(6)],
+                "text": [
+                    "adorei o produto",
+                    "péssimo atendimento",
+                    "chegou no prazo",
+                    "excelente experiência",
+                    "produto horrível",
+                    "sem opinião formada",
+                ],
+            }
+        )
+        labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
+
+        result_sequential = run_cascade_labeling(df, labelers, max_workers=1, show_progress=False)
+        result_parallel = run_cascade_labeling(df, labelers, max_workers=4, show_progress=False)
+
+        assert result_sequential.sort("id").to_dicts() == result_parallel.sort("id").to_dicts()
+
+
+class TestLabelIndexedItem:
+    """Testes diretos de ``_label_indexed_item`` (wrapper indexado usado no lote paralelo)."""
+
+    def test_preserves_original_index(self) -> None:
+        """O índice original deve passar intacto pela classificação."""
+        assert _label_indexed_item((7, "adorei o produto"), labeler=LexicalHeuristicLabeler()) == (
+            7,
+            "positivo",
+            1.0,
+        )
 
 
 class TestCalculateWeightedLabelScores:
@@ -163,13 +244,15 @@ class TestCalculateWeightedLabelScores:
 
     def test_sums_confidence_times_weight_per_label(self) -> None:
         """O score ponderado deve ser a soma de confiança x peso por rótulo."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         result = calculate_weighted_label_scores(df).sort("sentiment_label")
         assert result["weighted_score"].to_list() == pytest.approx([1.8, 2.0])
 
@@ -194,26 +277,30 @@ class TestCalculateAgreementRatio:
 
     def test_picks_label_with_highest_weighted_score(self) -> None:
         """O rótulo com maior score ponderado deve vencer como consenso."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         result = calculate_agreement_ratio(df)
         assert result["consensus_label"].to_list() == ["positivo"]
         assert result["agreement_ratio"].to_list()[0] == pytest.approx(0.5263, abs=1e-4)
 
     def test_computes_independently_per_sample(self) -> None:
         """A razão de concordância deve ser calculada separadamente para cada amostra."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "2", "2", "2"],
-            "tagger": ["a", "b", "a", "b", "c"],
-            "sentiment_label": ["positivo", "positivo", "negativo", "positivo", "positivo"],
-            "confidence_score": [1.0, 1.0, 1.0, 1.0, 1.0],
-            "weight": [1.0, 1.0, 1.0, 1.0, 1.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "2", "2", "2"],
+                "tagger": ["a", "b", "a", "b", "c"],
+                "sentiment_label": ["positivo", "positivo", "negativo", "positivo", "positivo"],
+                "confidence_score": [1.0, 1.0, 1.0, 1.0, 1.0],
+                "weight": [1.0, 1.0, 1.0, 1.0, 1.0],
+            }
+        )
         result = calculate_agreement_ratio(df).sort("id")
         assert result["consensus_label"].to_list() == ["positivo", "positivo"]
         assert result["agreement_ratio"].to_list() == pytest.approx([1.0, 0.6667], abs=1e-4)
@@ -224,13 +311,15 @@ class TestCalculateDiscordanceScore:
 
     def test_is_complement_of_agreement_ratio(self) -> None:
         """A discordância deve ser o complemento (1 - concordância) da razão de concordância."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         result = calculate_discordance_score(df)
         assert result["discordance_score"].to_list()[0] == pytest.approx(0.4737, abs=1e-4)
 
@@ -240,39 +329,45 @@ class TestFlagLowConfidenceSamples:
 
     def test_flags_sample_above_discordance_threshold(self) -> None:
         """Uma amostra com discordância acima do limiar deve ser sinalizada."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         discordance = calculate_discordance_score(df)
         result = flag_low_confidence_samples(discordance)
         assert result["requires_human_validation"].to_list() == [True]
 
     def test_does_not_flag_sample_with_full_agreement(self) -> None:
         """Uma amostra com concordância total não deve ser sinalizada."""
-        df = pl.DataFrame({
-            "id": ["1", "1"],
-            "tagger": ["heuristica", "llm"],
-            "sentiment_label": ["positivo", "positivo"],
-            "confidence_score": [1.0, 1.0],
-            "weight": [1.0, 1.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1"],
+                "tagger": ["heuristica", "llm"],
+                "sentiment_label": ["positivo", "positivo"],
+                "confidence_score": [1.0, 1.0],
+                "weight": [1.0, 1.0],
+            }
+        )
         discordance = calculate_discordance_score(df)
         result = flag_low_confidence_samples(discordance)
         assert result["requires_human_validation"].to_list() == [False]
 
     def test_respects_custom_thresholds(self) -> None:
         """Limiares customizados devem ser respeitados."""
-        df = pl.DataFrame({
-            "id": ["1", "1", "1"],
-            "tagger": ["heuristica", "llm", "modelo"],
-            "sentiment_label": ["positivo", "positivo", "negativo"],
-            "confidence_score": [0.8, 0.6, 0.9],
-            "weight": [1.0, 2.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1", "1"],
+                "tagger": ["heuristica", "llm", "modelo"],
+                "sentiment_label": ["positivo", "positivo", "negativo"],
+                "confidence_score": [0.8, 0.6, 0.9],
+                "weight": [1.0, 2.0, 2.0],
+            }
+        )
         discordance = calculate_discordance_score(df)
         result = flag_low_confidence_samples(
             discordance, low_confidence_threshold=0.0, discordance_threshold=1.0
@@ -285,13 +380,15 @@ class TestAggregateByWeightedMajorityVote:
 
     def test_produces_sentiment_label_and_confidence_columns(self) -> None:
         """O resultado deve conter as colunas ``sentiment_label`` e ``confidence_score``."""
-        df = pl.DataFrame({
-            "id": ["1", "1"],
-            "tagger": ["heuristica", "llm"],
-            "sentiment_label": ["positivo", "positivo"],
-            "confidence_score": [0.8, 0.9],
-            "weight": [1.0, 2.0],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "1"],
+                "tagger": ["heuristica", "llm"],
+                "sentiment_label": ["positivo", "positivo"],
+                "confidence_score": [0.8, 0.9],
+                "weight": [1.0, 2.0],
+            }
+        )
         result = aggregate_by_weighted_majority_vote(df)
         assert result["sentiment_label"].to_list() == ["positivo"]
         assert set(result.columns) == {"id", "sentiment_label", "confidence_score"}
@@ -303,22 +400,26 @@ class TestMergeConsensusIntoCorpus:
     def test_merges_matching_ids(self) -> None:
         """Amostras com consenso correspondente devem receber o rótulo mesclado."""
         corpus = pl.DataFrame({"id": ["1", "2"], "text": ["ótimo", "sem opinião"]})
-        consensus = pl.DataFrame({
-            "id": ["1"],
-            "sentiment_label": ["positivo"],
-            "confidence_score": [0.9],
-        })
+        consensus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "sentiment_label": ["positivo"],
+                "confidence_score": [0.9],
+            }
+        )
         result = merge_consensus_into_corpus(corpus, consensus).sort("id")
         assert result["sentiment_label"].to_list() == ["positivo", None]
 
     def test_preserves_original_row_count(self) -> None:
         """A junção à esquerda não deve alterar o número de linhas do corpus original."""
         corpus = pl.DataFrame({"id": ["1", "2"], "text": ["a", "b"]})
-        consensus = pl.DataFrame({
-            "id": ["1"],
-            "sentiment_label": ["positivo"],
-            "confidence_score": [0.9],
-        })
+        consensus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "sentiment_label": ["positivo"],
+                "confidence_score": [0.9],
+            }
+        )
         assert merge_consensus_into_corpus(corpus, consensus).height == 2
 
 
@@ -343,12 +444,14 @@ class TestSelectSamplesForHumanValidation:
 
     def test_selects_only_flagged_samples(self) -> None:
         """Apenas amostras sinalizadas para validação humana devem ser candidatas."""
-        df = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "consensus_label": ["positivo", "negativo", "neutro"],
-            "agreement_ratio": [0.2, 0.9, 0.4],
-            "requires_human_validation": [True, False, True],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "consensus_label": ["positivo", "negativo", "neutro"],
+                "agreement_ratio": [0.2, 0.9, 0.4],
+                "requires_human_validation": [True, False, True],
+            }
+        )
         result = select_samples_for_human_validation(
             df, sample_size=10, stratify_by_confidence=False
         )
@@ -357,24 +460,28 @@ class TestSelectSamplesForHumanValidation:
 
     def test_stratifies_by_confidence_bucket(self) -> None:
         """A amostragem estratificada deve manter representantes de cada faixa de confiança."""
-        df = pl.DataFrame({
-            "id": [str(i) for i in range(6)],
-            "consensus_label": ["positivo"] * 3 + ["negativo"] * 3,
-            "agreement_ratio": [0.2, 0.25, 0.28, 0.35, 0.4, 0.45],
-            "requires_human_validation": [True] * 6,
-        })
+        df = pl.DataFrame(
+            {
+                "id": [str(i) for i in range(6)],
+                "consensus_label": ["positivo"] * 3 + ["negativo"] * 3,
+                "agreement_ratio": [0.2, 0.25, 0.28, 0.35, 0.4, 0.45],
+                "requires_human_validation": [True] * 6,
+            }
+        )
         result = select_samples_for_human_validation(df, sample_size=6)
         assert result.height == 6
         assert "confidence_bucket" not in result.columns
 
     def test_raises_when_no_sample_is_flagged(self) -> None:
         """Se nenhuma amostra estiver sinalizada, deve levantar ``EmptyDatasetError``."""
-        df = pl.DataFrame({
-            "id": ["1"],
-            "consensus_label": ["positivo"],
-            "agreement_ratio": [0.9],
-            "requires_human_validation": [False],
-        })
+        df = pl.DataFrame(
+            {
+                "id": ["1"],
+                "consensus_label": ["positivo"],
+                "agreement_ratio": [0.9],
+                "requires_human_validation": [False],
+            }
+        )
         with pytest.raises(EmptyDatasetError):
             select_samples_for_human_validation(df)
 
@@ -492,14 +599,18 @@ class TestEvaluateAgainstGoldSet:
 
     def test_meets_minimum_agreement_with_high_kappa(self) -> None:
         """Concordância alta com o gold set deve atender ao limiar mínimo padrão."""
-        predicted = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "positivo"],
-        })
-        gold = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "positivo"],
-        })
+        predicted = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "positivo"],
+            }
+        )
+        gold = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "positivo"],
+            }
+        )
         result = evaluate_against_gold_set(predicted, gold)
         assert result.n_samples == 3
         assert result.meets_minimum_agreement is True
@@ -507,14 +618,18 @@ class TestEvaluateAgainstGoldSet:
 
     def test_does_not_meet_minimum_agreement_with_low_kappa(self) -> None:
         """Concordância abaixo do limiar mínimo não deve ser aprovada."""
-        predicted = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "positivo"],
-        })
-        gold = pl.DataFrame({
-            "id": ["1", "2", "3"],
-            "sentiment_label": ["positivo", "negativo", "negativo"],
-        })
+        predicted = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "positivo"],
+            }
+        )
+        gold = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "sentiment_label": ["positivo", "negativo", "negativo"],
+            }
+        )
         result = evaluate_against_gold_set(predicted, gold)
         assert result.cohen_kappa == pytest.approx(0.4, abs=1e-4)
         assert result.meets_minimum_agreement is False

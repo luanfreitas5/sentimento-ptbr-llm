@@ -40,6 +40,26 @@ class TestProjectError:
         with pytest.raises(Exception):  # noqa: B017 - verificação intencional de hierarquia ampla
             raise ProjectError("erro")
 
+    def test_survives_pickling_roundtrip_for_subclass_with_custom_init(self) -> None:
+        """Uma subclasse com __init__ próprio (ex.: PipelineStageError) sobrevive a pickle/unpickle.
+
+        Necessário para propagar corretamente a exceção original quando ela é
+        levantada dentro de um worker de ``ProcessPoolExecutor`` (ver
+        ``src/parallel/core.py``): o pickle padrão do Python reconstrói a
+        exceção via ``cls(*self.args)``, incompatível com um ``__init__`` que
+        não seja ``(message, *, context=None)``.
+        """
+        import pickle
+
+        from exceptions.pipeline import PipelineStageError
+
+        original = PipelineStageError("normalizacao_texto", "falha ao normalizar")
+        restored = pickle.loads(pickle.dumps(original))
+
+        assert isinstance(restored, PipelineStageError)
+        assert str(restored) == str(original)
+        assert restored.context == original.context
+
 
 class TestConfigurationExceptions:
     """Testes das exceções de configuração."""

@@ -1,6 +1,7 @@
 """Testes dos módulos de ingestão e catalogação de dados (``src/data``)."""
 
 import hashlib
+from datetime import datetime
 from pathlib import Path
 
 import polars as pl
@@ -15,7 +16,7 @@ from data.catalog import (
 from data.downloader import collect_tweets_by_query, download_external_dataset
 from data.loader import (
     load_labeled_corpus,
-    load_raw_tweet_dataset,
+    load_raw_tweet_batch,
     load_training_example_dataset,
     read_dataset_file,
 )
@@ -48,6 +49,33 @@ def _scrape_always_fails(query: str) -> list[dict[str, str]]:
     raise ValueError(f"falha ao coletar '{query}'")
 
 
+def _build_raw_tweet_batch(tweet_ids: list[str], *, language: str = "pt") -> pl.DataFrame:
+    """Constrói um DataFrame de tweets brutos válido, para testes de carregamento em lote."""
+    n = len(tweet_ids)
+    df = pl.DataFrame(
+        {
+            "tweet_id": tweet_ids,
+            "user_id": ["u1"] * n,
+            "text": [f"texto {tweet_id}" for tweet_id in tweet_ids],
+            "created_at": [datetime(2026, 1, 1)] * n,
+            "language": [language] * n,
+            "is_reply": [False] * n,
+            "is_retweet": [False] * n,
+            "like_count": [0] * n,
+            "reply_count": [0] * n,
+            "retweet_count": [0] * n,
+            "quote_count": [0] * n,
+        }
+    )
+    # Adiciona colunas nullable string para source_query e source_group
+    return df.with_columns(
+        [
+            pl.lit(None, dtype=pl.String).alias("source_query"),
+            pl.lit(None, dtype=pl.String).alias("source_group"),
+        ]
+    )
+
+
 class TestReadDatasetFile:
     """Testes do despacho de leitura por extensão (``read_dataset_file``)."""
 
@@ -78,29 +106,68 @@ class TestReadDatasetFile:
             read_dataset_file(tmp_path / "inexistente.parquet")
 
 
-class TestLoadRawTweetDataset:
-    """Testes de carregamento e validação de tweets brutos."""
+class TestLoadRawTweetBatch:
+    """Testes de carregamento em lote e validação de tweets brutos (múltiplos arquivos)."""
 
-    def test_returns_validated_dataframe(self, tmp_path: Path) -> None:
-        """Um dataset de tweets brutos válido deve ser carregado normalmente."""
-        file_path = tmp_path / "tweets.parquet"
-        df = pl.DataFrame(
+    def test_concatenates_and_validates_all_files(self, tmp_path: Path) -> None:
+        """Deve concatenar e validar todos os arquivos do diretório, renomeando tweet_id para id."""
+        write_parquet(_build_raw_tweet_batch(["1", "2"]), tmp_path / "usuario_a.parquet")
+        write_parquet(_build_raw_tweet_batch(["3"]), tmp_path / "usuario_b.parquet")
+
+        result = load_raw_tweet_batch(tmp_path, show_progress=False, max_workers=2)
+
+        assert result.height == 3
+        assert "id" in result.columns
+        assert "tweet_id" not in result.columns
+        assert sorted(result["id"].to_list()) == ["1", "2", "3"]
+
+    def test_raises_for_empty_directory(self, tmp_path: Path) -> None:
+        """Um diretório sem nenhum arquivo Parquet deve levantar EmptyDatasetError."""
+        with pytest.raises(EmptyDatasetError):
+            load_raw_tweet_batch(tmp_path, show_progress=False)
+
+    def test_isolates_corrupted_file_and_validates_remaining_batch(self, tmp_path: Path) -> None:
+        """Um arquivo corrompido não deve impedir a validação dos demais arquivos do lote."""
+        write_parquet(_build_raw_tweet_batch(["1", "2"]), tmp_path / "usuario_valido.parquet")
+        (tmp_path / "usuario_corrompido.parquet").write_bytes(b"nao e um parquet valido")
+
+        result = load_raw_tweet_batch(tmp_path, show_progress=False, max_workers=2)
+
+        assert result.height == 2
+
+    def test_rejects_duplicate_tweet_id_across_files(self, tmp_path: Path) -> None:
+        """Um tweet_id duplicado entre dois arquivos diferentes deve violar unicidade do schema."""
+        write_parquet(_build_raw_tweet_batch(["1"]), tmp_path / "usuario_a.parquet")
+        write_parquet(_build_raw_tweet_batch(["1"]), tmp_path / "usuario_b.parquet")
+
+        with pytest.raises(DataValidationError):
+            load_raw_tweet_batch(tmp_path, show_progress=False, max_workers=2)
+
+    def test_raises_data_error_for_schema_mismatched_file_in_batch_directory(
+        self, tmp_path: Path
+    ) -> None:
+        """Um arquivo com esquema incompatível (ex.: saída antiga de ``ingestion``) falha tipado.
+
+        Reproduz a colisão encontrada na revisão final: se o arquivo
+        consolidado de ``ingestion`` (schema mínimo de 4 colunas:
+        ``id``/``text``/``data_source``/``data_collected``) acabar no mesmo
+        diretório do lote bruto por usuário, ``pl.concat`` levanta um
+        ``polars.exceptions.ShapeError`` não tratado — deve virar
+        ``DataError`` tipado em vez disso.
+        """
+        write_parquet(_build_raw_tweet_batch(["1"]), tmp_path / "usuario_a.parquet")
+        legacy_ingestion_output = pl.DataFrame(
             {
-                "id": ["1", "2"],
-                "text": ["ótimo produto", "não gostei"],
-                "data_source": ["scraping", "scraping"],
-                "data_collected": ["2026-01-01", "2026-01-02"],
+                "id": ["99"],
+                "text": ["texto antigo"],
+                "data_source": ["scraping"],
+                "data_collected": ["2026-01-01"],
             }
         )
-        write_parquet(df, file_path)
-        assert load_raw_tweet_dataset(file_path).height == 2
+        write_parquet(legacy_ingestion_output, tmp_path / "tweets_coletados.parquet")
 
-    def test_raises_for_invalid_schema(self, tmp_path: Path) -> None:
-        """Colunas obrigatórias ausentes devem levantar DataValidationError."""
-        file_path = tmp_path / "tweets_invalidos.parquet"
-        write_parquet(pl.DataFrame({"id": ["1"], "text": ["ótimo"]}), file_path)
-        with pytest.raises(DataValidationError):
-            load_raw_tweet_dataset(file_path)
+        with pytest.raises(DataError):
+            load_raw_tweet_batch(tmp_path, show_progress=False, max_workers=2)
 
 
 class TestLoadLabeledCorpus:
