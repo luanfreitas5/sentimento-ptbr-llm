@@ -1,10 +1,14 @@
 """Testes dos utilitários de execução paralela do projeto."""
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from pathlib import Path
 
+import polars as pl
 import pytest
 
+from io_utils.parquet import write_parquet
 from parallel.core import ParallelExecutionResult, execute_parallel_tasks
+from parallel.data_loading import run_parallel_parquet_loading
 from parallel.experiments import run_parallel_experiments
 from parallel.inference import run_parallel_predictions
 from parallel.preprocessing import run_parallel_text_cleaning
@@ -216,3 +220,36 @@ class TestRunParallelScraping:
         assert result.successes == ["OK"]
         assert len(result.failures) == 1
         assert result.failures[0].item == "falha"
+
+
+class TestRunParallelParquetLoading:
+    """Testes da leitura paralela de lote Parquet (``parallel.data_loading``)."""
+
+    def test_reads_all_files_successfully(self, tmp_path: Path) -> None:
+        """Todos os arquivos devem ser lidos com sucesso quando não há erro."""
+        file_a = tmp_path / "a.parquet"
+        file_b = tmp_path / "b.parquet"
+        write_parquet(pl.DataFrame({"valor": [1]}), file_a)
+        write_parquet(pl.DataFrame({"valor": [2]}), file_b)
+
+        result = run_parallel_parquet_loading(
+            [file_a, file_b], show_progress=False, max_workers=2
+        )
+
+        assert result.failures == []
+        valores = sorted(df["valor"].to_list()[0] for df in result.successes)
+        assert valores == [1, 2]
+
+    def test_isolates_failure_for_missing_file(self, tmp_path: Path) -> None:
+        """A falha de leitura de um arquivo não deve interromper a leitura dos demais."""
+        file_ok = tmp_path / "ok.parquet"
+        write_parquet(pl.DataFrame({"valor": [1]}), file_ok)
+        missing_file = tmp_path / "inexistente.parquet"
+
+        result = run_parallel_parquet_loading(
+            [file_ok, missing_file], show_progress=False, max_workers=2
+        )
+
+        assert len(result.successes) == 1
+        assert len(result.failures) == 1
+        assert result.failures[0].item == missing_file
