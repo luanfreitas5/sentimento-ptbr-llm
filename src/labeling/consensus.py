@@ -35,20 +35,24 @@ def aggregate_by_weighted_majority_vote(labeling_results: pl.DataFrame) -> pl.Da
 
     Examples
     --------
-    >>> df = pl.DataFrame({
-    ...     "id": ["1", "1"],
-    ...     "tagger": ["heuristica", "llm"],
-    ...     "sentiment_label": ["positivo", "positivo"],
-    ...     "confidence_score": [0.8, 0.9],
-    ...     "weight": [1.0, 2.0],
-    ... })
+    >>> df = pl.DataFrame(
+    ...     {
+    ...         "id": ["1", "1"],
+    ...         "tagger": ["heuristica", "llm"],
+    ...         "sentiment_label": ["positivo", "positivo"],
+    ...         "confidence_score": [0.8, 0.9],
+    ...         "weight": [1.0, 2.0],
+    ...     }
+    ... )
     >>> aggregate_by_weighted_majority_vote(df)["sentiment_label"].to_list()
     ['positivo']
     """
-    result = calculate_agreement_ratio(labeling_results).rename({
-        "consensus_label": "sentiment_label",
-        "agreement_ratio": "confidence_score",
-    })
+    result = calculate_agreement_ratio(labeling_results).rename(
+        {
+            "consensus_label": "sentiment_label",
+            "agreement_ratio": "confidence_score",
+        }
+    )
     logger.info(
         "Consenso por votação majoritária ponderada calculado para %d amostra(s).", result.height
     )
@@ -81,11 +85,13 @@ def merge_consensus_into_corpus(
     Examples
     --------
     >>> corpus = pl.DataFrame({"id": ["1", "2"], "text": ["ótimo", "sem opinião"]})
-    >>> consensus = pl.DataFrame({
-    ...     "id": ["1"],
-    ...     "sentiment_label": ["positivo"],
-    ...     "confidence_score": [0.9],
-    ... })
+    >>> consensus = pl.DataFrame(
+    ...     {
+    ...         "id": ["1"],
+    ...         "sentiment_label": ["positivo"],
+    ...         "confidence_score": [0.9],
+    ...     }
+    ... )
     >>> merge_consensus_into_corpus(corpus, consensus).sort("id")["sentiment_label"].to_list()
     ['positivo', None]
     """

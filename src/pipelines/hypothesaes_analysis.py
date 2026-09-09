@@ -120,8 +120,7 @@ def _prepare_corpus(
         )
 
     return (
-        labeled_corpus
-        .filter(pl.col(text_column).str.strip_chars() != "")
+        labeled_corpus.filter(pl.col(text_column).str.strip_chars() != "")
         .unique(subset=[text_column], keep="first")
         .with_columns(
             (pl.col(confidence_column) < score_threshold)
@@ -151,8 +150,7 @@ def _build_dataset_summary(
 ) -> dict[str, Any]:
     """Resume a distribuição de rótulos de baixa confiança no corpus preparado."""
     low_confidence_by_label = (
-        corpus
-        .group_by(label_column)
+        corpus.group_by(label_column)
         .agg(pl.col(_LOW_CONFIDENCE_COLUMN).mean().round(4).alias("frac_baixa_confianca"))
         .sort(label_column)
         .to_dicts()
@@ -302,8 +300,7 @@ def run_hypothesaes_analysis_stage(
     )
 
     low_confidence_tweets = (
-        corpus
-        .filter(pl.col(_LOW_CONFIDENCE_COLUMN) == 1)
+        corpus.filter(pl.col(_LOW_CONFIDENCE_COLUMN) == 1)
         .select([id_column, text_column, label_column, confidence_column])
         .sort(confidence_column)
     )

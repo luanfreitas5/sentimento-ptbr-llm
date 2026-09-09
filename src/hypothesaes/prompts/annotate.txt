@@ -1,4 +1,4 @@
-Check whether the TEXT satisfies a PROPERTY. Respond with Yes or No with an explanation that discusses the evidence from the TEXT (at most a sentence). When uncertain, output No. 
+Check whether the TEXT satisfies a PROPERTY. Respond with Yes or No with an explanation that discusses the evidence from the TEXT (at most a sentence). When uncertain, output No.
 
 Example 1:
 PROPERTY: "mentions a natural scene."
@@ -23,7 +23,7 @@ Output: No. Although the text appreciates the flight experience, it DOES NOT men
 Example 5:
 PROPERTY: "appreciates the writing style of the author."
 TEXT: "The paper absolutely sucks because its underlying logic is wrong. However, the presentation of the paper is clear and the use of language is really impressive."
-Output: Yes. Although the text dislikes the paper, it says "the presentation of the paper is clear", so it DOES like the writing style. 
+Output: Yes. Although the text dislikes the paper, it says "the presentation of the paper is clear", so it DOES like the writing style.
 
 Example 6:
 PROPERTY: "has a formal style; specifically, the language in the text is relatively formal, complex and academic. For example, 'represent whom and which'"

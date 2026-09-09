@@ -76,7 +76,7 @@ from hypothesaes.sae import SparseAutoencoder, load_model
 from hypothesaes.select_neurons import select_neurons
 from hypothesaes.utils import format_text_for_display
 
-__all__: list[str] = [  # noqa: RUF022 (agrupado por categoria, ver comentários)
+__all__: list[str] = [  # (agrupado por categoria, ver comentários)
     # Funções de fluxo principal
     "train_sae",
     "interpret_sae",

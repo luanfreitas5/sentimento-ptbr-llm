@@ -298,9 +298,12 @@ class TestLangChainSentimentClassifier:
 
     def test_predict_with_justification_preserves_justification(self) -> None:
         """A justificativa textual do LLM deve ser preservada na saída completa."""
-        backend = _FakeLLMBackend([
-            '{"sentiment_label": "positivo", "confidence_score": 0.9, "justification": "elogio direto"}'
-        ])
+        backend = _FakeLLMBackend(
+            [
+                '{"sentiment_label": "positivo", "confidence_score": 0.9, \
+                "justification": "elogio direto"}'
+            ]
+        )
         classifier = LangChainSentimentClassifier(backend, strategy="zero_shot")
         outputs = classifier.predict_with_justification(["ótimo produto"])
         assert outputs[0].justification == "elogio direto"

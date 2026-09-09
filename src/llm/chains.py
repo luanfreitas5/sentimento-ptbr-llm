@@ -169,5 +169,5 @@ def run_chain_with_retry(
         fallback_label,
     )
     return SentimentLLMOutput(
-        sentiment_label=fallback_label, confidence_score=0.0, justificativa=""
+        sentiment_label=fallback_label, confidence_score=0.0, justification=""
     )

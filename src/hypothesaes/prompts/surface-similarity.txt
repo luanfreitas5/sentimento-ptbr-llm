@@ -4,7 +4,7 @@ Here are a few examples.
 Example 1:
 text_a: has a topic of protecting the environment
 text_b: has a topic of environmental protection and sustainability
-output: yes 
+output: yes
 
 Example 2:
 text_a: has a language of German
@@ -39,4 +39,4 @@ output: no
 Target:
 text_a: {text_a}
 text_b: {text_b}
-output: 
+output:

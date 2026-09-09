@@ -64,8 +64,10 @@ def _build_few_shot_examples_block(few_shot_examples: Sequence[tuple[str, str]])
         Um bloco de texto ``"Texto: ...\\nResposta: {...}"`` por exemplo.
     """
     return [
-        f'Texto: "{example_text}"\nResposta: '
-        f'{{"sentiment_label": "{example_label}", "confidence_score": 1.0, "justification": "exemplo"}}'
+        f'Texto: "{example_text}"\nResposta: '(
+            f'{{"sentiment_label": "{example_label}", "confidence_score": 1.0, \
+            "justification": "exemplo"}}'
+        )
         for example_text, example_label in few_shot_examples
     ]
 

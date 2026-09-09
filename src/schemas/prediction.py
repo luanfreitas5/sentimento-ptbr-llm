@@ -49,12 +49,14 @@ def validate_prediction(dataframe: pl.DataFrame) -> pl.DataFrame:
 
     Examples
     --------
-    >>> df = pl.DataFrame({
-    ...     "id": ["1"],
-    ...     "text": ["ótimo produto"],
-    ...     "sentiment_label": ["positivo"],
-    ...     "confidence_score": [0.95],
-    ... })
+    >>> df = pl.DataFrame(
+    ...     {
+    ...         "id": ["1"],
+    ...         "text": ["ótimo produto"],
+    ...         "sentiment_label": ["positivo"],
+    ...         "confidence_score": [0.95],
+    ...     }
+    ... )
     >>> validate_prediction(df).height
     1
     """

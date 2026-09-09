@@ -215,53 +215,59 @@ def _minimal_raw_tweet_frame(tweet_ids: list[str] | None = None) -> pl.DataFrame
     """Constrói um DataFrame mínimo válido contra o novo ``RawTweetSchema``, para testes."""
     ids = tweet_ids if tweet_ids is not None else ["1"]
     n = len(ids)
-    return pl.DataFrame({
-        "tweet_id": ids,
-        "user_id": ["u1"] * n,
-        "text": [f"texto {tweet_id}" for tweet_id in ids],
-        "created_at": [datetime(2026, 1, 1)] * n,
-        "language": ["pt"] * n,
-        "is_reply": [False] * n,
-        "is_retweet": [False] * n,
-        "like_count": [0] * n,
-        "reply_count": [0] * n,
-        "retweet_count": [0] * n,
-        "quote_count": [0] * n,
-        "source_query": [None] * n,
-        "source_group": [None] * n,
-    })
+    return pl.DataFrame(
+        {
+            "tweet_id": ids,
+            "user_id": ["u1"] * n,
+            "text": [f"texto {tweet_id}" for tweet_id in ids],
+            "created_at": [datetime(2026, 1, 1)] * n,
+            "language": ["pt"] * n,
+            "is_reply": [False] * n,
+            "is_retweet": [False] * n,
+            "like_count": [0] * n,
+            "reply_count": [0] * n,
+            "retweet_count": [0] * n,
+            "quote_count": [0] * n,
+            "source_query": [None] * n,
+            "source_group": [None] * n,
+        }
+    )
 ```
 
 Then replace the three existing raw-tweet tests inside `class TestDatasetSchemas:` (`test_validate_raw_tweet_dataset_accepts_valid_dataframe`, `test_validate_raw_tweet_dataset_rejects_extra_column`, `test_validate_raw_tweet_dataset_rejects_duplicate_id`) with:
 
 ```python
-    def test_validate_raw_tweet_dataset_accepts_valid_dataframe(self) -> None:
-        """Um DataFrame com todas as colunas obrigatórias e tweet_id único deve ser aceito."""
-        result = validate_raw_tweet_dataset(_minimal_raw_tweet_frame(["1", "2"]))
-        assert result.height == 2
+def test_validate_raw_tweet_dataset_accepts_valid_dataframe(self) -> None:
+    """Um DataFrame com todas as colunas obrigatórias e tweet_id único deve ser aceito."""
+    result = validate_raw_tweet_dataset(_minimal_raw_tweet_frame(["1", "2"]))
+    assert result.height == 2
 
-    def test_validate_raw_tweet_dataset_allows_null_source_query_and_group(self) -> None:
-        """source_query/source_group nulos (comum quando a coleta é por usuário, não por termo) são aceitos."""
-        result = validate_raw_tweet_dataset(_minimal_raw_tweet_frame())
-        assert result["source_query"].null_count() == 1
-        assert result["source_group"].null_count() == 1
 
-    def test_validate_raw_tweet_dataset_rejects_extra_column(self) -> None:
-        """Uma coluna extra não declarada deve ser rejeitada (schema strict)."""
-        df = _minimal_raw_tweet_frame().with_columns(pl.lit("valor").alias("extra_column"))
-        with pytest.raises(DataValidationError):
-            validate_raw_tweet_dataset(df)
+def test_validate_raw_tweet_dataset_allows_null_source_query_and_group(self) -> None:
+    """source_query/source_group nulos (comum quando a coleta é por usuário, não por termo) são aceitos."""
+    result = validate_raw_tweet_dataset(_minimal_raw_tweet_frame())
+    assert result["source_query"].null_count() == 1
+    assert result["source_group"].null_count() == 1
 
-    def test_validate_raw_tweet_dataset_rejects_duplicate_tweet_id(self) -> None:
-        """tweet_id duplicado deve violar a restrição de unicidade."""
-        with pytest.raises(DataValidationError):
-            validate_raw_tweet_dataset(_minimal_raw_tweet_frame(["1", "1"]))
 
-    def test_validate_raw_tweet_dataset_rejects_negative_engagement_count(self) -> None:
-        """Uma contagem de engajamento negativa deve violar o contrato (like_count >= 0)."""
-        df = _minimal_raw_tweet_frame().with_columns(pl.Series("like_count", [-1]))
-        with pytest.raises(DataValidationError):
-            validate_raw_tweet_dataset(df)
+def test_validate_raw_tweet_dataset_rejects_extra_column(self) -> None:
+    """Uma coluna extra não declarada deve ser rejeitada (schema strict)."""
+    df = _minimal_raw_tweet_frame().with_columns(pl.lit("valor").alias("extra_column"))
+    with pytest.raises(DataValidationError):
+        validate_raw_tweet_dataset(df)
+
+
+def test_validate_raw_tweet_dataset_rejects_duplicate_tweet_id(self) -> None:
+    """tweet_id duplicado deve violar a restrição de unicidade."""
+    with pytest.raises(DataValidationError):
+        validate_raw_tweet_dataset(_minimal_raw_tweet_frame(["1", "1"]))
+
+
+def test_validate_raw_tweet_dataset_rejects_negative_engagement_count(self) -> None:
+    """Uma contagem de engajamento negativa deve violar o contrato (like_count >= 0)."""
+    df = _minimal_raw_tweet_frame().with_columns(pl.Series("like_count", [-1]))
+    with pytest.raises(DataValidationError):
+        validate_raw_tweet_dataset(df)
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -434,9 +440,7 @@ class TestRunParallelParquetLoading:
         write_parquet(pl.DataFrame({"valor": [1]}), file_a)
         write_parquet(pl.DataFrame({"valor": [2]}), file_b)
 
-        result = run_parallel_parquet_loading(
-            [file_a, file_b], show_progress=False, max_workers=2
-        )
+        result = run_parallel_parquet_loading([file_a, file_b], show_progress=False, max_workers=2)
 
         assert result.failures == []
         valores = sorted(df["valor"].to_list()[0] for df in result.successes)
@@ -562,21 +566,23 @@ In `tests/test_data.py`, add `from datetime import datetime` to the imports, rep
 def _build_raw_tweet_batch(tweet_ids: list[str], *, language: str = "pt") -> pl.DataFrame:
     """Constrói um DataFrame de tweets brutos válido, para testes de carregamento em lote."""
     n = len(tweet_ids)
-    return pl.DataFrame({
-        "tweet_id": tweet_ids,
-        "user_id": ["u1"] * n,
-        "text": [f"texto {tweet_id}" for tweet_id in tweet_ids],
-        "created_at": [datetime(2026, 1, 1)] * n,
-        "language": [language] * n,
-        "is_reply": [False] * n,
-        "is_retweet": [False] * n,
-        "like_count": [0] * n,
-        "reply_count": [0] * n,
-        "retweet_count": [0] * n,
-        "quote_count": [0] * n,
-        "source_query": [None] * n,
-        "source_group": [None] * n,
-    })
+    return pl.DataFrame(
+        {
+            "tweet_id": tweet_ids,
+            "user_id": ["u1"] * n,
+            "text": [f"texto {tweet_id}" for tweet_id in tweet_ids],
+            "created_at": [datetime(2026, 1, 1)] * n,
+            "language": [language] * n,
+            "is_reply": [False] * n,
+            "is_retweet": [False] * n,
+            "like_count": [0] * n,
+            "reply_count": [0] * n,
+            "retweet_count": [0] * n,
+            "quote_count": [0] * n,
+            "source_query": [None] * n,
+            "source_group": [None] * n,
+        }
+    )
 ```
 
 Replace the whole `class TestLoadRawTweetDataset:` block with:
@@ -602,9 +608,7 @@ class TestLoadRawTweetBatch:
         with pytest.raises(EmptyDatasetError):
             load_raw_tweet_batch(tmp_path, show_progress=False)
 
-    def test_isolates_corrupted_file_and_validates_remaining_batch(
-        self, tmp_path: Path
-    ) -> None:
+    def test_isolates_corrupted_file_and_validates_remaining_batch(self, tmp_path: Path) -> None:
         """Um arquivo corrompido não deve impedir a validação dos demais arquivos do lote."""
         write_parquet(_build_raw_tweet_batch(["1", "2"]), tmp_path / "usuario_valido.parquet")
         (tmp_path / "usuario_corrompido.parquet").write_bytes(b"nao e um parquet valido")
@@ -760,42 +764,50 @@ class TestFilterByRawMetadata:
 
     def test_excludes_retweets_by_default(self) -> None:
         """Por padrão, linhas com is_retweet=True devem ser removidas."""
-        df = pl.DataFrame({
-            "text": ["a", "b"],
-            "is_retweet": [True, False],
-            "language": ["pt", "pt"],
-        })
+        df = pl.DataFrame(
+            {
+                "text": ["a", "b"],
+                "is_retweet": [True, False],
+                "language": ["pt", "pt"],
+            }
+        )
         result = filter_by_raw_metadata(df)
         assert result["text"].to_list() == ["b"]
 
     def test_keeps_replies(self) -> None:
         """Replies (is_reply=True) não devem ser removidas pelo filtro de retweet."""
-        df = pl.DataFrame({
-            "text": ["a"],
-            "is_retweet": [False],
-            "language": ["pt"],
-            "is_reply": [True],
-        })
+        df = pl.DataFrame(
+            {
+                "text": ["a"],
+                "is_retweet": [False],
+                "language": ["pt"],
+                "is_reply": [True],
+            }
+        )
         result = filter_by_raw_metadata(df)
         assert result.height == 1
 
     def test_filters_by_required_language(self) -> None:
         """Linhas fora do idioma exigido devem ser removidas."""
-        df = pl.DataFrame({
-            "text": ["a", "b"],
-            "is_retweet": [False, False],
-            "language": ["pt", "en"],
-        })
+        df = pl.DataFrame(
+            {
+                "text": ["a", "b"],
+                "is_retweet": [False, False],
+                "language": ["pt", "en"],
+            }
+        )
         result = filter_by_raw_metadata(df)
         assert result["text"].to_list() == ["a"]
 
     def test_can_disable_both_filters(self) -> None:
         """Com ambos os filtros desligados, nenhuma linha deve ser removida."""
-        df = pl.DataFrame({
-            "text": ["a", "b"],
-            "is_retweet": [True, False],
-            "language": ["en", "pt"],
-        })
+        df = pl.DataFrame(
+            {
+                "text": ["a", "b"],
+                "is_retweet": [True, False],
+                "language": ["en", "pt"],
+            }
+        )
         result = filter_by_raw_metadata(df, exclude_retweets=False, required_language=None)
         assert result.height == 2
 ```
@@ -919,27 +931,31 @@ Note on the `parallel/preprocessing.py` type-hint generalization: `run_parallel_
 Add to `tests/test_preprocessing.py`, inside `class TestRunPreprocessingPipeline:` (after `test_raises_pipeline_stage_error_when_normalization_fails`):
 
 ```python
-    def test_normalization_stays_aligned_to_original_rows_under_parallelism(self) -> None:
-        """A normalização paralela não deve embaralhar a correspondência texto->linha.
+def test_normalization_stays_aligned_to_original_rows_under_parallelism(self) -> None:
+    """A normalização paralela não deve embaralhar a correspondência texto->linha.
 
-        Com vários workers, a coleta de resultados termina na ordem de
-        conclusão, não na ordem de submissão (ver ``parallel/core.py``) —
-        sem reordenar pelo índice original, a coluna ``text_normalized``
-        ficaria associada à linha errada.
-        """
-        n_rows = 20
-        df = pl.DataFrame({
+    Com vários workers, a coleta de resultados termina na ordem de
+    conclusão, não na ordem de submissão (ver ``parallel/core.py``) —
+    sem reordenar pelo índice original, a coluna ``text_normalized``
+    ficaria associada à linha errada.
+    """
+    n_rows = 20
+    df = pl.DataFrame(
+        {
             "id": [str(index) for index in range(n_rows)],
-            "text": [f"RT @user{index}: mensagem numero {index} muito boa" for index in range(n_rows)],
-        })
+            "text": [
+                f"RT @user{index}: mensagem numero {index} muito boa" for index in range(n_rows)
+            ],
+        }
+    )
 
-        result = run_preprocessing_pipeline(
-            df, apply_inclusion_filters=False, max_workers=4, show_progress=False
-        )
+    result = run_preprocessing_pipeline(
+        df, apply_inclusion_filters=False, max_workers=4, show_progress=False
+    )
 
-        for index in range(n_rows):
-            row = result.filter(pl.col("id") == str(index))
-            assert f"numero {index}" in row["text_normalized"].to_list()[0]
+    for index in range(n_rows):
+        row = result.filter(pl.col("id") == str(index))
+        assert f"numero {index}" in row["text_normalized"].to_list()[0]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1176,21 +1192,23 @@ class TestRunPreprocessingStage:
         self, pipeline_paths: ProjectPaths
     ) -> None:
         """Deve carregar o lote bruto de data/raw/ e gravar o corpus normalizado correspondente."""
-        raw_batch = pl.DataFrame({
-            "tweet_id": ["1", "2"],
-            "user_id": ["u1", "u1"],
-            "text": ["RT @a: muito bom!! 😍", "RT @b: péssimo produto"],
-            "created_at": [datetime(2026, 1, 1), datetime(2026, 1, 1)],
-            "language": ["pt", "pt"],
-            "is_reply": [False, False],
-            "is_retweet": [False, False],
-            "like_count": [0, 0],
-            "reply_count": [0, 0],
-            "retweet_count": [0, 0],
-            "quote_count": [0, 0],
-            "source_query": [None, None],
-            "source_group": [None, None],
-        })
+        raw_batch = pl.DataFrame(
+            {
+                "tweet_id": ["1", "2"],
+                "user_id": ["u1", "u1"],
+                "text": ["RT @a: muito bom!! 😍", "RT @b: péssimo produto"],
+                "created_at": [datetime(2026, 1, 1), datetime(2026, 1, 1)],
+                "language": ["pt", "pt"],
+                "is_reply": [False, False],
+                "is_retweet": [False, False],
+                "like_count": [0, 0],
+                "reply_count": [0, 0],
+                "retweet_count": [0, 0],
+                "quote_count": [0, 0],
+                "source_query": [None, None],
+                "source_group": [None, None],
+            }
+        )
         write_dataset(raw_batch, pipeline_paths.data_raw_dir / "usuario_teste.parquet")
 
         normalized_path = run_preprocessing_stage(
@@ -1204,21 +1222,23 @@ class TestRunPreprocessingStage:
 
     def test_excludes_retweets_before_normalization(self, pipeline_paths: ProjectPaths) -> None:
         """Um tweet marcado como retweet deve ser removido antes da normalização."""
-        raw_batch = pl.DataFrame({
-            "tweet_id": ["1", "2"],
-            "user_id": ["u1", "u1"],
-            "text": ["muito bom o produto", "RT texto duplicado"],
-            "created_at": [datetime(2026, 1, 1), datetime(2026, 1, 1)],
-            "language": ["pt", "pt"],
-            "is_reply": [False, False],
-            "is_retweet": [False, True],
-            "like_count": [0, 0],
-            "reply_count": [0, 0],
-            "retweet_count": [0, 0],
-            "quote_count": [0, 0],
-            "source_query": [None, None],
-            "source_group": [None, None],
-        })
+        raw_batch = pl.DataFrame(
+            {
+                "tweet_id": ["1", "2"],
+                "user_id": ["u1", "u1"],
+                "text": ["muito bom o produto", "RT texto duplicado"],
+                "created_at": [datetime(2026, 1, 1), datetime(2026, 1, 1)],
+                "language": ["pt", "pt"],
+                "is_reply": [False, False],
+                "is_retweet": [False, True],
+                "like_count": [0, 0],
+                "reply_count": [0, 0],
+                "retweet_count": [0, 0],
+                "quote_count": [0, 0],
+                "source_query": [None, None],
+                "source_group": [None, None],
+            }
+        )
         write_dataset(raw_batch, pipeline_paths.data_raw_dir / "usuario_teste.parquet")
 
         run_preprocessing_stage(pipeline_paths, show_progress=False, apply_inclusion_filters=False)
@@ -1501,14 +1521,15 @@ cascata de rotuladores em labeling/automatic.py."
 Add to `tests/test_labeling.py`, inside `class TestRunCascadeLabeling:` (after `test_raises_data_validation_error_for_invalid_labeler_output`):
 
 ```python
-    def test_produces_same_result_with_and_without_parallelism(self) -> None:
-        """A rotulagem paralela deve produzir exatamente o mesmo resultado que a execução padrão.
+def test_produces_same_result_with_and_without_parallelism(self) -> None:
+    """A rotulagem paralela deve produzir exatamente o mesmo resultado que a execução padrão.
 
-        Verifica em particular que a ordem/correspondência amostra->rótulo
-        não se perde ao coletar resultados em ProcessPoolExecutor (ver
-        _label_indexed_item / operator.itemgetter(0)).
-        """
-        df = pl.DataFrame({
+    Verifica em particular que a ordem/correspondência amostra->rótulo
+    não se perde ao coletar resultados em ProcessPoolExecutor (ver
+    _label_indexed_item / operator.itemgetter(0)).
+    """
+    df = pl.DataFrame(
+        {
             "id": [str(i) for i in range(6)],
             "text": [
                 "adorei o produto",
@@ -1518,13 +1539,14 @@ Add to `tests/test_labeling.py`, inside `class TestRunCascadeLabeling:` (after `
                 "produto horrível",
                 "sem opinião formada",
             ],
-        })
-        labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
+        }
+    )
+    labelers = {"heuristica_lexica": LexicalHeuristicLabeler()}
 
-        result_sequential = run_cascade_labeling(df, labelers, max_workers=1, show_progress=False)
-        result_parallel = run_cascade_labeling(df, labelers, max_workers=4, show_progress=False)
+    result_sequential = run_cascade_labeling(df, labelers, max_workers=1, show_progress=False)
+    result_parallel = run_cascade_labeling(df, labelers, max_workers=4, show_progress=False)
 
-        assert result_sequential.sort("id").to_dicts() == result_parallel.sort("id").to_dicts()
+    assert result_sequential.sort("id").to_dicts() == result_parallel.sort("id").to_dicts()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1687,13 +1709,15 @@ def run_cascade_labeling(
             confidences.append(confidence_score)
             label_weights.append(resolved_weights.get(tagger_name, 1.0))
 
-    result = pl.DataFrame({
-        "id": ids,
-        "tagger": taggers,
-        "sentiment_label": sentiment_labels,
-        "confidence_score": confidences,
-        "weight": label_weights,
-    })
+    result = pl.DataFrame(
+        {
+            "id": ids,
+            "tagger": taggers,
+            "sentiment_label": sentiment_labels,
+            "confidence_score": confidences,
+            "weight": label_weights,
+        }
+    )
     logger.info(
         "Rotulagem em cascata concluída: %d amostra(s) x %d rotulador(es) = %d resultado(s).",
         dataframe.height,
@@ -1738,24 +1762,26 @@ silenciosamente descartada)."
 Add to `tests/test_pipelines.py`, inside `class TestRunLabelingStage:` (after the two existing tests):
 
 ```python
-    def test_accepts_max_workers_and_show_progress(self, pipeline_paths: ProjectPaths) -> None:
-        """Deve aceitar e repassar max_workers/show_progress sem alterar o resultado."""
-        normalized_corpus = pl.DataFrame({
+def test_accepts_max_workers_and_show_progress(self, pipeline_paths: ProjectPaths) -> None:
+    """Deve aceitar e repassar max_workers/show_progress sem alterar o resultado."""
+    normalized_corpus = pl.DataFrame(
+        {
             "id": ["1", "2"],
             "text": ["adorei o produto", "produto pessimo"],
             "text_normalized": ["adorei o produto", "produto pessimo"],
-        })
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+        }
+    )
+    write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
 
-        labeled_path = run_labeling_stage(
-            pipeline_paths,
-            {"heuristica_lexica": LexicalHeuristicLabeler()},
-            max_workers=2,
-            show_progress=False,
-        )
+    labeled_path = run_labeling_stage(
+        pipeline_paths,
+        {"heuristica_lexica": LexicalHeuristicLabeler()},
+        max_workers=2,
+        show_progress=False,
+    )
 
-        labeled_corpus = read_dataset_file(labeled_path)
-        assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
+    labeled_corpus = read_dataset_file(labeled_path)
+    assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**

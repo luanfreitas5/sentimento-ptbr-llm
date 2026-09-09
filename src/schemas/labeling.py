@@ -50,13 +50,15 @@ def validate_labeling_result(dataframe: pl.DataFrame) -> pl.DataFrame:
 
     Examples
     --------
-    >>> df = pl.DataFrame({
-    ...     "id": ["1"],
-    ...     "tagger": ["heuristica_lexica"],
-    ...     "sentiment_label": ["positivo"],
-    ...     "confidence_score": [0.9],
-    ...     "weight": [1.0],
-    ... })
+    >>> df = pl.DataFrame(
+    ...     {
+    ...         "id": ["1"],
+    ...         "tagger": ["heuristica_lexica"],
+    ...         "sentiment_label": ["positivo"],
+    ...         "confidence_score": [0.9],
+    ...         "weight": [1.0],
+    ...     }
+    ... )
     >>> validate_labeling_result(df).height
     1
     """

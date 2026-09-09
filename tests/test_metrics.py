@@ -312,10 +312,12 @@ class TestCountTrainableParameters:
 
     def test_counts_only_trainable_parameters(self) -> None:
         """Deve somar apenas os parâmetros com ``requires_grad=True``."""
-        model = self._FakeModel([
-            self._FakeParameter(10),
-            self._FakeParameter(5, requires_grad=False),
-        ])
+        model = self._FakeModel(
+            [
+                self._FakeParameter(10),
+                self._FakeParameter(5, requires_grad=False),
+            ]
+        )
         assert count_trainable_parameters(model) == 10
 
     def test_raises_model_error_when_model_lacks_parameters_method(self) -> None:
@@ -329,9 +331,9 @@ class TestCalculateOperationalMetrics:
 
     def test_includes_computational_cost_when_model_is_given(self) -> None:
         """Deve incluir ``computational_cost`` quando um modelo é informado."""
-        model = TestCountTrainableParameters._FakeModel([
-            TestCountTrainableParameters._FakeParameter(7)
-        ])
+        model = TestCountTrainableParameters._FakeModel(
+            [TestCountTrainableParameters._FakeParameter(7)]
+        )
         result = calculate_operational_metrics(lambda x: x, 1, n_repeats=2, model=model)
         assert result["computational_cost"] == 7.0
 

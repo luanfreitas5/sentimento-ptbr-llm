@@ -168,7 +168,7 @@ class LangChainSentimentClassifier:
         np.ndarray
             Vetor de rótulos de sentimento preditos.
         """
-        return np.array([self._classify_one(text).sentimento for text in X])
+        return np.array([self._classify_one(text).sentiment_label for text in X])
 
     def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Estima uma distribuição de probabilidade por classe a partir da confiança do LLM.
@@ -215,7 +215,8 @@ class LangChainSentimentClassifier:
         --------
         >>> class _Backend:
         ...     def generate(self, prompt: str) -> str:
-        ...         return '{"sentiment_label": "positivo", "confidence_score": 0.9, "justification": "ok"}'
+        ...         return '{"sentiment_label": "positivo",
+        ...                  "confidence_score": 0.9, "justification": "ok"}'
         >>> classificador = LangChainSentimentClassifier(_Backend(), strategy="zero_shot")
         >>> classificador.predict_with_justification(["ótimo"])[0].justification
         'ok'
