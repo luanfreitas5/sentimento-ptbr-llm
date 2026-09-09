@@ -180,9 +180,9 @@ def _resolve_neuron_indices(
         )
         return [int(i) for i in random_indices]
 
-    assert (
-        n_top_neurons is not None
-    ), "n_top_neurons não pode ser None quando neuron_indices e n_random_neurons também são None"
+    assert n_top_neurons is not None, (
+        "n_top_neurons não pode ser None quando neuron_indices e n_random_neurons também são None"
+    )
     if n_top_neurons > total_neurons:
         raise ValueError(
             f"n_top_neurons ({n_top_neurons}) não pode exceder o total de "

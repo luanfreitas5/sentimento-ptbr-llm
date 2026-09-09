@@ -77,27 +77,27 @@ from hypothesaes.select_neurons import select_neurons
 from hypothesaes.utils import format_text_for_display
 
 __all__: list[str] = [  # (agrupado por categoria, ver comentários)
-    # Funções de fluxo principal
-    "train_sae",
-    "interpret_sae",
-    "generate_hypotheses",
-    "evaluate_hypotheses",
-    # Classes principais
-    "SparseAutoencoder",
-    "load_model",
-    # Embeddings
-    "extract_openai_embeddings",
-    "extract_local_embeddings",
+    "InterpretConfig",
+    "LLMConfig",
     # Interpretação
     "NeuronInterpreter",
-    "InterpretConfig",
-    "ScoringConfig",
-    "LLMConfig",
     "SamplingConfig",
-    # Seleção e avaliação
-    "select_neurons",
-    "score_hypotheses",
+    "ScoringConfig",
+    # Classes principais
+    "SparseAutoencoder",
     "annotate_texts_with_concepts",
+    "evaluate_hypotheses",
+    "extract_local_embeddings",
+    # Embeddings
+    "extract_openai_embeddings",
     # Utilitários
     "format_text_for_display",
+    "generate_hypotheses",
+    "interpret_sae",
+    "load_model",
+    "score_hypotheses",
+    # Seleção e avaliação
+    "select_neurons",
+    # Funções de fluxo principal
+    "train_sae",
 ]
