@@ -14,7 +14,7 @@ default_install_hook_types: [pre-commit, commit-msg]
 repos:
   # --- Higiene básica de arquivos -----------------------------------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -28,7 +28,7 @@ repos:
 
   # --- Ruff: lint + format -------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+    rev: v0.16.6
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -43,13 +43,13 @@ repos:
 
   # --- nbstripout: remove outputs de notebooks antes do commit -------------
   - repo: https://github.com/kynan/nbstripout
-    rev: 0.7.1
+    rev: 0.9.1
     hooks:
       - id: nbstripout
 
   # --- commitizen: valida Conventional Commits (stage commit-msg) ----------
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v3.27.0
+    rev: v4.18.0
     hooks:
       - id: commitizen
         stages: [commit-msg]
