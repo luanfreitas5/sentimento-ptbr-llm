@@ -768,7 +768,7 @@ stevedore==5.8.0 ; python_full_version < '3.11'
     # via bandit
 stevedore==5.9.1 ; python_full_version >= '3.11'
     # via bandit
-sympy==1.13.1
+sympy==1.14.0
     # via onnxruntime
 tabulate==0.10.0
     # via interrogate
