@@ -269,7 +269,7 @@ magika==0.6.3
     # via markitdown
 mako==1.4.1
     # via alembic
-mando==0.7.1
+mando==0.8.2
     # via radon
 markdown==3.10.3
     # via
