@@ -254,6 +254,97 @@ def _collect_chunked_results(
             progress.update(task_id, advance=len(chunk_items))
 
 
+def _validate_execute_parallel_tasks_args(max_workers: int | None, chunk_size: int | None) -> None:
+    """Valida os parâmetros numéricos de :func:`execute_parallel_tasks`.
+
+    Parameters
+    ----------
+    max_workers : int | None
+        Número máximo de workers informado pelo chamador.
+    chunk_size : int | None
+        Tamanho de lote informado pelo chamador.
+
+    Raises
+    ------
+    ValueError
+        Se ``max_workers`` for informado e for menor que 1, ou se
+        ``chunk_size`` for informado e for menor que 1.
+    """
+    if max_workers is not None and max_workers < 1:
+        raise ValueError(f"max_workers deve ser >= 1, recebido: {max_workers}")
+    if chunk_size is not None and chunk_size < 1:
+        raise ValueError(f"chunk_size deve ser >= 1, recebido: {chunk_size}")
+
+
+def _resolve_task_id(progress: Progress | None, task_description: str, total: int) -> TaskID | None:
+    """Registra a tarefa na barra de progresso, se a exibição estiver habilitada.
+
+    Parameters
+    ----------
+    progress : Progress | None
+        Barra de progresso ativa, ou ``None`` se desabilitada.
+    task_description : str
+        Descrição exibida na barra de progresso.
+    total : int
+        Número total de itens da tarefa.
+
+    Returns
+    -------
+    TaskID | None
+        Identificador da tarefa registrada, ou ``None`` se ``progress`` for
+        ``None``.
+    """
+    return progress.add_task(task_description, total=total) if progress is not None else None
+
+
+def _dispatch_execution(
+    executor: ThreadPoolExecutor | ProcessPoolExecutor,
+    func: Callable[[ItemType], ResultType],
+    items_list: list[ItemType],
+    chunk_size: int | None,
+    result: ParallelExecutionResult[ItemType, ResultType],
+    progress: Progress | None,
+    progress_context: Progress | nullcontext[None],
+    task_description: str,
+) -> None:
+    """Submete os itens ao executor (com ou sem agrupamento em lotes) e aguarda a conclusão.
+
+    Parameters
+    ----------
+    executor : ThreadPoolExecutor | ProcessPoolExecutor
+        Executor já aberto ao qual as tarefas serão submetidas.
+    func : Callable[[ItemType], ResultType]
+        Função aplicada a cada item.
+    items_list : list[ItemType]
+        Itens já materializados a processar.
+    chunk_size : int | None
+        Se informado, agrupa os itens em lotes desse tamanho antes de
+        submeter ao executor; caso contrário, submete um item por vez.
+    result : ParallelExecutionResult[ItemType, ResultType]
+        Objeto de resultado, atualizado in-place com cada sucesso ou falha.
+    progress : Progress | None
+        Barra de progresso a ser atualizada, ou ``None`` se desabilitada.
+    progress_context : Progress | nullcontext[None]
+        Contexto a ser aberto durante a coleta dos resultados (a própria
+        barra de progresso, ou um contexto nulo se desabilitada).
+    task_description : str
+        Descrição da tarefa, usada na barra de progresso e nos logs.
+    """
+    if chunk_size is None:
+        futures = {executor.submit(func, item): item for item in items_list}
+        with progress_context:
+            task_id = _resolve_task_id(progress, task_description, len(items_list))
+            _collect_results(futures, result, progress, task_id, task_description)
+    else:
+        chunks = _split_into_chunks(items_list, chunk_size)
+        chunk_futures = {
+            executor.submit(_run_chunk_of_items, func, chunk): chunk for chunk in chunks
+        }
+        with progress_context:
+            task_id = _resolve_task_id(progress, task_description, len(items_list))
+            _collect_chunked_results(chunk_futures, result, progress, task_id, task_description)
+
+
 def execute_parallel_tasks(
     func: Callable[[ItemType], ResultType],
     items: Iterable[ItemType],
@@ -333,10 +424,7 @@ def execute_parallel_tasks(
     >>> sorted(resultado.successes)  # doctest: +SKIP
     ['A', 'B']
     """
-    if max_workers is not None and max_workers < 1:
-        raise ValueError(f"max_workers deve ser >= 1, recebido: {max_workers}")
-    if chunk_size is not None and chunk_size < 1:
-        raise ValueError(f"chunk_size deve ser >= 1, recebido: {chunk_size}")
+    _validate_execute_parallel_tasks_args(max_workers, chunk_size)
 
     items_list = list(items)
     result: ParallelExecutionResult[ItemType, ResultType] = ParallelExecutionResult()
@@ -349,23 +437,16 @@ def execute_parallel_tasks(
     progress_context = progress if progress is not None else nullcontext()
 
     with measure_execution_time() as tempo, executor_class(max_workers=max_workers) as executor:
-        if chunk_size is None:
-            futures = {executor.submit(func, item): item for item in items_list}
-            with progress_context:
-                task_id = (
-                    progress.add_task(task_description, total=len(items_list)) if progress else None
-                )
-                _collect_results(futures, result, progress, task_id, task_description)
-        else:
-            chunks = _split_into_chunks(items_list, chunk_size)
-            chunk_futures = {
-                executor.submit(_run_chunk_of_items, func, chunk): chunk for chunk in chunks
-            }
-            with progress_context:
-                task_id = (
-                    progress.add_task(task_description, total=len(items_list)) if progress else None
-                )
-                _collect_chunked_results(chunk_futures, result, progress, task_id, task_description)
+        _dispatch_execution(
+            executor,
+            func,
+            items_list,
+            chunk_size,
+            result,
+            progress,
+            progress_context,
+            task_description,
+        )
 
     result.elapsed_seconds = tempo.elapsed_seconds
     logger.info(
