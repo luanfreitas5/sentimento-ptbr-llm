@@ -65,7 +65,7 @@ def generate_sentiment_wordcloud(
         raise EmptyDatasetError("word_frequencies")
 
     try:
-        from wordcloud import WordCloud
+        from wordcloud import WordCloud  # pyright: ignore[reportAttributeAccessIssue]
     except ImportError as exception:
         raise ImportError(_WORDCLOUD_INSTALL_MESSAGE) from exception
 
