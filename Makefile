@@ -8,7 +8,7 @@ export PYTHONHASHSEED := 42
 
 .DEFAULT_GOAL := help
 .PHONY: help init venv install install-all \
-	install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model \
+	install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data \
 	update lock export \
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
@@ -43,12 +43,16 @@ install-llm:  ## Instala os extras de LLM (PyTorch + Transformers + Accelerate +
 install-collect:  ## Instala os extras de coleta (twscrape)
 	uv sync --extra collect --dev
 
-install-nlp:  ## Instala os extras de PLN (spaCy) e baixa o modelo pt-BR
+install-nlp:  ## Instala os extras de PLN (spaCy + nltk), baixa o modelo pt-BR e o corpus de stopwords
 	uv sync --extra nlp --dev
 	$(MAKE) spacy-model
+	$(MAKE) nltk-data
 
 spacy-model:  ## Baixa o modelo do spaCy para português (habilita a lematização)
 	uv run python -m spacy download pt_core_news_sm
+
+nltk-data:  ## Baixa o corpus de stopwords do nltk (enriquece a lista curada em pt-BR)
+	uv run python -m nltk.downloader stopwords
 
 install-viz:  ## Instala os extras de visualização (wordcloud, networkx, umap-learn)
 	uv sync --extra viz --dev

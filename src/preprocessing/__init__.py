@@ -19,10 +19,14 @@ tokenization
     negação.
 cleaning
     Remoção de marcador de retweet e predicados de qualidade mínima
-    (conteúdo, idioma, spam).
+    (conteúdo, idioma, spam), com stopwords enriquecidas pelo corpus do
+    nltk quando disponível.
 filtering
     Filtragem de um corpus (``pl.DataFrame``) pelos critérios de
     inclusão/exclusão definidos em ``cleaning``.
+lemmatization
+    Lematização de textos via spaCy (``pt_core_news_sm``), com fallback
+    para o texto original quando a biblioteca/modelo não estão instalados.
 pipeline
     Composição de todas as etapas acima em um pipeline reprodutível.
 """
@@ -35,6 +39,7 @@ from preprocessing.cleaning import (
     is_minimum_length_content,
     is_probable_portuguese_text,
     is_spam_like,
+    load_nltk_portuguese_stopwords,
     remove_retweet_marker,
 )
 from preprocessing.emojis import (
@@ -55,6 +60,7 @@ from preprocessing.filtering import (
     filter_spam_like_rows,
     remove_duplicate_text_rows,
 )
+from preprocessing.lemmatization import lemmatize_text, load_spacy_model
 from preprocessing.pipeline import normalize_tweet_text, run_preprocessing_pipeline
 from preprocessing.text import (
     normalize_hashtags,
@@ -94,6 +100,9 @@ __all__: list[str] = [
     "is_minimum_length_content",
     "is_probable_portuguese_text",
     "is_spam_like",
+    "lemmatize_text",
+    "load_nltk_portuguese_stopwords",
+    "load_spacy_model",
     "mark_negation_scope",
     "normalize_emojis",
     "normalize_hashtags",

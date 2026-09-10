@@ -169,12 +169,16 @@ collect = [
     "twscrape>=0.13",                 # scraping assíncrono de tweets
 ]
 
-# Recomendado para melhorar a tokenização/lematização em pt-BR no
-# pré-processamento (`make install-nlp`, que já baixa o modelo). O modelo
-# `pt_core_news_sm` exige download à parte (`make spacy-model`); sem ele o
-# projeto cai no fallback por regex, com aviso no log.
+# Recomendado para melhorar a lematização e as stopwords em pt-BR no
+# pré-processamento (`make install-nlp`, que já baixa o modelo do spaCy e o
+# corpus do nltk). O modelo `pt_core_news_sm` exige download à parte (`make
+# spacy-model`); sem ele o projeto cai no fallback por regex, com aviso no
+# log (ver `src/preprocessing/lemmatization.py`). O corpus `stopwords` do
+# nltk enriquece a lista curada em `src/preprocessing/cleaning.py`; sem
+# ele, apenas a lista curada é usada.
 nlp = [
-    "spacy>=3.7",                     # tokenização/lematização em português
+    "spacy>=3.7",                     # lematização em português (pt_core_news_sm)
+    "nltk>=3.9",                      # corpus de stopwords em português
 ]
 
 # Recomendado ao gerar o relatório final de visualizações
@@ -366,9 +370,9 @@ include = ["src", "tests"]
 extraPaths = ["src"]
 exclude = ["**/__pycache__", "notebooks", "data", "models", "reports", "logs"]
 reportMissingTypeStubs = false
-# Dependências opcionais (torch, transformers, twscrape, spacy, shap, umap,
-# wordcloud, networkx, ollama) são importadas sob demanda e podem não estar
-# instaladas no ambiente de checagem.
+# Dependências opcionais (torch, transformers, twscrape, spacy, nltk, shap,
+# umap, wordcloud, networkx, ollama) são importadas sob demanda e podem não
+# estar instaladas no ambiente de checagem.
 reportMissingImports = "warning"
 
 # =============================================================================

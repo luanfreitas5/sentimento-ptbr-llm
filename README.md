@@ -175,7 +175,7 @@ Extras opcionais, instalados sob demanda conforme a etapa do pipeline usada:
 
 ```bash
 make install-collect   # twscrape (coleta de tweets)
-make install-nlp       # spaCy + modelo pt-BR (lematização)
+make install-nlp       # spaCy + modelo pt-BR (lematização) e nltk + corpus de stopwords
 make install-llm       # PyTorch + Transformers + Accelerate + Ollama
 uv sync --extra viz    # wordcloud, networkx, umap-learn (figuras opcionais)
 uv sync --extra dvc    # versionamento de dados/modelos

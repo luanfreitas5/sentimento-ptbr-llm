@@ -5,7 +5,8 @@ elementos estruturais (``src/preprocessing/text.py``) e de emojis
 (``src/preprocessing/emojis.py``) em uma única função por texto e aplica o
 resultado a um corpus inteiro, junto aos critérios de inclusão/exclusão
 (``src/preprocessing/filtering.py``) e, opcionalmente, à tokenização
-(``src/preprocessing/tokenization.py``), produzindo o dataset intermediário
+(``src/preprocessing/tokenization.py``) e à lematização via spaCy
+(``src/preprocessing/lemmatization.py``), produzindo o dataset intermediário
 usado pelas etapas seguintes (rotulagem e extração de features).
 """
 
@@ -21,6 +22,7 @@ from parallel.preprocessing import run_parallel_text_cleaning
 from preprocessing.cleaning import clean_tweet_text
 from preprocessing.emojis import normalize_emojis
 from preprocessing.filtering import filter_by_inclusion_criteria
+from preprocessing.lemmatization import lemmatize_text
 from preprocessing.text import (
     normalize_hashtags,
     normalize_mentions,
@@ -166,6 +168,7 @@ def run_preprocessing_pipeline(
     text_column: str = "text",
     normalized_text_column: str = "text_normalized",
     tokens_column: str | None = None,
+    lemmatized_text_column: str | None = None,
     keep_hashtag_word: bool = True,
     expand_slang: bool = True,
     apply_negation_marking: bool = True,
@@ -200,6 +203,14 @@ def run_preprocessing_pipeline(
         Nome da coluna de tokens a ser criada, aplicada após os filtros de
         inclusão (quando habilitados). Se ``None``, a tokenização não é
         executada, by default None.
+    lemmatized_text_column : str | None, optional
+        Nome da coluna de texto lematizado a ser criada, via
+        :func:`preprocessing.lemmatization.lemmatize_text` (spaCy),
+        aplicada após os filtros de inclusão (quando habilitados). Se
+        ``None``, a lematização não é executada, by default None. Sem o
+        spaCy/modelo ``pt_core_news_sm`` instalados (``make
+        install-nlp``), a coluna é criada com o texto normalizado
+        inalterado (fallback com aviso no log).
     keep_hashtag_word : bool, optional
         Repassado a :func:`normalize_tweet_text`, by default True.
     max_workers : int | None, optional
@@ -238,9 +249,9 @@ def run_preprocessing_pipeline(
     Returns
     -------
     pl.DataFrame
-        Corpus com a coluna de texto normalizado (e, quando solicitado, a
-        coluna de tokens), filtrado pelos critérios de inclusão quando
-        ``apply_inclusion_filters`` for ``True``.
+        Corpus com a coluna de texto normalizado (e, quando solicitadas, as
+        colunas de tokens e/ou texto lematizado), filtrado pelos critérios
+        de inclusão quando ``apply_inclusion_filters`` for ``True``.
 
     Raises
     ------
@@ -301,6 +312,12 @@ def run_preprocessing_pipeline(
             for text in result[normalized_text_column].to_list()
         ]
         result = result.with_columns(pl.Series(tokens_column, token_lists, dtype=pl.List(pl.Utf8)))
+
+    if lemmatized_text_column is not None:
+        lemmatized_texts = [
+            lemmatize_text(text) for text in result[normalized_text_column].to_list()
+        ]
+        result = result.with_columns(pl.Series(lemmatized_text_column, lemmatized_texts))
 
     logger.info(
         "Pipeline de pré-processamento concluído: %d/%d linha(s) mantida(s)",

@@ -6,20 +6,23 @@ permanecer no corpus: presença de conteúdo mínimo, sinal heurístico de
 idioma português e indícios de spam (repetição excessiva de uma palavra).
 """
 
+import logging
 import re
 
 from constants.regex import RETWEET_PATTERN
 from utils.text import normalize_whitespace
 
+logger = logging.getLogger(__name__)
+
 _WORD_PATTERN = re.compile(r"\w+")
 
 # Lista curada das palavras funcionais (stopwords) mais frequentes em
-# português brasileiro. Não pretende ser exaustiva nem substituir uma
-# biblioteca de detecção de idioma (nenhuma está entre as dependências do
-# projeto — ver CLAUDE.md, "What to Avoid" -> dependências sem
-# justificativa): serve apenas como heurística leve e determinística para
-# estimar se um texto é predominantemente escrito em português.
-PORTUGUESE_STOPWORDS: frozenset[str] = frozenset(
+# português brasileiro, usada como base determinística mesmo sem o nltk
+# instalado (ver :func:`load_nltk_portuguese_stopwords`). Não pretende ser
+# exaustiva nem substituir uma biblioteca de detecção de idioma: serve
+# apenas como heurística leve para estimar se um texto é predominantemente
+# escrito em português.
+_CURATED_PORTUGUESE_STOPWORDS: frozenset[str] = frozenset(
     {
         "a",
         "o",
@@ -73,6 +76,52 @@ PORTUGUESE_STOPWORDS: frozenset[str] = frozenset(
         "também",
         "porque",
     }
+)
+
+
+def load_nltk_portuguese_stopwords() -> frozenset[str]:
+    """Carrega as stopwords em português do corpus ``stopwords`` do nltk.
+
+    A biblioteca ``nltk`` é opcional (ver ``pyproject.toml``, extra "nlp"):
+    o import ocorre de forma tardia, dentro desta função, para que o
+    restante do módulo permaneça importável sem ela. Não dispara download
+    em tempo de execução — o corpus deve ser obtido antecipadamente via
+    ``make install-nlp``; sem ele, o conjunto retornado é vazio e
+    :data:`PORTUGUESE_STOPWORDS` cai no fallback da lista curada
+    (:data:`_CURATED_PORTUGUESE_STOPWORDS`), com aviso no log.
+
+    Returns
+    -------
+    frozenset[str]
+        Stopwords em português do nltk, ou conjunto vazio se a biblioteca
+        não estiver instalada ou o corpus não tiver sido baixado.
+
+    Examples
+    --------
+    >>> load_nltk_portuguese_stopwords() >= frozenset()
+    True
+    """
+    try:
+        from nltk.corpus import stopwords  # pyright: ignore[reportMissingImports]
+    except ImportError:
+        logger.debug("nltk não está instalado; usando apenas a lista curada de stopwords.")
+        return frozenset()
+
+    try:
+        return frozenset(stopwords.words("portuguese"))
+    except LookupError:
+        logger.warning(
+            "Corpus 'stopwords' do nltk não encontrado. Rode `make install-nlp` para "
+            "baixá-lo; usando apenas a lista curada de stopwords enquanto isso."
+        )
+        return frozenset()
+
+
+# União da lista curada com o corpus do nltk (quando disponível), calculada
+# uma única vez na importação do módulo. Sem o nltk instalado/baixado,
+# equivale exatamente à lista curada (ver :func:`load_nltk_portuguese_stopwords`).
+PORTUGUESE_STOPWORDS: frozenset[str] = (
+    _CURATED_PORTUGUESE_STOPWORDS | load_nltk_portuguese_stopwords()
 )
 
 

@@ -27,14 +27,14 @@ O projeto instala apenas as dependências de runtime "leves" por padrão. Extras
 |---|---|---|
 | `llm` | PyTorch, Transformers, Accelerate, Ollama, LangChain | Estágios `llm_evaluation` e análise HypotheSAEs |
 | `collect` | twscrape | Estágio `ingestion` (coleta de tweets) |
-| `nlp` | spaCy + modelo `pt_core_news_sm` | Lematização no pré-processamento (com fallback por regex se ausente) |
+| `nlp` | spaCy + modelo `pt_core_news_sm`, nltk + corpus `stopwords` | Lematização e stopwords em pt-BR no pré-processamento (com fallback por regex/lista curada se ausentes) |
 | `viz` | wordcloud, networkx, umap-learn | Figuras opcionais (nuvem de palavras, rede de similaridade, projeção UMAP) |
 | `dvc` | DVC | Versionamento de dados/modelos (ver `dvc.yaml`) |
 | `app` | Streamlit, Plotly | Dashboard comparativo (`app/dashboard.py`) |
 
 ```bash
 make install-collect
-make install-nlp        # já baixa o modelo pt-BR do spaCy
+make install-nlp        # já baixa o modelo pt-BR do spaCy e o corpus de stopwords do nltk
 make install-llm
 uv sync --extra viz
 uv sync --extra dvc
