@@ -36,6 +36,7 @@ from exceptions.data import DataValidationError
 class TestColumns:
     """Testes das constantes de nomes de coluna."""
 
+    @pytest.mark.smoke
     def test_target_column_matches_config(self) -> None:
         """A coluna-alvo deve ser 'sentimento', conforme configs/config.yaml."""
         assert TARGET_COLUMN == "sentimento"
