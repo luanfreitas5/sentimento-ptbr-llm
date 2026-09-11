@@ -1,0 +1,1138 @@
+
+<!doctype html>
+<html lang="pt" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Análise comparativa de sentimentos em tweets pt-BR entre ML clássico, Deep Learning/Transformers e LLMs locais.">
+      
+      
+        <meta name="author" content="Luan Freitas">
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Processamento paralelo de lotes de tweets brutos (preprocessing, labeling, features) - sentimento-ptbr-llm</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#processamento-paralelo-de-lotes-de-tweets-brutos-preprocessing-labeling-features" class="md-skip">
+          Pular para conteúdo
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Cabeçalho">
+    <a href="../../.." title="sentimento-ptbr-llm" class="md-header__button md-logo" aria-label="sentimento-ptbr-llm" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            sentimento-ptbr-llm
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Processamento paralelo de lotes de tweets brutos (preprocessing, labeling, features)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Modo escuro"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Modo escuro" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Modo claro"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Modo claro" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Buscar" placeholder="Buscar" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Pesquisar">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Limpar" aria-label="Limpar" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Inicializando busca
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/luanfreitas5/sentimento-ptbr-llm" title="Ir para repositório" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    luanfreitas5/sentimento-ptbr-llm
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Abas" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Início
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../guides/metodologia/" class="md-tabs__link">
+          
+  
+  
+  Guias
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Referência da API
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navegação" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="sentimento-ptbr-llm" class="md-nav__button md-logo" aria-label="sentimento-ptbr-llm" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    sentimento-ptbr-llm
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/luanfreitas5/sentimento-ptbr-llm" title="Ir para repositório" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    luanfreitas5/sentimento-ptbr-llm
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Início
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guias
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guias
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/metodologia/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metodologia
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/reprodutibilidade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reprodutibilidade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guides/setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Referência da API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Índice">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Índice
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#contexto-e-problema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contexto e problema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fora-do-escopo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fora do escopo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisoes-de-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisões de design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decisões de design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-contrato-de-dados-brutos-schemasdatasetpy-constantscolumnspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Contrato de dados brutos (schemas/dataset.py, constants/columns.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-carregamento-em-lote-paralelo-dataloaderpy-paralleldata_loadingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Carregamento em lote paralelo (data/loader.py + parallel/data_loading.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-preprocessing-pipelinespreprocessingpy-preprocessingfilteringpy-preprocessingpipelinepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Preprocessing (pipelines/preprocessing.py, preprocessing/filtering.py, preprocessing/pipeline.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-labeling-labelingautomaticpy-parallellabelingpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Labeling (labeling/automatic.py + parallel/labeling.py)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-features-pipelinesfeaturespy-sem-mudanca-de-codigo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Features (pipelines/features.py) — sem mudança de código
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-configuracao-de-max_workers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Configuração de max_workers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#addendum-durante-o-planejamento-pre-requisito-de-serializacao-de-excecoes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Addendum (durante o planejamento): pré-requisito de serialização de exceções
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#riscos-e-mitigacao" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Riscos e mitigação
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="processamento-paralelo-de-lotes-de-tweets-brutos-preprocessing-labeling-features">Processamento paralelo de lotes de tweets brutos (preprocessing, labeling, features)<a class="headerlink" href="#processamento-paralelo-de-lotes-de-tweets-brutos-preprocessing-labeling-features" title="Permanent link">&para;</a></h1>
+<p>Data: 2026-09-07</p>
+<h2 id="contexto-e-problema">Contexto e problema<a class="headerlink" href="#contexto-e-problema" title="Permanent link">&para;</a></h2>
+<p><code>data/raw/</code> já contém múltiplos arquivos Parquet reais coletados por usuário
+(ex.: <code>A_Albuquerque99_fulljson.parquet</code>), cada um com as colunas
+<code>user_id, tweet_id, text, created_at, language, is_reply, is_retweet,
+like_count, reply_count, retweet_count, quote_count, source_query,
+source_group</code>.</p>
+<p>O pipeline atual, porém, assume um único arquivo consolidado
+(<code>paths.raw_tweets_file</code>) com um schema mínimo e incompatível
+(<code>id, text, data_source, data_collected</code>), produzido pela etapa <code>ingestion</code>
+(scraping ao vivo). As etapas <code>preprocessing</code>/<code>labeling</code> processam o corpus
+inteiro em laços Python sequenciais (uma linha por vez).</p>
+<p>Objetivo: atualizar as etapas <code>preprocessing</code>, <code>labeling</code> e <code>features</code> para
+consumir diretamente o lote de arquivos já existentes em <code>data/raw/</code>,
+validá-los contra um contrato de dados que reflita as colunas reais, e
+paralelizar o processamento de grandes volumes de tweets, produzindo ao
+final um corpus rotulado pronto para a etapa <code>features</code> (split e TF-IDF).</p>
+<h2 id="fora-do-escopo">Fora do escopo<a class="headerlink" href="#fora-do-escopo" title="Permanent link">&para;</a></h2>
+<ul>
+<li>A etapa <code>ingestion</code> (scraping ao vivo via <code>twscrape</code>) não é alterada: ela
+  não valida contra <code>RawTweetSchema</code> hoje (apenas grava o que <code>scrape_func</code>
+  retornar) e continua existindo para coletas futuras, desacoplada deste
+  fluxo.</li>
+<li><code>pipelines/features.py</code> não ganha código de paralelismo próprio (ver
+  Decisão 5).</li>
+<li>Rotuladores baseados em LLM/modelo de referência (<code>configs/labeling.yaml</code>)
+  continuam não implementados; a paralelização de rotulagem cobre o
+  rotulador heurístico-lexical existente.</li>
+</ul>
+<h2 id="decisoes-de-design">Decisões de design<a class="headerlink" href="#decisoes-de-design" title="Permanent link">&para;</a></h2>
+<h3 id="1-contrato-de-dados-brutos-schemasdatasetpy-constantscolumnspy">1. Contrato de dados brutos (<code>schemas/dataset.py</code>, <code>constants/columns.py</code>)<a class="headerlink" href="#1-contrato-de-dados-brutos-schemasdatasetpy-constantscolumnspy" title="Permanent link">&para;</a></h3>
+<p><code>RawTweetSchema</code> passa a modelar exatamente as colunas reais de
+<code>data/raw/*.parquet</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Observação</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tweet_id</code></td>
+<td><code>str</code></td>
+<td>único — chave primária do schema bruto</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td><code>str</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td><code>str</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td><code>datetime</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td><code>str</code></td>
+<td>código de idioma reportado pela coleta</td>
+</tr>
+<tr>
+<td><code>is_reply</code></td>
+<td><code>bool</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>is_retweet</code></td>
+<td><code>bool</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>like_count</code>, <code>reply_count</code>, <code>retweet_count</code>, <code>quote_count</code></td>
+<td><code>int</code>, <code>ge=0</code></td>
+<td>métricas de engajamento</td>
+</tr>
+<tr>
+<td><code>source_query</code></td>
+<td><code>str</code></td>
+<td>termo/consulta de coleta</td>
+</tr>
+<tr>
+<td><code>source_group</code></td>
+<td><code>str</code></td>
+<td>agrupamento de origem (ex.: usuário coletado)</td>
+</tr>
+</tbody>
+</table>
+<p>Os campos antigos (<code>id</code>, <code>data_source</code>, <code>data_collected</code>) são removidos —
+nada fora deste schema depende deles (<code>pipelines/ingestion.py</code> não valida
+contra <code>RawTweetSchema</code>). <code>Config.strict = True</code> é mantido.</p>
+<p><code>LabeledCorpusSchema</code> (<code>strict = False</code>) não muda: colunas extras (métricas
+de engajamento, <code>created_at</code> etc.) seguem intactas até o corpus rotulado,
+disponíveis para avaliação por slice no futuro.</p>
+<p><code>constants/columns.py</code> ganha as novas constantes de nome de coluna
+(<code>TWEET_ID_COLUMN</code>, <code>USER_ID_COLUMN</code>, <code>CREATED_AT_COLUMN</code>,
+<code>LANGUAGE_COLUMN</code>, <code>IS_REPLY_COLUMN</code>, <code>IS_RETWEET_COLUMN</code>,
+<code>LIKE_COUNT_COLUMN</code>, <code>REPLY_COUNT_COLUMN</code>, <code>RETWEET_COUNT_COLUMN</code>,
+<code>QUOTE_COUNT_COLUMN</code>, <code>SOURCE_QUERY_COLUMN</code>, <code>SOURCE_GROUP_COLUMN</code>) e um
+novo <code>RAW_TWEET_BATCH_REQUIRED_COLUMNS</code>, efetivamente usadas pelo novo
+carregador (item 2) — não apenas declaradas. As constantes antigas não
+utilizadas (<code>TEXT_COLUMN = "texto"</code> etc.) não são tocadas: divergência
+pré-existente, fora do escopo desta mudança.</p>
+<h3 id="2-carregamento-em-lote-paralelo-dataloaderpy-paralleldata_loadingpy">2. Carregamento em lote paralelo (<code>data/loader.py</code> + <code>parallel/data_loading.py</code>)<a class="headerlink" href="#2-carregamento-em-lote-paralelo-dataloaderpy-paralleldata_loadingpy" title="Permanent link">&para;</a></h3>
+<p>Novo módulo <code>src/parallel/data_loading.py</code>, seguindo o padrão dos demais
+módulos de <code>src/parallel/</code> (um wrapper fino sobre <code>execute_parallel_tasks</code>):</p>
+<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">run_parallel_parquet_loading</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">file_paths</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Path</span><span class="p">],</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">max_workers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">show_progress</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ParallelExecutionResult</span><span class="p">[</span><span class="n">Path</span><span class="p">,</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="sd">"""Lê múltiplos arquivos Parquet em paralelo (ThreadPoolExecutor)."""</span>
+</span></code></pre></div>
+<p>Usa <code>ThreadPoolExecutor</code>: a leitura/decodificação Parquet do polars é
+implementada em Rust e libera o GIL, então threads evitam o custo de
+serializar DataFrames inteiros entre processos (mesmo raciocínio já
+documentado em <code>parallel/scraping.py</code> para I/O).</p>
+<p><code>data/loader.py</code> ganha <code>load_raw_tweet_batch(directory: Path, *,
+max_workers=None, show_progress=True) -&gt; pl.DataFrame</code>, substituindo
+<code>load_raw_tweet_dataset</code> (arquivo único):</p>
+<ol>
+<li><code>directory.glob("*.parquet")</code> — levanta <code>EmptyDatasetError</code> se vazio.</li>
+<li><code>run_parallel_parquet_loading(...)</code> sobre os caminhos encontrados; uma
+   falha de leitura isolada (arquivo corrompido) é logada e resulta em
+   <code>DataError</code> acumulado, sem abortar os demais arquivos.</li>
+<li><code>pl.concat(leituras_bem_sucedidas, how="vertical")</code>.</li>
+<li>Validação <strong>única</strong> contra o novo <code>RawTweetSchema</code>, feita sobre o
+   DataFrame já concatenado (não por arquivo) — assim uma duplicata de
+   <code>tweet_id</code> entre dois arquivos diferentes é detectada pela
+   constraint <code>unique=True</code>, o que validar por arquivo isoladamente não
+   pegaria.</li>
+<li>Renomeia <code>tweet_id -&gt; id</code> <strong>após</strong> a validação, para que
+   <code>labeling/automatic.py</code> (<code>id_column="id"</code>) e o restante do pipeline
+   continuem funcionando sem alteração de contrato.</li>
+</ol>
+<p><code>load_raw_tweet_dataset</code> (arquivo único, schema antigo) é removida —
+YAGNI: nenhum caminho de código real a usa depois desta mudança.</p>
+<h3 id="3-preprocessing-pipelinespreprocessingpy-preprocessingfilteringpy-preprocessingpipelinepy">3. Preprocessing (<code>pipelines/preprocessing.py</code>, <code>preprocessing/filtering.py</code>, <code>preprocessing/pipeline.py</code>)<a class="headerlink" href="#3-preprocessing-pipelinespreprocessingpy-preprocessingfilteringpy-preprocessingpipelinepy" title="Permanent link">&para;</a></h3>
+<p><code>run_preprocessing_stage</code>:
+- Troca <code>load_raw_tweet_dataset(paths.raw_tweets_file)</code> por
+  <code>load_raw_tweet_batch(paths.data_raw_dir, max_workers=..., show_progress=...)</code>.
+- Aplica o novo filtro de metadados brutos (abaixo) antes de chamar
+  <code>run_preprocessing_pipeline</code>.
+- Ganha parâmetros <code>max_workers: int | None = None</code> e
+  <code>show_progress: bool = True</code>, repassados a <code>load_raw_tweet_batch</code> e a
+  <code>run_preprocessing_pipeline</code>.</p>
+<p>Novo <code>filter_by_raw_metadata</code> em <code>preprocessing/filtering.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">filter_by_raw_metadata</span><span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">dataframe</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">exclude_retweets</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">required_language</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">"pt"</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="sd">"""Remove retweets e/ou linhas fora do idioma alvo, usando metadados da coleta."""</span>
+</span></code></pre></div>
+<ul>
+<li><code>exclude_retweets=True</code> (padrão): remove <code>is_retweet == True</code>. Replies
+  são mantidos (ainda expressam opinião original do autor).</li>
+<li><code>required_language="pt"</code> (padrão): remove linhas com <code>language != "pt"</code>
+  — filtro primário, mais barato que a heurística lexical existente
+  (<code>filter_by_portuguese_language</code>, que continua atuando como filtro
+  secundário de qualidade sobre o texto já normalizado).</li>
+<li>Aplicado nesta ordem (retweet, depois idioma) por serem os filtros mais
+  baratos, antes do trabalho caro de normalização por linha.</li>
+</ul>
+<p><code>preprocessing/pipeline.py</code> — paralelização de <code>run_preprocessing_pipeline</code>:</p>
+<ul>
+<li>Novo tipo <code>_IndexedText = tuple[int, str]</code> e wrapper de módulo
+  <code>_normalize_indexed_row_text(item: _IndexedText, *, keep_hashtag_word:
+  bool) -&gt; _IndexedText</code>, delegando a <code>_normalize_row_text</code> (mantida como
+  está, incluindo a conversão de exceção em <code>PipelineStageError</code>).</li>
+<li><code>run_preprocessing_pipeline</code> ganha <code>max_workers: int | None = None</code> e
+  <code>show_progress: bool = True</code>.</li>
+<li>O laço serial é substituído por:
+  <div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">indexed_texts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">dataframe</span><span class="p">[</span><span class="n">text_column</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">()))</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">resultado</span> <span class="o">=</span> <span class="n">run_parallel_text_cleaning</span><span class="p">(</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">_normalize_indexed_row_text</span><span class="p">,</span> <span class="n">keep_hashtag_word</span><span class="o">=</span><span class="n">keep_hashtag_word</span><span class="p">),</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">indexed_texts</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">,</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">show_progress</span><span class="o">=</span><span class="n">show_progress</span><span class="p">,</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">if</span> <span class="n">resultado</span><span class="o">.</span><span class="n">failures</span><span class="p">:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="k">raise</span> <span class="n">resultado</span><span class="o">.</span><span class="n">failures</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">error</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">normalized_texts</span> <span class="o">=</span> <span class="p">[</span><span class="n">texto</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">texto</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">resultado</span><span class="o">.</span><span class="n">successes</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">))]</span>
+</span></code></pre></div>
+  Reordenar por índice original é obrigatório: <code>execute_parallel_tasks</code>
+  coleta resultados na ordem de conclusão (<code>as_completed</code>), não na ordem
+  de submissão — o mesmo problema já resolvido em
+  <code>inference/llm_batch.py</code> (<code>_IndexedItem</code> + <code>sorted(...,
+  key=operator.itemgetter(0))</code>), replicado aqui pelo mesmo motivo:
+  a lista resultante é atribuída de volta como coluna via <code>pl.Series</code>,
+  então precisa estar alinhada linha a linha com o DataFrame original.</li>
+<li>Falha continua sendo fail-fast (levanta <code>PipelineStageError</code> da primeira
+  falha), preservando o contrato documentado hoje.</li>
+<li><code>run_parallel_text_cleaning</code> (<code>parallel/preprocessing.py</code>) tem sua
+  assinatura generalizada de <code>Callable[[str], str]</code>/<code>Iterable[str]</code> para
+  <code>TypeVar</code>s genéricos (<code>ItemType</code>/<code>ResultType</code>), alinhando-a ao estilo já
+  usado em <code>run_parallel_predictions</code>/<code>run_parallel_scraping</code> — sem
+  mudança de comportamento, apenas permite reuso com os pares indexados
+  acima.</li>
+</ul>
+<h3 id="4-labeling-labelingautomaticpy-parallellabelingpy">4. Labeling (<code>labeling/automatic.py</code> + <code>parallel/labeling.py</code>)<a class="headerlink" href="#4-labeling-labelingautomaticpy-parallellabelingpy" title="Permanent link">&para;</a></h3>
+<p>Novo <code>src/parallel/labeling.py</code>, mesmo padrão dos demais wrappers:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">run_parallel_sentiment_labeling</span><span class="p">(</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">label_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">ItemType</span><span class="p">],</span> <span class="n">ResultType</span><span class="p">],</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">items</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ItemType</span><span class="p">],</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">max_workers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">show_progress</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ParallelExecutionResult</span><span class="p">[</span><span class="n">ItemType</span><span class="p">,</span> <span class="n">ResultType</span><span class="p">]:</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="sd">"""Aplica uma função de rotulagem a múltiplos itens em paralelo (ProcessPoolExecutor)."""</span>
+</span></code></pre></div>
+<p><code>ProcessPoolExecutor</code>: a única implementação concreta de
+<code>SentimentLabeler</code> hoje (<code>LexicalHeuristicLabeler</code>) faz contagem
+léxica/regex — CPU-bound, mesmo raciocínio de
+<code>parallel/preprocessing.py</code>.</p>
+<p><code>run_cascade_labeling</code> ganha <code>max_workers: int | None = None</code> e
+<code>show_progress: bool = True</code>. Para cada rotulador da cascata, os textos são
+indexados (<code>list(enumerate(...))</code>), rotulados em paralelo via
+<code>run_parallel_sentiment_labeling</code> com um wrapper de módulo
+<code>_label_indexed_item(item: tuple[int, str], *, labeler: SentimentLabeler)
+-&gt; tuple[int, str, tuple[str, float]]</code>, e os resultados reordenados por
+<code>operator.itemgetter(0)</code> antes de montar as colunas do formato longo —
+mesmo padrão indexado do item 3, pelo mesmo motivo (alinhamento linha a
+linha, agora por combinação amostra×rotulador).</p>
+<p>Comportamento de falha: <strong>fail-fast</strong> (levanta a partir da primeira
+<code>ParallelTaskFailure</code>), não silenciosamente ignorado — uma falha de
+rotulagem não pode resultar em uma linha ausente/incompleta no corpus
+rotulado sem sinalização.</p>
+<p><code>LexicalHeuristicLabeler</code> é uma classe simples sem estado não serializável
+(sem locks, handles de arquivo, threads) — picklable por padrão, compatível
+com <code>ProcessPoolExecutor</code>.</p>
+<h3 id="5-features-pipelinesfeaturespy-sem-mudanca-de-codigo">5. Features (<code>pipelines/features.py</code>) — sem mudança de código<a class="headerlink" href="#5-features-pipelinesfeaturespy-sem-mudanca-de-codigo" title="Permanent link">&para;</a></h3>
+<p><code>run_features_stage</code> calcula apenas TF-IDF (<code>sklearn</code>, já vetorizado em
+C) sobre o corpus de treino já particionado; não lê <code>data/raw</code> em nenhum
+momento. O ganho de paralelismo para "grandes lotes de tweets de usuários"
+ocorre integralmente a montante (carregamento, preprocessing, labeling) —
+por isso este pipeline não recebe uma implementação própria de paralelismo.
+Um parágrafo é adicionado à docstring de <code>run_features_stage</code> explicando
+esta decisão explicitamente, para não parecer uma lacuna esquecida.</p>
+<h3 id="6-configuracao-de-max_workers">6. Configuração de <code>max_workers</code><a class="headerlink" href="#6-configuracao-de-max_workers" title="Permanent link">&para;</a></h3>
+<p>Reaproveita o <code>--max-workers</code> já existente em <code>src/main.py</code> (hoje usado por
+<code>ingestion</code>/<code>llm_evaluation</code>/<code>hypothesaes_analysis</code>). Nenhuma seção nova em
+<code>configs/config.yaml</code>. Mudanças em <code>src/main.py</code>:</p>
+<ul>
+<li><code>_build_preprocessing_stage_kwargs</code> passa a incluir
+  <code>"max_workers": args.max_workers</code>.</li>
+<li><code>_build_labeling_stage_kwargs</code> passa a incluir
+  <code>"max_workers": args.max_workers</code>.</li>
+<li>Docstring do argumento <code>--max-workers</code> (linha ~124-128) atualizada para
+  listar também <code>preprocessing</code>/<code>labeling</code>.</li>
+</ul>
+<h2 id="testes">Testes<a class="headerlink" href="#testes" title="Permanent link">&para;</a></h2>
+<p>CLAUDE.md exige cobertura ≥ 80%; as mudanças acima quebram testes
+existentes (schema antigo) e introduzem código novo sem cobertura. O plano
+de implementação inclui:</p>
+<ul>
+<li><strong><code>tests/test_schemas.py</code></strong>: reescrever os casos de <code>RawTweetSchema</code> para
+  o novo conjunto de colunas (válido, coluna ausente, <code>tweet_id</code>
+  duplicado, tipo incorreto).</li>
+<li><strong><code>tests/test_data.py</code></strong>: substituir <code>TestLoadRawTweetDataset</code> (arquivo
+  único) por testes de <code>load_raw_tweet_batch</code> — diretório com múltiplos
+  arquivos válidos concatenados corretamente, diretório vazio
+  (<code>EmptyDatasetError</code>), um arquivo corrompido isolado sem abortar os
+  demais, <code>tweet_id</code> duplicado entre dois arquivos rejeitado, renomeação
+  <code>tweet_id -&gt; id</code> confirmada no resultado.</li>
+<li><strong><code>tests/test_parallel.py</code></strong>: testes para <code>run_parallel_parquet_loading</code>
+  e <code>run_parallel_sentiment_labeling</code> (sucesso, falha isolada, respeita
+  <code>max_workers</code>), seguindo os testes existentes de
+  <code>run_parallel_text_cleaning</code>/<code>run_parallel_predictions</code> como modelo.</li>
+<li><strong><code>tests/test_preprocessing.py</code></strong>: teste para <code>filter_by_raw_metadata</code>
+  (retweet excluído, reply mantido, idioma filtrado, <code>required_language=None</code>
+  desliga o filtro); teste confirmando que
+  <code>run_preprocessing_pipeline</code> com <code>max_workers</code> produz o mesmo resultado
+  (mesma ordem/conteúdo) que a execução serial anterior, e que uma falha
+  de normalização ainda levanta <code>PipelineStageError</code>.</li>
+<li><strong><code>tests/test_labeling.py</code></strong>: teste confirmando que
+  <code>run_cascade_labeling</code> com <code>max_workers</code> produz o mesmo resultado que a
+  execução serial, preservando ordem e correspondência amostra↔rótulo.</li>
+<li>Nenhum teste deve depender de dados reais em <code>data/raw/</code>; todos usam
+  DataFrames/arquivos sintéticos pequenos via <code>tmp_path</code>, como já é padrão
+  no projeto.</li>
+</ul>
+<h2 id="addendum-durante-o-planejamento-pre-requisito-de-serializacao-de-excecoes">Addendum (durante o planejamento): pré-requisito de serialização de exceções<a class="headerlink" href="#addendum-durante-o-planejamento-pre-requisito-de-serializacao-de-excecoes" title="Permanent link">&para;</a></h2>
+<p>Ao detalhar a implementação, foi encontrado um bug pré-existente que bloqueia
+diretamente a Decisão 3: toda exceção customizada do projeto herda de
+<code>ProjectError</code>, mas sobrescreve <code>__init__</code> com parâmetros próprios (ex.:
+<code>PipelineStageError(stage_name, detail)</code>). O pickle padrão do Python
+reconstrói uma exceção via <code>cls(*self.args)</code>, incompatível com esse padrão —
+confirmado empiricamente: levantar <code>PipelineStageError</code> dentro de um worker
+de <code>ProcessPoolExecutor</code> não propaga <code>PipelineStageError</code> ao processo pai,
+e sim <code>concurrent.futures.process.BrokenProcessPool</code>, quebrando o pool
+inteiro (violando a garantia de "isolar a falha de um único item" que
+<code>parallel/core.py</code> documenta e todo o projeto assume).</p>
+<p>Corrigido na raiz com um <code>ProjectError.__reduce__</code> que reconstrói a
+instância via <code>__new__</code> (sem chamar o <code>__init__</code> da subclasse) — sem
+mudança de comportamento para nenhum uso existente, apenas torna toda a
+hierarquia de exceções do projeto segura para atravessar um
+<code>ProcessPoolExecutor</code>. Vira o primeiro item do plano de implementação
+(pré-requisito da paralelização de <code>preprocessing/pipeline.py</code>).</p>
+<h2 id="riscos-e-mitigacao">Riscos e mitigação<a class="headerlink" href="#riscos-e-mitigacao" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Reordenação por conclusão em vez de submissão</strong>: mitigado pelo padrão
+  indexado + <code>sorted(..., key=operator.itemgetter(0))</code>, já validado em
+  produção por <code>inference/llm_batch.py</code>.</li>
+<li><strong>Overhead de <code>ProcessPoolExecutor</code> em lotes pequenos</strong> (os 10 arquivos
+  atuais somam poucas centenas de linhas): <code>max_workers=None</code> deixa o
+  executor decidir; não há motivo para forçar paralelismo em datasets
+  pequenos — o ganho aparece quando o volume de tweets crescer, que é o
+  cenário que motiva esta mudança.</li>
+<li><strong><code>RawTweetSchema</code> mais rígido pode rejeitar arquivos reais com
+  variações de schema</strong> (ex.: coluna ausente em coletas mais antigas): não
+  há evidência disso nos 10 arquivos inspecionados (mesmas 13 colunas em
+  todos); se surgir, é um problema de dados a tratar caso a caso, não algo
+  a acomodar preventivamente no schema.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Voltar para o topo
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Código sob licença MIT. Os dados não são redistribuídos.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/luanfreitas5" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.instant", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copiado para \u00e1rea de transfer\u00eancia", "clipboard.copy": "Copiar para \u00e1rea de transfer\u00eancia", "search.result.more.one": "mais 1 nesta p\u00e1gina", "search.result.more.other": "# mais nesta p\u00e1gina", "search.result.none": "Nenhum documento encontrado", "search.result.one": "1 documento encontrado", "search.result.other": "# documentos encontrados", "search.result.placeholder": "Digite para iniciar a busca", "search.result.term.missing": "Ausente", "select.version": "Selecione a vers\u00e3o"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
