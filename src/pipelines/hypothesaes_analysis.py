@@ -159,6 +159,264 @@ def _build_dataset_summary(
     }
 
 
+@dataclass(frozen=True)
+class _CorpusSplitArtifacts:
+    """Divisão treino/validação/holdout do corpus preparado, com textos/rótulos já extraídos."""
+
+    holdout_split: pl.DataFrame
+    texts: list[str]
+    low_confidence_labels: list[int]
+    validation_texts: list[str]
+    holdout_texts: list[str]
+    cache_name: str
+
+
+def _split_corpus_for_analysis(
+    corpus: pl.DataFrame,
+    *,
+    label_column: str,
+    text_column: str,
+    selection_method: str,
+    m_total_neurons: int,
+    k_active_neurons: int,
+    evaluate_on_holdout: bool,
+    holdout_size: float,
+    validation_size: float,
+    random_seed: int,
+) -> _CorpusSplitArtifacts:
+    """Divide o corpus em treino/validação/holdout e extrai textos, rótulos e o nome do cache."""
+    split_corpus = create_stratified_split(
+        corpus,
+        label_column=label_column,
+        split_column=_SPLIT_COLUMN,
+        test_size=holdout_size if evaluate_on_holdout else 0.0,
+        validation_size=validation_size,
+        random_seed=random_seed,
+    )
+    train_split = split_corpus.filter(pl.col(_SPLIT_COLUMN) == "treino")
+    validation_split = split_corpus.filter(pl.col(_SPLIT_COLUMN) == "validacao")
+    holdout_split = split_corpus.filter(pl.col(_SPLIT_COLUMN) == "teste")
+
+    texts = train_split[text_column].to_list()
+    low_confidence_labels = train_split[_LOW_CONFIDENCE_COLUMN].to_list()
+    validation_texts = validation_split[text_column].to_list()
+    holdout_texts = holdout_split[text_column].to_list() if evaluate_on_holdout else []
+
+    cache_name = _build_cache_name(
+        selection_method=selection_method,
+        n_train=len(texts),
+        n_validation=len(validation_texts),
+        m_total_neurons=m_total_neurons,
+        k_active_neurons=k_active_neurons,
+    )
+    logger.info(
+        "Split -> treino: %d | validação: %d%s",
+        len(texts),
+        len(validation_texts),
+        f" | holdout: {len(holdout_texts)}" if evaluate_on_holdout else "",
+    )
+    return _CorpusSplitArtifacts(
+        holdout_split=holdout_split,
+        texts=texts,
+        low_confidence_labels=low_confidence_labels,
+        validation_texts=validation_texts,
+        holdout_texts=holdout_texts,
+        cache_name=cache_name,
+    )
+
+
+def _train_sae_on_embeddings(
+    texts: list[str],
+    validation_texts: list[str],
+    holdout_texts: list[str],
+    *,
+    embedder_model_name: str,
+    embedding_batch_size: int,
+    cache_name: str,
+    m_total_neurons: int,
+    k_active_neurons: int,
+    matryoshka_prefix_lengths: list[int] | None,
+    checkpoint_dir: Path,
+) -> tuple[Any, list[Any]]:
+    """Calcula embeddings locais do corpus e treina (ou carrega do checkpoint) o SAE.
+
+    Import tardio: ``hypothesaes`` depende de ``torch`` (dependência opcional,
+    extra ``hypothesaes``/``llm`` de ``pyproject.toml``) e não pode ser
+    importado no topo do módulo sem tornar o pacote ``pipelines`` inteiro
+    (e, por cascata, ``main.py``) dependente de torch só para ser importado.
+    """
+    from hypothesaes.embedding import extract_local_embeddings
+    from hypothesaes.quickstart import train_sae
+
+    logger.info("Calculando embeddings ('%s')...", embedder_model_name)
+    text_to_embedding = extract_local_embeddings(
+        texts + validation_texts + holdout_texts,
+        model=embedder_model_name,
+        batch_size=embedding_batch_size,
+        cache_name=cache_name,
+    )
+    train_embeddings = [text_to_embedding[text] for text in texts]
+    validation_embeddings = [text_to_embedding[text] for text in validation_texts]
+
+    logger.info("Treinando/carregando o Sparse Autoencoder...")
+    sae = train_sae(
+        embeddings=train_embeddings,
+        m_total_neurons=m_total_neurons,
+        k_active_neurons=k_active_neurons,
+        matryoshka_prefix_lengths=matryoshka_prefix_lengths,
+        val_embeddings=validation_embeddings,
+        checkpoint_dir=checkpoint_dir,
+    )
+    return sae, train_embeddings
+
+
+def _discover_and_save_patterns(
+    texts: list[str],
+    train_embeddings: list[Any],
+    sae: Any,
+    paths: ProjectPaths,
+    *,
+    n_random_neurons: int,
+    interpreter_model: str,
+    n_examples_for_interpretation: int,
+    max_words_per_example: int,
+    max_interpretation_tokens: int | None,
+    task_specific_instructions: str | None,
+) -> pl.DataFrame:
+    """Interpreta uma amostra de neurônios do SAE (descoberta de padrões) e salva o resultado."""
+    from hypothesaes.quickstart import interpret_sae
+
+    logger.info("Descoberta de padrões: interpretando neurônios do SAE...")
+    patterns = pl.from_pandas(
+        interpret_sae(
+            texts=texts,
+            embeddings=train_embeddings,
+            sae=sae,
+            n_random_neurons=n_random_neurons,
+            interpreter_model=interpreter_model,
+            n_examples_for_interpretation=n_examples_for_interpretation,
+            max_words_per_example=max_words_per_example,
+            max_interpretation_tokens=max_interpretation_tokens,
+            task_specific_instructions=task_specific_instructions,
+        )
+    )
+    write_csv(patterns, paths.reports_interpretability_dir / _PATTERNS_FILE_NAME)
+    return patterns
+
+
+@dataclass(frozen=True)
+class _HypothesesArtifacts:
+    """Hipóteses geradas, tabela top-N consolidada e figura salva."""
+
+    hypotheses: pl.DataFrame
+    top_hypotheses_table: pl.DataFrame
+    figure_paths: tuple[Path, Path]
+
+
+def _generate_and_save_hypotheses(
+    texts: list[str],
+    low_confidence_labels: list[int],
+    train_embeddings: list[Any],
+    sae: Any,
+    paths: ProjectPaths,
+    *,
+    cache_name: str,
+    selection_method: str,
+    n_selected_neurons: int,
+    interpreter_model: str,
+    annotator_model: str,
+    n_examples_for_interpretation: int,
+    max_words_per_example: int,
+    max_interpretation_tokens: int | None,
+    n_scoring_examples: int,
+    n_workers: int,
+    task_specific_instructions: str | None,
+) -> _HypothesesArtifacts:
+    """Gera as hipóteses de inconsistência, consolida a tabela top-N e salva o gráfico."""
+    from hypothesaes.quickstart import generate_hypotheses
+
+    logger.info("Identificação de inconsistências: gerando hipóteses...")
+    target_column = f"target_{selection_method}"
+    hypotheses = pl.from_pandas(
+        generate_hypotheses(
+            texts=texts,
+            labels=low_confidence_labels,
+            embeddings=train_embeddings,
+            sae=sae,
+            cache_name=cache_name,
+            classification=True,
+            selection_method=selection_method,
+            n_selected_neurons=n_selected_neurons,
+            interpreter_model=interpreter_model,
+            annotator_model=annotator_model,
+            n_examples_for_interpretation=n_examples_for_interpretation,
+            max_words_per_example=max_words_per_example,
+            max_interpretation_tokens=max_interpretation_tokens,
+            n_scoring_examples=n_scoring_examples,
+            n_workers_interpretation=n_workers,
+            n_workers_annotation=n_workers,
+            task_specific_instructions=task_specific_instructions,
+        ).sort_values(by=target_column, ascending=False)
+    )
+    write_csv(hypotheses, paths.reports_interpretability_dir / _HYPOTHESES_FILE_NAME)
+
+    top_hypotheses_table = build_top_hypotheses_table(hypotheses, target_column=target_column)
+    save_top_hypotheses_table(
+        top_hypotheses_table, paths.reports_interpretability_dir / _TOP_HYPOTHESES_FILE_NAME
+    )
+    figure = plot_hypotheses_bars(
+        top_hypotheses_table,
+        target_column=target_column,
+        title=f"Hipóteses x baixa confiança — método '{selection_method}'",
+    )
+    figure_paths = save_figure(figure, _FIGURE_NAME, directory=paths.reports_figures_dir)
+    return _HypothesesArtifacts(
+        hypotheses=hypotheses,
+        top_hypotheses_table=top_hypotheses_table,
+        figure_paths=figure_paths,
+    )
+
+
+def _evaluate_hypotheses_on_holdout(
+    hypotheses: pl.DataFrame,
+    holdout_split: pl.DataFrame,
+    holdout_texts: list[str],
+    paths: ProjectPaths,
+    *,
+    evaluate_on_holdout: bool,
+    cache_name: str,
+    annotator_model: str,
+    n_workers: int,
+) -> dict[str, Any] | None:
+    """Avalia as hipóteses em holdout via LLM, quando habilitado; ``None`` caso contrário."""
+    if not evaluate_on_holdout:
+        return None
+    if holdout_split.height == 0:
+        raise EmptyDatasetError("holdout_split")
+
+    from hypothesaes.quickstart import evaluate_hypotheses
+
+    logger.info("Avaliando hipóteses no holdout (via LLM)...")
+    metrics, evaluation_df = evaluate_hypotheses(
+        hypotheses_df=hypotheses.to_pandas(),
+        texts=holdout_texts,
+        labels=holdout_split[_LOW_CONFIDENCE_COLUMN].to_list(),
+        cache_name=cache_name,
+        annotator_model=annotator_model,
+        classification=True,
+        n_workers_annotation=n_workers,
+    )
+    write_csv(
+        pl.from_pandas(evaluation_df),
+        paths.reports_interpretability_dir / _HOLDOUT_EVALUATION_FILE_NAME,
+    )
+    holdout_metrics = {
+        key: (list(value) if isinstance(value, tuple) else value) for key, value in metrics.items()
+    }
+    write_json(holdout_metrics, paths.reports_interpretability_dir / _HOLDOUT_METRICS_FILE_NAME)
+    return holdout_metrics
+
+
 def run_hypothesaes_analysis_stage(
     labeled_corpus: pl.DataFrame,
     paths: ProjectPaths,
@@ -284,18 +542,6 @@ def run_hypothesaes_analysis_stage(
     --------
     >>> run_hypothesaes_analysis_stage(labeled_corpus, paths)  # doctest: +SKIP
     """
-    # Import tardio: `hypothesaes` depende de `torch` (dependência opcional,
-    # extra `hypothesaes`/`llm` de pyproject.toml) e não pode ser importado
-    # no topo do módulo sem tornar o pacote `pipelines` inteiro (e, por
-    # cascata, `main.py`) dependente de torch só para ser importado.
-    from hypothesaes.embedding import extract_local_embeddings
-    from hypothesaes.quickstart import (
-        evaluate_hypotheses,
-        generate_hypotheses,
-        interpret_sae,
-        train_sae,
-    )
-
     validate_not_empty_collection(labeled_corpus, collection_name="labeled_corpus")
     corpus = _prepare_corpus(
         labeled_corpus,
@@ -320,134 +566,70 @@ def run_hypothesaes_analysis_stage(
     )
 
     with measure_execution_time() as execution_timing:
-        split_corpus = create_stratified_split(
+        split = _split_corpus_for_analysis(
             corpus,
             label_column=label_column,
-            split_column=_SPLIT_COLUMN,
-            test_size=holdout_size if evaluate_on_holdout else 0.0,
+            text_column=text_column,
+            selection_method=selection_method,
+            m_total_neurons=m_total_neurons,
+            k_active_neurons=k_active_neurons,
+            evaluate_on_holdout=evaluate_on_holdout,
+            holdout_size=holdout_size,
             validation_size=validation_size,
             random_seed=random_seed,
         )
-        train_split = split_corpus.filter(pl.col(_SPLIT_COLUMN) == "treino")
-        validation_split = split_corpus.filter(pl.col(_SPLIT_COLUMN) == "validacao")
-        holdout_split = split_corpus.filter(pl.col(_SPLIT_COLUMN) == "teste")
-
-        texts = train_split[text_column].to_list()
-        low_confidence_labels = train_split[_LOW_CONFIDENCE_COLUMN].to_list()
-        validation_texts = validation_split[text_column].to_list()
-        holdout_texts = holdout_split[text_column].to_list() if evaluate_on_holdout else []
-
-        cache_name = _build_cache_name(
-            selection_method=selection_method,
-            n_train=len(texts),
-            n_validation=len(validation_texts),
-            m_total_neurons=m_total_neurons,
-            k_active_neurons=k_active_neurons,
-        )
-        logger.info(
-            "Split -> treino: %d | validação: %d%s",
-            len(texts),
-            len(validation_texts),
-            f" | holdout: {len(holdout_texts)}" if evaluate_on_holdout else "",
-        )
-
-        logger.info("Calculando embeddings ('%s')...", embedder_model_name)
-        text_to_embedding = extract_local_embeddings(
-            texts + validation_texts + holdout_texts,
-            model=embedder_model_name,
-            batch_size=embedding_batch_size,
-            cache_name=cache_name,
-        )
-        train_embeddings = [text_to_embedding[text] for text in texts]
-        validation_embeddings = [text_to_embedding[text] for text in validation_texts]
-
-        logger.info("Treinando/carregando o Sparse Autoencoder...")
-        sae = train_sae(
-            embeddings=train_embeddings,
+        sae, train_embeddings = _train_sae_on_embeddings(
+            split.texts,
+            split.validation_texts,
+            split.holdout_texts,
+            embedder_model_name=embedder_model_name,
+            embedding_batch_size=embedding_batch_size,
+            cache_name=split.cache_name,
             m_total_neurons=m_total_neurons,
             k_active_neurons=k_active_neurons,
             matryoshka_prefix_lengths=matryoshka_prefix_lengths,
-            val_embeddings=validation_embeddings,
-            checkpoint_dir=paths.models_checkpoints_dir / _CHECKPOINTS_SUBDIR / cache_name,
+            checkpoint_dir=paths.models_checkpoints_dir / _CHECKPOINTS_SUBDIR / split.cache_name,
         )
-
-        logger.info("Descoberta de padrões: interpretando neurônios do SAE...")
-        patterns = pl.from_pandas(
-            interpret_sae(
-                texts=texts,
-                embeddings=train_embeddings,
-                sae=sae,
-                n_random_neurons=n_random_neurons,
-                interpreter_model=interpreter_model,
-                n_examples_for_interpretation=n_examples_for_interpretation,
-                max_words_per_example=max_words_per_example,
-                max_interpretation_tokens=max_interpretation_tokens,
-                task_specific_instructions=task_specific_instructions,
-            )
+        patterns = _discover_and_save_patterns(
+            split.texts,
+            train_embeddings,
+            sae,
+            paths,
+            n_random_neurons=n_random_neurons,
+            interpreter_model=interpreter_model,
+            n_examples_for_interpretation=n_examples_for_interpretation,
+            max_words_per_example=max_words_per_example,
+            max_interpretation_tokens=max_interpretation_tokens,
+            task_specific_instructions=task_specific_instructions,
         )
-        write_csv(patterns, paths.reports_interpretability_dir / _PATTERNS_FILE_NAME)
-
-        logger.info("Identificação de inconsistências: gerando hipóteses...")
-        target_column = f"target_{selection_method}"
-        hypotheses = pl.from_pandas(
-            generate_hypotheses(
-                texts=texts,
-                labels=low_confidence_labels,
-                embeddings=train_embeddings,
-                sae=sae,
-                cache_name=cache_name,
-                classification=True,
-                selection_method=selection_method,
-                n_selected_neurons=n_selected_neurons,
-                interpreter_model=interpreter_model,
-                annotator_model=annotator_model,
-                n_examples_for_interpretation=n_examples_for_interpretation,
-                max_words_per_example=max_words_per_example,
-                max_interpretation_tokens=max_interpretation_tokens,
-                n_scoring_examples=n_scoring_examples,
-                n_workers_interpretation=n_workers,
-                n_workers_annotation=n_workers,
-                task_specific_instructions=task_specific_instructions,
-            ).sort_values(by=target_column, ascending=False)
+        hypotheses_artifacts = _generate_and_save_hypotheses(
+            split.texts,
+            split.low_confidence_labels,
+            train_embeddings,
+            sae,
+            paths,
+            cache_name=split.cache_name,
+            selection_method=selection_method,
+            n_selected_neurons=n_selected_neurons,
+            interpreter_model=interpreter_model,
+            annotator_model=annotator_model,
+            n_examples_for_interpretation=n_examples_for_interpretation,
+            max_words_per_example=max_words_per_example,
+            max_interpretation_tokens=max_interpretation_tokens,
+            n_scoring_examples=n_scoring_examples,
+            n_workers=n_workers,
+            task_specific_instructions=task_specific_instructions,
         )
-        write_csv(hypotheses, paths.reports_interpretability_dir / _HYPOTHESES_FILE_NAME)
-
-        top_hypotheses_table = build_top_hypotheses_table(hypotheses, target_column=target_column)
-        save_top_hypotheses_table(
-            top_hypotheses_table, paths.reports_interpretability_dir / _TOP_HYPOTHESES_FILE_NAME
+        holdout_metrics = _evaluate_hypotheses_on_holdout(
+            hypotheses_artifacts.hypotheses,
+            split.holdout_split,
+            split.holdout_texts,
+            paths,
+            evaluate_on_holdout=evaluate_on_holdout,
+            cache_name=split.cache_name,
+            annotator_model=annotator_model,
+            n_workers=n_workers,
         )
-        figure = plot_hypotheses_bars(
-            top_hypotheses_table,
-            target_column=target_column,
-            title=f"Hipóteses x baixa confiança — método '{selection_method}'",
-        )
-        figure_paths = save_figure(figure, _FIGURE_NAME, directory=paths.reports_figures_dir)
-
-        holdout_metrics: dict[str, Any] | None = None
-        if evaluate_on_holdout:
-            if holdout_split.height == 0:
-                raise EmptyDatasetError("holdout_split")
-            logger.info("Avaliando hipóteses no holdout (via LLM)...")
-            metrics, evaluation_df = evaluate_hypotheses(
-                hypotheses_df=hypotheses.to_pandas(),
-                texts=holdout_texts,
-                labels=holdout_split[_LOW_CONFIDENCE_COLUMN].to_list(),
-                cache_name=cache_name,
-                annotator_model=annotator_model,
-                classification=True,
-                n_workers_annotation=n_workers,
-            )
-            write_csv(
-                pl.from_pandas(evaluation_df),
-                paths.reports_interpretability_dir / _HOLDOUT_EVALUATION_FILE_NAME,
-            )
-            holdout_metrics = {
-                key: (list(value) if isinstance(value, tuple) else value)
-                for key, value in metrics.items()
-            }
-            write_json(
-                holdout_metrics, paths.reports_interpretability_dir / _HOLDOUT_METRICS_FILE_NAME
-            )
 
     summary = _build_dataset_summary(
         corpus, label_column=label_column, score_threshold=score_threshold
@@ -469,14 +651,14 @@ def run_hypothesaes_analysis_stage(
         "Etapa 'hypothesaes_analysis' concluída em %.1fs: %d padrão(ões), %d hipótese(s).",
         execution_timing.elapsed_seconds,
         patterns.height,
-        hypotheses.height,
+        hypotheses_artifacts.hypotheses.height,
     )
     return HypothesaesArtifacts(
         low_confidence_tweets=low_confidence_tweets,
         patterns=patterns,
-        hypotheses=hypotheses,
-        top_hypotheses_table=top_hypotheses_table,
+        hypotheses=hypotheses_artifacts.hypotheses,
+        top_hypotheses_table=hypotheses_artifacts.top_hypotheses_table,
         holdout_metrics=holdout_metrics,
-        figure_paths=figure_paths,
+        figure_paths=hypotheses_artifacts.figure_paths,
         summary_path=summary_path,
     )
