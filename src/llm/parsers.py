@@ -34,7 +34,7 @@ _JSON_OBJECT_PATTERN = re.compile(r"\{.*\}", re.DOTALL)
 class SentimentLLMOutput(BaseModel):
     """Contrato de saída estruturada de um LLM para classificação de sentimento.
 
-    Parameters
+    Attributes
     ----------
     sentiment_label : str
         Rótulo de sentimento predito, normalizado (minúsculas, sem espaços
