@@ -26,7 +26,36 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/dependency-review-action@v5
+      - name: Verificar suporte ao Dependency Review
+        id: dependency-review-support
+        run: |
+          set -euo pipefail
+
+          response_file="$(mktemp)"
+          status_code="$(
+            curl -sS -o "${response_file}" -w "%{http_code}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${{ github.repository }}/dependency-graph/compare/${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+          )"
+
+          if [[ "${status_code}" == "200" ]]; then
+            echo "supported=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if grep -q "Dependency review is not supported on this repository" "${response_file}"; then
+            echo "::warning::Dependency Review não é suportado neste repositório (Dependency Graph desativado). Job marcado como sucesso para não bloquear o PR."
+            echo "supported=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "::error::Falha ao verificar suporte ao Dependency Review (HTTP ${status_code})."
+          cat "${response_file}"
+          exit 1
+
+      - if: steps.dependency-review-support.outputs.supported == 'true'
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: always
