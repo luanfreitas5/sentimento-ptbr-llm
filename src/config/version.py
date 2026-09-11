@@ -47,9 +47,9 @@ def get_project_version(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> s
     '0.2.0'
     """
     with pyproject_file_path.open("rb") as file:
-        dados = tomllib.load(file)
+        data = tomllib.load(file)
     try:
-        return dados["project"]["version"]
+        return data["project"]["version"]
     except KeyError as exception:
         raise InvalidConfigurationError(
             f"chave 'project.version' não encontrada em {pyproject_file_path}"
@@ -81,9 +81,9 @@ def get_project_name(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> str:
     'sentimento-ptbr-llm'
     """
     with pyproject_file_path.open("rb") as file:
-        dados = tomllib.load(file)
+        data = tomllib.load(file)
     try:
-        return dados["project"]["name"]
+        return data["project"]["name"]
     except KeyError as exception:
         raise InvalidConfigurationError(
             f"chave 'project.name' não encontrada em {pyproject_file_path}"

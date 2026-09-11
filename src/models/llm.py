@@ -203,12 +203,13 @@ def build_sentiment_prompt(
     instructions = (
         "Classifique o sentimento do texto em português brasileiro abaixo em "
         f"uma das classes {labels_text}. Responda apenas com um objeto JSON "
-        'contendo as chaves "sentimento", "confianca" (entre 0.0 e 1.0) e '
-        '"justificativa".'
+        'contendo as chaves "sentiment_label", "confidence_score" (entre 0.0 e 1.0) e '
+        '"justification".'
     )
     example_blocks = [
         f'Texto: "{example_text}"\nResposta: '
-        f'{{"sentimento": "{example_label}", "confianca": 1.0, "justificativa": "exemplo"}}'
+        f'{{"sentiment_label": "{example_label}", "confidence_score": 1.0, '
+        '"justification": "exemplo"}'
         for example_text, example_label in few_shot_examples
     ]
     prompt_sections = [instructions, *example_blocks, f'Texto: "{text}"\nResposta:']
@@ -234,12 +235,12 @@ def parse_llm_sentiment_output(
     tuple[str | None, float]
         Par ``(rótulo, confiança)`` quando a resposta é interpretável, ou
         ``(None, 0.0)`` quando não contém um objeto JSON válido, falta a
-        chave ``"sentimento"`` ou o rótulo extraído não pertence a
+        chave ``"sentiment_label"`` ou o rótulo extraído não pertence a
         ``allowed_labels``.
 
     Examples
     --------
-    >>> parse_llm_sentiment_output('{"sentimento": "positivo", "confianca": 0.9}')
+    >>> parse_llm_sentiment_output('{"sentiment_label": "positivo", "confidence_score": 0.9}')
     ('positivo', 0.9)
     >>> parse_llm_sentiment_output("resposta sem json")
     (None, 0.0)
@@ -250,8 +251,8 @@ def parse_llm_sentiment_output(
         return None, 0.0
     try:
         parsed = json.loads(match.group(0))
-        label = str(parsed["sentimento"]).strip().lower()
-        confidence = float(parsed.get("confianca", 0.0))
+        label = str(parsed["sentiment_label"]).strip().lower()
+        confidence = float(parsed.get("confidence_score", 0.0))
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exception:
         logger.warning("Falha ao decodificar resposta do LLM: %s", exception)
         return None, 0.0

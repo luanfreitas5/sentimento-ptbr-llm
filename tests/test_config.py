@@ -19,6 +19,8 @@ from config.version import get_project_name, get_project_version, read_latest_ch
 from exceptions.configuration import InvalidConfigurationError, MissingEnvironmentVariableError
 from io_utils.yaml import write_yaml
 
+VERSION = "0.3.0"  # Atualize este valor conforme a versão real do projeto
+
 
 class TestPaths:
     """Testes da resolução centralizada de caminhos do projeto."""
@@ -210,7 +212,7 @@ class TestVersion:
 
     def test_get_project_version_matches_pyproject(self) -> None:
         """A versão lida deve corresponder à declarada em pyproject.toml."""
-        assert get_project_version() == "0.2.0"
+        assert get_project_version() == VERSION
 
     def test_get_project_name_matches_pyproject(self) -> None:
         """O nome lido deve corresponder ao declarado em pyproject.toml."""
@@ -227,7 +229,7 @@ class TestVersion:
     def test_read_latest_changelog_entry_returns_most_recent_section(self) -> None:
         """Deve retornar a primeira seção '## ...' do CHANGELOG.md real do projeto."""
         latest_changelog_entry = read_latest_changelog_entry()
-        assert latest_changelog_entry.startswith("## v0.2.0")
+        assert latest_changelog_entry.startswith("## v" + VERSION)
 
     def test_read_latest_changelog_entry_returns_empty_string_when_no_entries(
         self, tmp_path: Path
