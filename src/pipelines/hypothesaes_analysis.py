@@ -54,6 +54,61 @@ _FIGURE_NAME = "hypothesaes_hipoteses"
 _CHECKPOINTS_SUBDIR = "hypothesaes"
 
 
+def extract_local_embeddings(texts: list[str], **kwargs: Any) -> dict[str, Any]:
+    """Import tardio de :func:`hypothesaes.embedding.extract_local_embeddings`.
+
+    Definida como função de módulo (em vez de um import direto dentro de
+    ``_train_sae_on_embeddings``) para que os testes possam substituí-la por
+    um dublê via ``monkeypatch.setattr``, sem tornar ``hypothesaes`` (e, por
+    cascata, ``torch``) uma dependência obrigatória apenas para importar este
+    módulo (dependência opcional, extra ``hypothesaes``/``llm`` de
+    ``pyproject.toml``).
+    """
+    from hypothesaes.embedding import extract_local_embeddings as _extract_local_embeddings
+
+    return _extract_local_embeddings(texts, **kwargs)
+
+
+def train_sae(**kwargs: Any) -> Any:
+    """Import tardio de :func:`hypothesaes.quickstart.train_sae`.
+
+    Ver :func:`extract_local_embeddings` para a justificativa.
+    """
+    from hypothesaes.quickstart import train_sae as _train_sae
+
+    return _train_sae(**kwargs)
+
+
+def interpret_sae(**kwargs: Any) -> Any:
+    """Import tardio de :func:`hypothesaes.quickstart.interpret_sae`.
+
+    Ver :func:`extract_local_embeddings` para a justificativa.
+    """
+    from hypothesaes.quickstart import interpret_sae as _interpret_sae
+
+    return _interpret_sae(**kwargs)
+
+
+def generate_hypotheses(**kwargs: Any) -> Any:
+    """Import tardio de :func:`hypothesaes.quickstart.generate_hypotheses`.
+
+    Ver :func:`extract_local_embeddings` para a justificativa.
+    """
+    from hypothesaes.quickstart import generate_hypotheses as _generate_hypotheses
+
+    return _generate_hypotheses(**kwargs)
+
+
+def evaluate_hypotheses(**kwargs: Any) -> tuple[dict[str, Any], Any]:
+    """Import tardio de :func:`hypothesaes.quickstart.evaluate_hypotheses`.
+
+    Ver :func:`extract_local_embeddings` para a justificativa.
+    """
+    from hypothesaes.quickstart import evaluate_hypotheses as _evaluate_hypotheses
+
+    return _evaluate_hypotheses(**kwargs)
+
+
 @dataclass(frozen=True)
 class HypothesaesArtifacts:
     """Resultado consolidado do estágio ``hypothesaes_analysis``.
@@ -240,14 +295,10 @@ def _train_sae_on_embeddings(
 ) -> tuple[Any, list[Any]]:
     """Calcula embeddings locais do corpus e treina (ou carrega do checkpoint) o SAE.
 
-    Import tardio: ``hypothesaes`` depende de ``torch`` (dependência opcional,
-    extra ``hypothesaes``/``llm`` de ``pyproject.toml``) e não pode ser
-    importado no topo do módulo sem tornar o pacote ``pipelines`` inteiro
-    (e, por cascata, ``main.py``) dependente de torch só para ser importado.
+    Usa :func:`extract_local_embeddings` e :func:`train_sae` (import tardio de
+    ``hypothesaes``, ver suas docstrings) em vez de chamar ``hypothesaes``
+    diretamente.
     """
-    from hypothesaes.embedding import extract_local_embeddings
-    from hypothesaes.quickstart import train_sae
-
     logger.info("Calculando embeddings ('%s')...", embedder_model_name)
     text_to_embedding = extract_local_embeddings(
         texts + validation_texts + holdout_texts,
@@ -284,8 +335,6 @@ def _discover_and_save_patterns(
     task_specific_instructions: str | None,
 ) -> pl.DataFrame:
     """Interpreta uma amostra de neurônios do SAE (descoberta de padrões) e salva o resultado."""
-    from hypothesaes.quickstart import interpret_sae
-
     logger.info("Descoberta de padrões: interpretando neurônios do SAE...")
     patterns = pl.from_pandas(
         interpret_sae(
@@ -333,8 +382,6 @@ def _generate_and_save_hypotheses(
     task_specific_instructions: str | None,
 ) -> _HypothesesArtifacts:
     """Gera as hipóteses de inconsistência, consolida a tabela top-N e salva o gráfico."""
-    from hypothesaes.quickstart import generate_hypotheses
-
     logger.info("Identificação de inconsistências: gerando hipóteses...")
     target_column = f"target_{selection_method}"
     hypotheses = pl.from_pandas(
@@ -393,8 +440,6 @@ def _evaluate_hypotheses_on_holdout(
         return None
     if holdout_split.height == 0:
         raise EmptyDatasetError("holdout_split")
-
-    from hypothesaes.quickstart import evaluate_hypotheses
 
     logger.info("Avaliando hipóteses no holdout (via LLM)...")
     metrics, evaluation_df = evaluate_hypotheses(
