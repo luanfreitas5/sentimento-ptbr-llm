@@ -22,8 +22,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import torch  # type: ignore[reportMissingImports]
 
+from exceptions.model import ModelError
 from hypothesaes.annotate import annotate_texts_with_concepts
 from hypothesaes.evaluation import score_hypotheses
 from hypothesaes.interpret_neurons import (
@@ -39,6 +39,20 @@ from hypothesaes.select_neurons import select_neurons
 from hypothesaes.utils import format_text_for_display
 
 logger = logging.getLogger(__name__)
+
+# `torch` não está nas dependências base do projeto (dependência pesada e
+# opcional, extra `hypothesaes`/`llm` de pyproject.toml). O import é feito no
+# topo do arquivo (funções deste módulo usam `torch.tensor`/`torch.Tensor`
+# diretamente), mas guardado por um erro de projeto claro
+# (:class:`~exceptions.model.ModelError`), em vez de propagar um
+# ``ModuleNotFoundError`` cru — mesmo padrão de ``hypothesaes/sae.py``.
+try:
+    import torch  # type: ignore[reportMissingImports]
+except ImportError as _import_error:  # pragma: no cover - guarda defensiva
+    raise ModelError(
+        "A biblioteca 'torch' não está instalada. Instale com `uv add torch` "
+        "para usar as funções de alto nível do HypotheSAEs."
+    ) from _import_error
 
 
 def _infer_classification_task(labels: np.ndarray) -> bool:

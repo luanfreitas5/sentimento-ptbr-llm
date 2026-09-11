@@ -27,13 +27,6 @@ from constants.defaults import DEFAULT_RANDOM_SEED
 from data.splitter import create_stratified_split
 from evaluation.hypothesaes_report import build_top_hypotheses_table, save_top_hypotheses_table
 from exceptions.data import DataValidationError, EmptyDatasetError
-from hypothesaes.embedding import extract_local_embeddings
-from hypothesaes.quickstart import (
-    evaluate_hypotheses,
-    generate_hypotheses,
-    interpret_sae,
-    train_sae,
-)
 from io_utils.csv import write_csv
 from io_utils.json import write_json
 from utils.timing import measure_execution_time
@@ -291,6 +284,18 @@ def run_hypothesaes_analysis_stage(
     --------
     >>> run_hypothesaes_analysis_stage(labeled_corpus, paths)  # doctest: +SKIP
     """
+    # Import tardio: `hypothesaes` depende de `torch` (dependência opcional,
+    # extra `hypothesaes`/`llm` de pyproject.toml) e não pode ser importado
+    # no topo do módulo sem tornar o pacote `pipelines` inteiro (e, por
+    # cascata, `main.py`) dependente de torch só para ser importado.
+    from hypothesaes.embedding import extract_local_embeddings
+    from hypothesaes.quickstart import (
+        evaluate_hypotheses,
+        generate_hypotheses,
+        interpret_sae,
+        train_sae,
+    )
+
     validate_not_empty_collection(labeled_corpus, collection_name="labeled_corpus")
     corpus = _prepare_corpus(
         labeled_corpus,
