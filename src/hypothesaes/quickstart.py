@@ -227,8 +227,7 @@ def _build_neuron_interpretation_result(
     result: dict[str, Any] = {
         "neuron_idx": idx,
         "interpretation": interpretations[idx][0] if n_candidates == 1 else interpretations[idx],
-        **_metadata_columns(meta),
-    }
+    } | _metadata_columns(meta)
 
     if print_examples_n <= 0:
         return result
@@ -425,9 +424,9 @@ def _build_hypothesis_rows_without_scoring(
             "neuron_idx": idx,
             f"target_{selection_method}": score,
             "interpretation": interpretations[idx][0],
-            **_metadata_columns(interpreter.neuron_metadata.get(idx, [None])[0]),
-            **_get_top_examples(idx, activations, texts, print_examples_n=print_examples_n),
         }
+        | _metadata_columns(interpreter.neuron_metadata.get(idx, [None])[0])
+        | _get_top_examples(idx, activations, texts, print_examples_n=print_examples_n)
         for idx, score in zip(selected_neurons, scores, strict=True)
     ]
 
