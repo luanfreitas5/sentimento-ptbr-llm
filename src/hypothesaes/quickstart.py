@@ -458,6 +458,119 @@ def _build_hypothesis_rows_with_scoring(
     return rows
 
 
+def _select_predictive_neurons(
+    activations: torch.Tensor,
+    labels: np.ndarray,
+    n_selected_neurons: int,
+    selection_method: str,
+    classification: bool,
+) -> tuple[list[int], list[float]]:
+    """Valida `n_selected_neurons` e seleciona os neurônios mais preditivos do alvo (Etapa 1)."""
+    if n_selected_neurons > activations.shape[1]:
+        raise ValueError(
+            f"n_selected_neurons ({n_selected_neurons}) pode ser no máximo o total de "
+            f"neurônios ({activations.shape[1]})"
+        )
+
+    return select_neurons(
+        activations=activations,
+        target=labels,
+        n_select=n_selected_neurons,
+        method=selection_method,
+        classification=classification,
+        verbose=True,
+    )
+
+
+def _interpret_selected_neurons(
+    texts: list[str],
+    activations: torch.Tensor,
+    selected_neurons: list[int],
+    *,
+    cache_name: str | None,
+    interpreter_model: str,
+    annotator_model: str,
+    n_workers_interpretation: int,
+    n_workers_annotation: int,
+    n_examples_for_interpretation: int,
+    max_words_per_example: int,
+    interpret_temperature: float,
+    max_interpretation_tokens: int | None,
+    interpret_llm_kwargs: dict[str, Any] | None,
+    n_candidate_interpretations: int,
+    task_specific_instructions: str | None,
+    min_coverage: float,
+    min_specificity: float,
+) -> tuple[NeuronInterpreter, dict[int, list[str | None]]]:
+    """Interpreta os neurônios selecionados em linguagem natural e filtra por qualidade
+    (Etapa 2)."""
+    interpreter = NeuronInterpreter(
+        cache_name=cache_name,
+        interpreter_model=interpreter_model,
+        annotator_model=annotator_model,
+        n_workers_interpretation=n_workers_interpretation,
+        n_workers_annotation=n_workers_annotation,
+    )
+
+    interpret_config = InterpretConfig(
+        sampling=SamplingConfig(
+            n_examples=n_examples_for_interpretation, max_words_per_example=max_words_per_example
+        ),
+        llm=LLMConfig(
+            temperature=interpret_temperature,
+            max_output_tokens=max_interpretation_tokens,
+            llm_kwargs=interpret_llm_kwargs or {},
+        ),
+        n_candidates=n_candidate_interpretations,
+        task_specific_instructions=task_specific_instructions or DEFAULT_TASK_SPECIFIC_INSTRUCTIONS,
+    )
+
+    interpretations = interpreter.interpret_neurons(
+        texts=texts,
+        activations=activations,
+        neuron_indices=selected_neurons,
+        config=interpret_config,
+    )
+
+    # Os neurônios cuja interpretação (JSON estruturado) não atinge
+    # o nível de qualidade exigido são descartados antes da etapa custosa
+    # de `score_interpretations()`/`annotate()`.
+    # Interpretações em texto simples (sem metadados) nunca são filtradas.
+    # `categoria_probs`, `cobertura` e `especificidade` permanecem como
+    # metadados por neurônio (`interpreter.neuron_metadata`), expostos
+    # como colunas extras abaixo.
+    interpretations = interpreter.filter_by_quality(
+        interpretations,
+        min_coverage=min_coverage,
+        min_specificity=min_specificity,
+    )
+
+    return interpreter, interpretations
+
+
+def _filter_kept_neurons(
+    selected_neurons: list[int],
+    scores: list[float],
+    interpretations: dict[int, list[str | None]],
+) -> tuple[list[int], list[float]]:
+    """Remove da seleção os neurônios descartados por `filter_by_quality()`.
+
+    `filter_by_quality()` pode descartar neurônios inteiros (nenhuma candidata
+    atingiu a barra de qualidade); `selected_neurons`/`scores` precisam ser
+    filtrados em conjunto, senão `interpretations[idx]` levantaria `KeyError`
+    para os neurônios descartados.
+    """
+    kept_neurons_and_scores = [
+        (idx, score)
+        for idx, score in zip(selected_neurons, scores, strict=True)
+        if idx in interpretations
+    ]
+    return (
+        [idx for idx, _ in kept_neurons_and_scores],
+        [score for _, score in kept_neurons_and_scores],
+    )
+
+
 def generate_hypotheses(
     texts: list[str],
     labels: list[int] | list[float] | np.ndarray,
@@ -583,74 +696,32 @@ def generate_hypotheses(
     logger.info("Formato das ativações: %s", activations.shape)
 
     logger.info("Etapa 1: selecionando os %d neurônios mais preditivos", n_selected_neurons)
-    if n_selected_neurons > activations.shape[1]:
-        raise ValueError(
-            f"n_selected_neurons ({n_selected_neurons}) pode ser no máximo o total de "
-            f"neurônios ({activations.shape[1]})"
-        )
-
-    selected_neurons, scores = select_neurons(
-        activations=activations,
-        target=labels,
-        n_select=n_selected_neurons,
-        method=selection_method,
-        classification=classification,
-        verbose=True,
+    selected_neurons, scores = _select_predictive_neurons(
+        activations, labels, n_selected_neurons, selection_method, classification
     )
 
     logger.info("Etapa 2: interpretando os neurônios selecionados")
-    interpreter = NeuronInterpreter(
+    interpreter, interpretations = _interpret_selected_neurons(
+        texts,
+        activations,
+        selected_neurons,
         cache_name=cache_name,
         interpreter_model=interpreter_model,
         annotator_model=annotator_model,
         n_workers_interpretation=n_workers_interpretation,
         n_workers_annotation=n_workers_annotation,
-    )
-
-    interpret_config = InterpretConfig(
-        sampling=SamplingConfig(
-            n_examples=n_examples_for_interpretation, max_words_per_example=max_words_per_example
-        ),
-        llm=LLMConfig(
-            temperature=interpret_temperature,
-            max_output_tokens=max_interpretation_tokens,
-            llm_kwargs=interpret_llm_kwargs or {},
-        ),
-        n_candidates=n_candidate_interpretations,
-        task_specific_instructions=task_specific_instructions or DEFAULT_TASK_SPECIFIC_INSTRUCTIONS,
-    )
-
-    interpretations = interpreter.interpret_neurons(
-        texts=texts,
-        activations=activations,
-        neuron_indices=selected_neurons,
-        config=interpret_config,
-    )
-
-    # Os neurônios cuja interpretação (JSON estruturado) não atinge
-    # o nível de qualidade exigido são descartados antes da etapa custosa
-    # de `score_interpretations()`/`annotate()`.
-    # Interpretações em texto simples (sem metadados) nunca são filtradas.
-    # `categoria_probs`, `cobertura` e `especificidade` permanecem como
-    # metadados por neurônio (`interpreter.neuron_metadata`), expostos
-    # como colunas extras abaixo.
-    interpretations = interpreter.filter_by_quality(
-        interpretations,
+        n_examples_for_interpretation=n_examples_for_interpretation,
+        max_words_per_example=max_words_per_example,
+        interpret_temperature=interpret_temperature,
+        max_interpretation_tokens=max_interpretation_tokens,
+        interpret_llm_kwargs=interpret_llm_kwargs,
+        n_candidate_interpretations=n_candidate_interpretations,
+        task_specific_instructions=task_specific_instructions,
         min_coverage=min_coverage,
         min_specificity=min_specificity,
     )
 
-    # `filter_by_quality()` pode descartar neurônios inteiros (nenhuma candidata
-    # atingiu a barra de qualidade); `selected_neurons`/`scores` precisam ser
-    # filtrados em conjunto, senão `interpretations[idx]` abaixo levantaria
-    # `KeyError` para os neurônios descartados.
-    kept_neurons_and_scores = [
-        (idx, score)
-        for idx, score in zip(selected_neurons, scores, strict=True)
-        if idx in interpretations
-    ]
-    selected_neurons = [idx for idx, _ in kept_neurons_and_scores]
-    scores = [score for _, score in kept_neurons_and_scores]
+    selected_neurons, scores = _filter_kept_neurons(selected_neurons, scores, interpretations)
 
     if n_scoring_examples == 0:
         results = _build_hypothesis_rows_without_scoring(
