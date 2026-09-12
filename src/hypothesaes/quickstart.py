@@ -27,6 +27,8 @@ from exceptions.model import ModelError
 from hypothesaes.annotate import annotate_texts_with_concepts
 from hypothesaes.evaluation import score_hypotheses
 from hypothesaes.interpret_neurons import (
+    DEFAULT_MIN_COVERAGE,
+    DEFAULT_MIN_SPECIFICITY,
     DEFAULT_TASK_SPECIFIC_INSTRUCTIONS,
     InterpretConfig,
     LLMConfig,
@@ -215,14 +217,17 @@ def _build_neuron_interpretation_result(
     texts: list[str],
     print_examples_n: int,
     print_examples_max_chars: int,
+    interpreter: NeuronInterpreter,
 ) -> dict[str, Any]:
     """Monta a linha de resultado de um neurônio interpretado,
     com exemplos de ativação opcionais.
     """
     neuron_activations = activations[:, idx]
+    meta = interpreter.neuron_metadata.get(idx, [None])[0]
     result: dict[str, Any] = {
         "neuron_idx": idx,
         "interpretation": interpretations[idx][0] if n_candidates == 1 else interpretations[idx],
+        **_metadata_columns(meta),
     }
 
     if print_examples_n <= 0:
@@ -370,6 +375,7 @@ def interpret_sae(
             texts,
             print_examples_n,
             print_examples_max_chars,
+            interpreter,
         )
         for idx in neuron_indices
     ]
@@ -377,11 +383,41 @@ def interpret_sae(
     return pd.DataFrame(results_list)
 
 
+def _metadata_columns(meta: dict[str, Any] | None) -> dict[str, Any]:
+    """Exponha categoria_probs/cobertura/especificidade como colunas extras de resultados."""
+    if not meta:
+        return {}
+    return {
+        "categoria_probs": meta.get("categoria_probs"),
+        "cobertura": meta.get("cobertura"),
+        "especificidade": meta.get("especificidade"),
+    }
+
+
+def _get_top_examples(
+    idx: int, activations: np.ndarray, texts: list[str], print_examples_n: int = 3
+) -> dict:
+    """Retorna os exemplos de maior ativação para um neurônio, como colunas extras."""
+    if print_examples_n <= 0:
+        return {}
+    neuron_activations = activations[:, idx]
+    top_indices = np.argsort(neuron_activations)[-print_examples_n:][::-1]
+    top_examples = [texts[i] for i in top_indices]
+    example_dict = {}
+    for i, example in enumerate(top_examples, 1):
+        example_dict[f"top_example_{i}"] = example
+    return example_dict
+
+
 def _build_hypothesis_rows_without_scoring(
     selected_neurons: list[int],
     scores: list[float],
     interpretations: dict[int, list[str | None]],
     selection_method: str,
+    interpreter: NeuronInterpreter,
+    activations: np.ndarray,
+    texts: list[str],
+    print_examples_n: int = 3,
 ) -> list[dict[str, Any]]:
     """Monta as linhas de resultado sem pontuar a fidelidade das interpretações."""
     return [
@@ -389,6 +425,8 @@ def _build_hypothesis_rows_without_scoring(
             "neuron_idx": idx,
             f"target_{selection_method}": score,
             "interpretation": interpretations[idx][0],
+            **_metadata_columns(interpreter.neuron_metadata.get(idx, [None])[0]),
+            **_get_top_examples(idx, activations, texts, print_examples_n=print_examples_n),
         }
         for idx, score in zip(selected_neurons, scores, strict=True)
     ]
@@ -445,6 +483,9 @@ def generate_hypotheses(
     n_workers_interpretation: int = 10,
     n_workers_annotation: int = 30,
     task_specific_instructions: str | None = None,
+    print_examples_n: int = 3,
+    min_coverage: float = DEFAULT_MIN_COVERAGE,
+    min_specificity: float = DEFAULT_MIN_SPECIFICITY,
 ) -> pd.DataFrame:
     """Gera hipóteses interpretáveis a partir de texto, usando um SAE treinado.
 
@@ -506,6 +547,15 @@ def generate_hypotheses(
     task_specific_instructions : str | None, optional
         Instruções específicas da tarefa, incluídas no prompt de
         interpretação, by default None.
+    print_examples_n: int, optional
+        Número de exemplos de ativação principais a serem incluídos como colunas top_example_i
+        (0 para desativar)
+    min_coverage: float, optional
+        Cobertura mínima necessária para que uma interpretação estruturada (JSON) sobreviva
+        ao filtro `filter_by_quality()`; ignorada para interpretações de texto simples.
+    min_specificity: float, optional
+        Especificidade mínima necessária para que uma interpretação estruturada (JSON) sobreviva
+        ao filtro `filter_by_quality()`; ignorada para interpretações de texto simples.
 
     Returns
     -------
@@ -578,9 +628,41 @@ def generate_hypotheses(
         config=interpret_config,
     )
 
+    # Os neurônios cuja interpretação (JSON estruturado) não atinge
+    # o nível de qualidade exigido são descartados antes da etapa custosa
+    # de `score_interpretations()`/`annotate()`.
+    # Interpretações em texto simples (sem metadados) nunca são filtradas.
+    # `categoria_probs`, `cobertura` e `especificidade` permanecem como
+    # metadados por neurônio (`interpreter.neuron_metadata`), expostos
+    # como colunas extras abaixo.
+    interpretations = interpreter.filter_by_quality(
+        interpretations,
+        min_coverage=min_coverage,
+        min_specificity=min_specificity,
+    )
+
+    # `filter_by_quality()` pode descartar neurônios inteiros (nenhuma candidata
+    # atingiu a barra de qualidade); `selected_neurons`/`scores` precisam ser
+    # filtrados em conjunto, senão `interpretations[idx]` abaixo levantaria
+    # `KeyError` para os neurônios descartados.
+    kept_neurons_and_scores = [
+        (idx, score)
+        for idx, score in zip(selected_neurons, scores, strict=True)
+        if idx in interpretations
+    ]
+    selected_neurons = [idx for idx, _ in kept_neurons_and_scores]
+    scores = [score for _, score in kept_neurons_and_scores]
+
     if n_scoring_examples == 0:
         results = _build_hypothesis_rows_without_scoring(
-            selected_neurons, scores, interpretations, selection_method
+            selected_neurons,
+            scores,
+            interpretations,
+            selection_method,
+            interpreter,
+            activations,
+            texts,
+            print_examples_n=print_examples_n,
         )
         return pd.DataFrame(results)
 

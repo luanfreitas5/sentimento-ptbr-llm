@@ -1,4 +1,4 @@
-"""HypotheSAEs: geração de hipóteses interpretáveis via Sparse Autoencoders.
+"""HypotheSAEs: Geração de hipóteses interpretáveis via Sparse Autoencoders.
 
 Porte para este projeto do método HypotheSAEs (Movva et al.), adaptado do
 repositório https://github.com/rmovva/HypotheSAEs. Implementa a análise

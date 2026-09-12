@@ -9,6 +9,7 @@ interpretação: o quanto ela, quando usada como critério de anotação
 """
 
 import concurrent.futures
+import json
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -27,6 +28,37 @@ DEFAULT_TASK_SPECIFIC_INSTRUCTIONS = """An example feature could be:
 - "uses multiple adjectives to describe colors"
 - "describes a patient experiencing seizures or epilepsy"
 - "contains multiple single-digit numbers\""""
+
+# Barra de qualidade aplicada às respostas do interpretador estruturado (JSON)
+# antes de chegarem à etapa custosa score_interpretations()/annotate().
+# Consulte filter_by_quality().
+DEFAULT_MIN_COVERAGE = 0.8
+DEFAULT_MIN_SPECIFICITY = 0.6
+
+
+def extract_concept(raw: str) -> dict[str, Any] | None:
+    """Extrair um objeto conceitual estruturado a partir da resposta de um interpretador.
+
+    Parameters
+    ----------
+    raw : str
+        Resposta bruta do interpretador (LLM).
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Objeto conceitual extraído, ou ``None`` se a resposta não puder ser interpretada
+        como JSON válido contendo a chave ``"conceito"``.
+    """
+    text = raw.strip()
+    if "</think>" in text:
+        text = text.split("</think>")[1].strip()
+    text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return obj if isinstance(obj, dict) and "conceito" in obj else None
 
 
 def sample_top_zero(
@@ -351,6 +383,10 @@ class NeuronInterpreter:
         self.n_workers_interpretation = n_workers_interpretation
         self.n_workers_annotation = n_workers_annotation
         self.cache_name = cache_name
+        # Preenchido por interpret_neurons(): neuron_idx -> dicionário de metadados por candidato
+        # (categoria_probs/cobertura/especificidade), ou None
+        # para candidatos em forma de frase simples.
+        self.neuron_metadata: dict[int, list[dict[str, Any] | None]] = {}
 
     def _build_interpretation_prompt(
         self,
@@ -410,6 +446,93 @@ class NeuronInterpreter:
 
         return response.strip('"').strip()
 
+    def _parse_response(self, response: str) -> tuple[str | None, dict[str, Any] | None]:
+        """Analisar uma resposta bruta do interpretador em (conceito, metadados)."""
+        concept_obj = extract_concept(response)
+        if concept_obj is not None:
+            concept = str(concept_obj["conceito"]).strip()
+            metadata = {k: v for k, v in concept_obj.items() if k != "conceito"}
+            return concept, metadata
+
+        return self._parse_interpretation(response), None
+
+    @staticmethod
+    def _meets_quality_bar(
+        concept: str | None,
+        meta: dict[str, Any] | None,
+        min_coverage: float,
+        min_specificity: float,
+    ) -> bool:
+        """Verifica se uma interpretação candidata atende à barra de cobertura/especificidade."""
+        if concept is None:
+            return False
+        if meta is None:
+            return True
+        return (
+            meta.get("cobertura", 0) >= min_coverage
+            and meta.get("especificidade", 0) >= min_specificity
+        )
+
+    def _filter_neuron_candidates(
+        self,
+        candidates: list[str | None],
+        metas: list[dict[str, Any] | None],
+        min_coverage: float,
+        min_specificity: float,
+    ) -> tuple[list[str | None], list[dict[str, Any] | None]]:
+        """Filtra as interpretações candidatas de um único neurônio pela barra de qualidade."""
+        kept_pairs = [
+            (concept, meta)
+            for concept, meta in zip(candidates, metas, strict=True)
+            if self._meets_quality_bar(concept, meta, min_coverage, min_specificity)
+        ]
+        return [c for c, _ in kept_pairs], [m for _, m in kept_pairs]
+
+    def filter_by_quality(
+        self,
+        interpretations: dict[int, list[str | None]],
+        min_coverage: float = DEFAULT_MIN_COVERAGE,
+        min_specificity: float = DEFAULT_MIN_SPECIFICITY,
+    ) -> dict[int, list[str | None]]:
+        """Remova as interpretações candidatas abaixo da barra de cobertura/especificidade.
+
+        Parameters
+        ----------
+        interpretations : dict[int, list[str | None]]
+            Interpretações candidatas por neurônio (ver :meth:`interpret_neurons`).
+        min_coverage : float, optional
+            Cobertura mínima exigida para manter uma interpretação candidata, by default 0.8
+        min_specificity : float, optional
+            Especificidade mínima exigida para manter uma interpretação candidata, by default 0.6
+        """
+        filtered_interpretations: dict[int, list[str | None]] = {}
+        filtered_metadata: dict[int, list[dict[str, Any] | None]] = {}
+        n_dropped = 0
+
+        for neuron_idx, candidates in interpretations.items():
+            metas = self.neuron_metadata.get(neuron_idx, [None] * len(candidates))
+            kept_concepts, kept_metas = self._filter_neuron_candidates(
+                candidates, metas, min_coverage, min_specificity
+            )
+            if kept_concepts:
+                filtered_interpretations[neuron_idx] = kept_concepts
+                filtered_metadata[neuron_idx] = kept_metas
+            else:
+                n_dropped += 1
+
+        if n_dropped:
+            logger.warning(
+                "[filtro de qualidade] %d/%d neurônio(s) descartado(s): nenhuma candidata "
+                "atingiu cobertura>=%.2f, especificidade>=%.2f",
+                n_dropped,
+                len(interpretations),
+                min_coverage,
+                min_specificity,
+            )
+
+        self.neuron_metadata = filtered_metadata
+        return filtered_interpretations
+
     def _resolve_llm_kwargs(
         self, config: InterpretConfig, llm_kwargs: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any], float | None]:
@@ -436,8 +559,8 @@ class NeuronInterpreter:
 
     def _generate_interpretation(
         self, prompt: str, llm_kwargs: dict[str, Any] | None = None, timeout: float | None = None
-    ) -> str | None:
-        """Envia um único prompt ao modelo intérprete e retorna a interpretação já parseada."""
+    ) -> tuple[str | None, dict[str, Any] | None]:
+        """Envia um único prompt ao modelo intérprete e retorna (interpretação, metadados)."""
         try:
             request_kwargs = dict(llm_kwargs or {})
             if timeout is not None:
@@ -445,15 +568,16 @@ class NeuronInterpreter:
             response = generate_completion(
                 prompt=prompt, model=self.interpreter_model, **request_kwargs
             )
-            return self._parse_interpretation(response)
+            return self._parse_response(response)
         except Exception:
             logger.exception("Falha ao gerar interpretação.")
-            return None
+            return None, None
 
     def _execute_prompts(
         self, prompts: list[str | None], llm_kwargs: dict[str, Any], timeout: float | None
-    ) -> list[str | None]:
-        """Executa um lote de prompts em paralelo e retorna as interpretações (uma por prompt)."""
+    ) -> list[tuple[str | None, dict[str, Any] | None]]:
+        """Executa um lote de prompts em paralelo e retorna (interpretação, metadados)
+        por prompt."""
         valid_prompts = [prompt for prompt in prompts if prompt is not None]
         if not valid_prompts:
             return []
@@ -474,10 +598,12 @@ class NeuronInterpreter:
                 desc="Gerando interpretações",
             )
 
-            ordered_interpretations: list[str | None] = [None] * len(valid_prompts)
+            ordered_results: list[tuple[str | None, dict[str, Any] | None]] = [(None, None)] * len(
+                valid_prompts
+            )
             for future in iterator:
-                ordered_interpretations[future_to_idx[future]] = future.result()
-            return ordered_interpretations
+                ordered_results[future_to_idx[future]] = future.result()
+            return ordered_results
 
     def interpret_neurons(
         self,
@@ -518,6 +644,7 @@ class NeuronInterpreter:
         ]
 
         interpretations: dict[int, list[str | None]] = {idx: [] for idx in neuron_indices}
+        self.neuron_metadata = {idx: [] for idx in neuron_indices}
 
         prompts = [
             self._build_interpretation_prompt(
@@ -530,15 +657,16 @@ class NeuronInterpreter:
             for neuron_idx, candidate_idx in interpretation_tasks
         ]
 
-        generated_interpretations = iter(
-            self._execute_prompts(prompts, resolved_llm_kwargs, timeout)
-        )
+        generated_results = iter(self._execute_prompts(prompts, resolved_llm_kwargs, timeout))
 
         for idx, (neuron_idx, _candidate_idx) in enumerate(interpretation_tasks):
             if prompts[idx] is None:
                 interpretations[neuron_idx].append(None)
+                self.neuron_metadata[neuron_idx].append(None)
             else:
-                interpretations[neuron_idx].append(next(generated_interpretations))
+                concept, metadata = next(generated_results)
+                interpretations[neuron_idx].append(concept)
+                self.neuron_metadata[neuron_idx].append(metadata)
 
         return interpretations
 

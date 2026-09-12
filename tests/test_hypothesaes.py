@@ -8,6 +8,7 @@ requisições de rede.
 """
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -598,6 +599,32 @@ class TestComputeActivations:
 # =============================================================================
 # interpret_neurons.py
 # =============================================================================
+class TestExtractConcept:
+    """Testes da extração de conceito estruturado (JSON) a partir da resposta do LLM."""
+
+    def test_extracts_valid_json_with_conceito(self) -> None:
+        """Um JSON válido com a chave 'conceito' deve ser retornado como dict."""
+        raw = '{"conceito": "elogia o atendimento", "cobertura": 0.9, "especificidade": 0.7}'
+        assert interpret_neurons.extract_concept(raw) == {
+            "conceito": "elogia o atendimento",
+            "cobertura": 0.9,
+            "especificidade": 0.7,
+        }
+
+    def test_returns_none_for_invalid_json(self) -> None:
+        """Uma resposta que não é JSON válido deve retornar None."""
+        assert interpret_neurons.extract_concept("isto não é um JSON") is None
+
+    def test_returns_none_when_conceito_key_is_missing(self) -> None:
+        """Um JSON válido sem a chave 'conceito' deve retornar None."""
+        assert interpret_neurons.extract_concept('{"outra_chave": 1}') is None
+
+    def test_strips_code_fence_and_thinking_block(self) -> None:
+        """Deve remover blocos <think> e cercas de código markdown antes de interpretar o JSON."""
+        raw = '<think>analisando</think>\n```json\n{"conceito": "x"}\n```'
+        assert interpret_neurons.extract_concept(raw) == {"conceito": "x"}
+
+
 class TestSampleTopZero:
     """Testes da amostragem de exemplos de topo/zero para interpretação."""
 
@@ -694,6 +721,83 @@ class TestNeuronInterpreterParseInterpretation:
         assert result == "resultado final"
 
 
+class TestNeuronInterpreterParseResponse:
+    """Testes do parsing unificado (JSON estruturado ou texto livre) da resposta do LLM."""
+
+    def test_parses_structured_json_response(self) -> None:
+        """Uma resposta JSON deve retornar o conceito e os metadados restantes."""
+        interpreter = NeuronInterpreter()
+        raw = '{"conceito": "menciona atendimento", "cobertura": 0.9, "especificidade": 0.8}'
+        concept, meta = interpreter._parse_response(raw)
+        assert concept == "menciona atendimento"
+        assert meta == {"cobertura": 0.9, "especificidade": 0.8}
+
+    def test_falls_back_to_plain_text_parsing(self) -> None:
+        """Uma resposta em texto livre deve usar o parser de texto simples, sem metadados."""
+        interpreter = NeuronInterpreter()
+        concept, meta = interpreter._parse_response('- "menciona atendimento rápido"')
+        assert concept == "menciona atendimento rápido"
+        assert meta is None
+
+
+class TestNeuronInterpreterMeetsQualityBar:
+    """Testes do critério estático de barra de qualidade (cobertura/especificidade)."""
+
+    def test_returns_false_for_none_concept(self) -> None:
+        """Um conceito None nunca deve atender à barra de qualidade."""
+        assert not NeuronInterpreter._meets_quality_bar(None, None, 0.8, 0.6)
+
+    def test_returns_true_when_metadata_is_absent(self) -> None:
+        """Sem metadados (interpretação em texto simples), a barra é sempre atendida."""
+        assert NeuronInterpreter._meets_quality_bar("hipótese", None, 0.8, 0.6)
+
+    def test_returns_true_when_thresholds_are_met(self) -> None:
+        """Cobertura e especificidade acima dos limiares devem atender à barra."""
+        meta = {"cobertura": 0.9, "especificidade": 0.7}
+        assert NeuronInterpreter._meets_quality_bar("hipótese", meta, 0.8, 0.6)
+
+    def test_returns_false_when_specificity_below_threshold(self) -> None:
+        """Especificidade abaixo do limiar não deve atender à barra."""
+        meta = {"cobertura": 0.9, "especificidade": 0.1}
+        assert not NeuronInterpreter._meets_quality_bar("hipótese", meta, 0.8, 0.6)
+
+
+class TestNeuronInterpreterFilterByQuality:
+    """Testes do filtro de qualidade (cobertura/especificidade) das interpretações estruturadas."""
+
+    def test_keeps_plain_text_candidates_without_metadata(self) -> None:
+        """Candidatos em texto simples (meta=None) nunca devem ser filtrados."""
+        interpreter = NeuronInterpreter()
+        interpreter.neuron_metadata = {0: [None]}
+        assert interpreter.filter_by_quality({0: ["hipótese qualquer"]}) == {
+            0: ["hipótese qualquer"]
+        }
+
+    def test_drops_structured_candidate_below_quality_bar(self) -> None:
+        """Candidatos JSON abaixo da barra de cobertura/especificidade devem ser removidos."""
+        interpreter = NeuronInterpreter()
+        interpreter.neuron_metadata = {0: [{"cobertura": 0.5, "especificidade": 0.9}]}
+        result = interpreter.filter_by_quality(
+            {0: ["hipótese fraca"]}, min_coverage=0.8, min_specificity=0.6
+        )
+        assert 0 not in result
+
+    def test_keeps_structured_candidate_above_quality_bar(self) -> None:
+        """Candidatos JSON que atingem a barra de qualidade devem ser mantidos."""
+        interpreter = NeuronInterpreter()
+        interpreter.neuron_metadata = {0: [{"cobertura": 0.9, "especificidade": 0.7}]}
+        result = interpreter.filter_by_quality(
+            {0: ["hipótese forte"]}, min_coverage=0.8, min_specificity=0.6
+        )
+        assert result == {0: ["hipótese forte"]}
+
+    def test_drops_none_candidates(self) -> None:
+        """Candidatos None (falha de geração) devem ser sempre removidos."""
+        interpreter = NeuronInterpreter()
+        interpreter.neuron_metadata = {0: [None]}
+        assert 0 not in interpreter.filter_by_quality({0: [None]})
+
+
 class TestNeuronInterpreterComputeMetrics:
     """Testes do cálculo de métricas de fidelidade de uma interpretação."""
 
@@ -754,6 +858,35 @@ class TestNeuronInterpreterInterpretNeurons:
         interpreter = NeuronInterpreter()
         result = interpreter.interpret_neurons(texts, activations, neuron_indices=[0])
         assert result[0] == [None]
+
+    def test_populates_neuron_metadata_from_structured_json_response(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Uma resposta JSON estruturada deve extrair o conceito e preencher ``neuron_metadata``.
+
+        Regressão: ``_generate_interpretation`` chamava apenas ``_parse_interpretation``
+        (parser de texto simples), então respostas JSON nunca alimentavam
+        ``neuron_metadata`` e ``filter_by_quality()`` ficava sempre inerte.
+        """
+        json_response = (
+            '{"conceito": "menciona atendimento", "cobertura": 0.9, "especificidade": 0.7}'
+        )
+        monkeypatch.setattr(
+            interpret_neurons, "generate_completion", lambda **kwargs: json_response
+        )
+
+        texts = [f"texto {i}" for i in range(8)]
+        activations = np.zeros((8, 1))
+        activations[:, 0] = [5.0, 4.0, 3.0, 2.0, 0.0, 0.0, 0.0, 0.0]
+
+        interpreter = NeuronInterpreter(n_workers_interpretation=2)
+        config = InterpretConfig(sampling=SamplingConfig(n_examples=4))
+        result = interpreter.interpret_neurons(
+            texts, activations, neuron_indices=[0], config=config
+        )
+
+        assert result[0] == ["menciona atendimento"]
+        assert interpreter.neuron_metadata[0] == [{"cobertura": 0.9, "especificidade": 0.7}]
 
 
 class TestNeuronInterpreterScoreInterpretations:
@@ -954,6 +1087,37 @@ class TestQuickstartInterpretSae:
         assert list(result.columns[:2]) == ["neuron_idx", "interpretation"]
         assert len(result) == 2
 
+    def test_exposes_metadata_columns_for_structured_interpretations(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Interpretações em JSON estruturado devem expor colunas de cobertura/especificidade."""
+        json_response = (
+            '{"conceito": "hipótese estruturada", "cobertura": 0.85, '
+            '"especificidade": 0.75, "categoria_probs": {"a": 0.5}}'
+        )
+        monkeypatch.setattr(
+            interpret_neurons, "generate_completion", lambda **kwargs: json_response
+        )
+
+        torch.manual_seed(0)
+        model = SparseAutoencoder(input_dim=6, m_total_neurons=8, k_active_neurons=3, device="cpu")
+        embeddings = np.random.default_rng(0).normal(size=(20, 6)).astype(np.float32)
+        texts = [f"texto {i}" for i in range(20)]
+
+        result = quickstart.interpret_sae(
+            texts,
+            embeddings,
+            model,
+            n_top_neurons=1,
+            print_examples_n=0,
+            n_examples_for_interpretation=4,
+        )
+
+        assert result.iloc[0]["interpretation"] == "hipótese estruturada"
+        assert result.iloc[0]["cobertura"] == pytest.approx(0.85)
+        assert result.iloc[0]["especificidade"] == pytest.approx(0.75)
+        assert result.iloc[0]["categoria_probs"] == {"a": 0.5}
+
 
 class TestQuickstartGenerateHypotheses:
     """Testes do fluxo de alto nível de geração de hipóteses."""
@@ -987,6 +1151,52 @@ class TestQuickstartGenerateHypotheses:
         assert "target_correlation" in result.columns
         assert "interpretation" in result.columns
         assert len(result) == 2
+
+    def test_excludes_neurons_dropped_by_quality_filter_without_crashing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Um neurônio descartado por ``filter_by_quality()`` deve ficar de fora do resultado,
+        sem levantar ``KeyError``.
+
+        Regressão: ``selected_neurons``/``scores`` não eram filtrados em conjunto com
+        ``interpretations`` após ``filter_by_quality()``, então um neurônio totalmente
+        descartado (nenhuma candidata atingindo a barra de qualidade) levava a um
+        ``interpretations[idx]`` inexistente nas funções que montam as linhas de resultado.
+        """
+        monkeypatch.setattr(
+            interpret_neurons, "generate_completion", lambda **kwargs: '- "hipótese de teste"'
+        )
+
+        torch.manual_seed(0)
+        model = SparseAutoencoder(input_dim=6, m_total_neurons=8, k_active_neurons=3, device="cpu")
+        embeddings = np.random.default_rng(0).normal(size=(30, 6)).astype(np.float32)
+        texts = [f"texto {i}" for i in range(30)]
+        labels = np.random.default_rng(0).normal(size=30)
+
+        original_filter_by_quality = NeuronInterpreter.filter_by_quality
+
+        def _drop_first_neuron(
+            self: NeuronInterpreter, interpretations: dict, **kwargs: Any
+        ) -> dict:
+            filtered = original_filter_by_quality(self, interpretations, **kwargs)
+            first_neuron = next(iter(filtered))
+            del filtered[first_neuron]
+            return filtered
+
+        monkeypatch.setattr(NeuronInterpreter, "filter_by_quality", _drop_first_neuron)
+
+        result = quickstart.generate_hypotheses(
+            texts,
+            labels,
+            embeddings,
+            model,
+            selection_method="correlation",
+            n_selected_neurons=2,
+            n_scoring_examples=0,
+            n_examples_for_interpretation=4,
+        )
+
+        assert len(result) == 1
 
     def test_raises_when_n_selected_exceeds_total_neurons(self) -> None:
         """Selecionar mais neurônios do que o total do SAE deve levantar ``ValueError``."""
