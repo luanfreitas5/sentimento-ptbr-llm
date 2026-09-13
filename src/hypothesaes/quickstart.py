@@ -438,14 +438,23 @@ def _build_hypothesis_rows_with_scoring(
     metrics: dict[int, dict[str | None, dict[str, float]]],
     selection_method: str,
     scoring_metric: str,
+    interpreter: NeuronInterpreter,
+    activations: np.ndarray,
+    texts: list[str],
+    print_examples_n: int = 3,
 ) -> list[dict[str, Any]]:
-    """Monta as linhas de resultado, escolhendo a interpretação de maior fidelidade por neurônio."""
+    """Monta as linhas de resultado, escolhendo a interpretação de maior fidelidade por neurônio.
+
+    Expõe o mesmo esquema de colunas de :func:`_build_hypothesis_rows_without_scoring`
+    (metadados de categoria/cobertura/especificidade e ``top_example_i``), para que o
+    DataFrame resultante não dependa de ``n_scoring_examples`` ter sido zero ou não.
+    """
     rows = []
     for idx, score in zip(selected_neurons, scores, strict=True):
         best_interpretation = max(
             interpretations[idx], key=lambda interp: metrics[idx][interp][scoring_metric]
         )
-        rows.append(
+        row = (
             {
                 "neuron_idx": idx,
                 f"target_{selection_method}": score,
@@ -454,7 +463,10 @@ def _build_hypothesis_rows_with_scoring(
                     scoring_metric
                 ],
             }
+            | _metadata_columns(interpreter.neuron_metadata.get(idx, [None])[0])
+            | _get_top_examples(idx, activations, texts, print_examples_n=print_examples_n)
         )
+        rows.append(row)
     return rows
 
 
@@ -747,7 +759,16 @@ def generate_hypotheses(
     )
 
     results = _build_hypothesis_rows_with_scoring(
-        selected_neurons, scores, interpretations, metrics, selection_method, scoring_metric
+        selected_neurons,
+        scores,
+        interpretations,
+        metrics,
+        selection_method,
+        scoring_metric,
+        interpreter,
+        activations,
+        texts,
+        print_examples_n=print_examples_n,
     )
     return pd.DataFrame(results)
 
