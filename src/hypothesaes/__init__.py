@@ -54,7 +54,18 @@ dependências base do projeto: ``torch``, ``openai``, ``tiktoken``,
 ``sentence-transformers``. Instale-as (ex.: ``uv add torch openai tiktoken
 scikit-learn scipy statsmodels sentence-transformers``) antes de usar
 qualquer função deste pacote.
+
+``SparseAutoencoder``, ``load_model``, ``train_sae``, ``interpret_sae``,
+``generate_hypotheses`` e ``evaluate_hypotheses`` dependem de ``torch``
+(via ``sae.py``/``quickstart.py``) e são carregados sob demanda por
+:func:`__getattr__` (PEP 562), em vez de reexportados no topo deste
+``__init__``. Isso permite importar submódulos independentes de ``torch``
+(ex.: ``hypothesaes.llm_api``, usado por
+``src/labeling/llm_relabeling.py``) sem exigir a instalação de ``torch``.
 """
+
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
 
 from hypothesaes.annotate import annotate_texts_with_concepts
 from hypothesaes.embedding import extract_local_embeddings, extract_openai_embeddings
@@ -66,15 +77,53 @@ from hypothesaes.interpret_neurons import (
     SamplingConfig,
     ScoringConfig,
 )
-from hypothesaes.quickstart import (
-    evaluate_hypotheses,
-    generate_hypotheses,
-    interpret_sae,
-    train_sae,
-)
-from hypothesaes.sae import SparseAutoencoder, load_model
 from hypothesaes.select_neurons import select_neurons
 from hypothesaes.utils import format_text_for_display
+
+if TYPE_CHECKING:
+    from hypothesaes.quickstart import (
+        evaluate_hypotheses,
+        generate_hypotheses,
+        interpret_sae,
+        train_sae,
+    )
+    from hypothesaes.sae import SparseAutoencoder, load_model
+
+_LAZY_TORCH_ATTRS: dict[str, tuple[str, str]] = {
+    "SparseAutoencoder": ("hypothesaes.sae", "SparseAutoencoder"),
+    "load_model": ("hypothesaes.sae", "load_model"),
+    "evaluate_hypotheses": ("hypothesaes.quickstart", "evaluate_hypotheses"),
+    "generate_hypotheses": ("hypothesaes.quickstart", "generate_hypotheses"),
+    "interpret_sae": ("hypothesaes.quickstart", "interpret_sae"),
+    "train_sae": ("hypothesaes.quickstart", "train_sae"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Carrega sob demanda os símbolos que dependem de ``torch`` (PEP 562).
+
+    Parameters
+    ----------
+    name : str
+        Nome do atributo do módulo solicitado.
+
+    Returns
+    -------
+    Any
+        Símbolo resolvido a partir de ``sae``/``quickstart``.
+
+    Raises
+    ------
+    AttributeError
+        Se ``name`` não corresponder a nenhum símbolo lazy conhecido.
+    """
+    try:
+        module_name, attr_name = _LAZY_TORCH_ATTRS[name]
+    except KeyError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    module = import_module(module_name)
+    return getattr(module, attr_name)
+
 
 __all__: list[str] = [  # (agrupado por categoria, ver comentários)
     "InterpretConfig",
