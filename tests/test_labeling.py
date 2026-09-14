@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 from constants.labels import SENTIMENT_CLASSES
 from exceptions.data import DataValidationError, EmptyDatasetError
 from exceptions.pipeline import PipelineStageError
+from labeling import llm_relabeling
 from labeling.automatic import (
     LexicalHeuristicLabeler,
     _label_indexed_item,
@@ -22,6 +23,14 @@ from labeling.confidence import (
     flag_low_confidence_samples,
 )
 from labeling.consensus import aggregate_by_weighted_majority_vote, merge_consensus_into_corpus
+from labeling.llm_relabeling import (
+    _extract_confidence,
+    _relabel_single_text,
+    _run_relabel_workers,
+    _validate_relabel_inputs,
+    parse_relabel_response,
+    relabel_low_confidence_samples,
+)
 from labeling.manual import (
     _bucket_confidence_level,
     apply_human_validation_labels,
@@ -640,6 +649,419 @@ class TestEvaluateAgainstGoldSet:
         gold = pl.DataFrame({"id": ["2"], "sentiment_label": ["negativo"]})
         with pytest.raises(EmptyDatasetError):
             evaluate_against_gold_set(predicted, gold)
+
+
+class TestParseRelabelResponse:
+    """Testes de :func:`labeling.llm_relabeling.parse_relabel_response`."""
+
+    def test_parses_label_and_confidence_fields(self) -> None:
+        """Uma resposta com ``label``/``confidence`` explícitos deve ser interpretada direto."""
+        assert parse_relabel_response('{"label": "positivo", "confidence": 0.9}') == (
+            "positivo",
+            0.9,
+        )
+
+    def test_parses_confidence_from_probs_when_present(self) -> None:
+        """Quando ``probs`` está presente, a confiança deve vir de ``probs[label]``."""
+        raw_response = '{"label":"negativo","probs":{"positivo":0.1,"negativo":0.8,"neutro":0.1}}'
+        assert parse_relabel_response(raw_response) == ("negativo", 0.8)
+
+    def test_defaults_confidence_to_one_when_absent(self) -> None:
+        """Sem ``confidence`` nem ``probs``, a confiança deve assumir 1.0."""
+        assert parse_relabel_response('{"label": "neutro"}') == ("neutro", 1.0)
+
+    def test_returns_none_for_response_without_json(self) -> None:
+        """Uma resposta sem nenhum objeto JSON deve retornar ``None``."""
+        assert parse_relabel_response("resposta sem json") is None
+
+    def test_returns_none_for_malformed_json(self) -> None:
+        """Um objeto JSON malformado deve retornar ``None`` em vez de levantar exceção."""
+        assert parse_relabel_response('{"label": "positivo",}') is None
+
+    def test_returns_none_for_label_outside_allowed_classes(self) -> None:
+        """Um rótulo fora de ``allowed_labels`` deve ser rejeitado."""
+        assert parse_relabel_response('{"label": "muito_positivo", "confidence": 0.9}') is None
+
+    def test_strips_reasoning_block_before_think_tag(self) -> None:
+        """Conteúdo de raciocínio antes de ``</think>`` deve ser descartado."""
+        raw_response = '<think>raciocinando...</think>{"label": "positivo", "confidence": 0.7}'
+        assert parse_relabel_response(raw_response) == ("positivo", 0.7)
+
+    def test_strips_markdown_code_fence(self) -> None:
+        """Uma resposta envolta em cerca de código ``` json deve ser interpretada normalmente."""
+        raw_response = '```json\n{"label": "positivo", "confidence": 0.8}\n```'
+        assert parse_relabel_response(raw_response) == ("positivo", 0.8)
+
+    def test_is_case_and_whitespace_insensitive_for_label(self) -> None:
+        """O rótulo deve ser normalizado (minúsculas, sem espaços) antes da validação."""
+        assert parse_relabel_response('{"label": " POSITIVO ", "confidence": 0.5}') == (
+            "positivo",
+            0.5,
+        )
+
+
+class TestExtractConfidence:
+    """Testes de :func:`labeling.llm_relabeling._extract_confidence`."""
+
+    def test_reads_confidence_from_probs_for_label(self) -> None:
+        """A confiança deve ser lida de ``probs[label]`` quando disponível."""
+        parsed = {"label": "positivo", "probs": {"positivo": 0.7, "negativo": 0.3}}
+        assert _extract_confidence(parsed, "positivo") == pytest.approx(0.7)
+
+    def test_falls_back_to_confidence_when_label_missing_from_probs(self) -> None:
+        """Se ``probs`` não contiver o rótulo, deve recorrer a ``confidence``."""
+        parsed = {"label": "neutro", "probs": {"positivo": 0.7}, "confidence": 0.4}
+        assert _extract_confidence(parsed, "neutro") == pytest.approx(0.4)
+
+    def test_clamps_value_above_one(self) -> None:
+        """Valores de confiança acima de 1.0 devem ser limitados (clamp) a 1.0."""
+        assert _extract_confidence({"confidence": 1.5}, "positivo") == pytest.approx(1.0)
+
+    def test_clamps_negative_value_to_zero(self) -> None:
+        """Valores de confiança negativos devem ser limitados (clamp) a 0.0."""
+        assert _extract_confidence({"confidence": -0.5}, "positivo") == pytest.approx(0.0)
+
+    def test_defaults_to_one_for_non_numeric_confidence(self) -> None:
+        """Um valor de confiança não numérico deve resultar no padrão 1.0."""
+        assert _extract_confidence({"confidence": "alta"}, "positivo") == pytest.approx(1.0)
+
+
+class TestRelabelSingleText:
+    """Testes de :func:`labeling.llm_relabeling._relabel_single_text`."""
+
+    def test_returns_parsed_result_on_first_successful_call(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Uma primeira chamada bem-sucedida e interpretável deve retornar (rótulo, confiança)."""
+        monkeypatch.setattr(
+            llm_relabeling,
+            "generate_completion",
+            lambda **kwargs: '{"label": "positivo", "confidence": 0.8}',
+        )
+        result = _relabel_single_text(
+            "adorei o produto",
+            "Classifique: {{TEXTO}}",
+            model="modelo-teste",
+            temperature=0.0,
+            max_retries=3,
+            allowed_labels=SENTIMENT_CLASSES,
+        )
+        assert result == ("positivo", 0.8)
+
+    def test_retries_until_a_parseable_response_is_returned(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Respostas não interpretáveis devem ser reprocessadas até ``max_retries``."""
+        responses = iter(["resposta sem json", '{"label": "negativo", "confidence": 0.6}'])
+        monkeypatch.setattr(llm_relabeling, "generate_completion", lambda **kwargs: next(responses))
+        result = _relabel_single_text(
+            "produto pessimo",
+            "Classifique: {{TEXTO}}",
+            model="modelo-teste",
+            temperature=0.0,
+            max_retries=3,
+            allowed_labels=SENTIMENT_CLASSES,
+        )
+        assert result == ("negativo", 0.6)
+
+    def test_returns_none_after_exhausting_retries_on_call_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Se todas as tentativas levantarem exceção, deve retornar ``None`` (fail-safe)."""
+
+        def _always_raises(**kwargs: object) -> str:
+            raise RuntimeError("falha simulada de rede")
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _always_raises)
+        result = _relabel_single_text(
+            "texto qualquer",
+            "Classifique: {{TEXTO}}",
+            model="modelo-teste",
+            temperature=0.0,
+            max_retries=2,
+            allowed_labels=SENTIMENT_CLASSES,
+        )
+        assert result is None
+
+    def test_returns_none_after_exhausting_retries_on_unparseable_response(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Se todas as tentativas retornarem respostas não interpretáveis, deve retornar None."""
+        monkeypatch.setattr(
+            llm_relabeling, "generate_completion", lambda **kwargs: "resposta sem json"
+        )
+        result = _relabel_single_text(
+            "texto qualquer",
+            "Classifique: {{TEXTO}}",
+            model="modelo-teste",
+            temperature=0.0,
+            max_retries=2,
+            allowed_labels=SENTIMENT_CLASSES,
+        )
+        assert result is None
+
+    def test_substitutes_text_placeholder_in_prompt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """O placeholder ``{{TEXTO}}`` do template deve ser substituído pelo texto real."""
+        captured_prompts: list[str] = []
+
+        def _fake_generate_completion(*, prompt: str, **kwargs: object) -> str:
+            captured_prompts.append(prompt)
+            return '{"label": "neutro", "confidence": 1.0}'
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _fake_generate_completion)
+        _relabel_single_text(
+            "chegou no prazo",
+            "Classifique o texto: {{TEXTO}} - fim",
+            model="modelo-teste",
+            temperature=0.0,
+            max_retries=1,
+            allowed_labels=SENTIMENT_CLASSES,
+        )
+        assert captured_prompts == ["Classifique o texto: chegou no prazo - fim"]
+
+
+class TestValidateRelabelInputs:
+    """Testes de :func:`labeling.llm_relabeling._validate_relabel_inputs`."""
+
+    def test_raises_empty_dataset_error_for_empty_corpus(self) -> None:
+        """Um corpus vazio deve levantar ``EmptyDatasetError``."""
+        df = pl.DataFrame(
+            {"id": [], "text_normalized": [], "sentiment_label": [], "confidence_score": []},
+            schema={
+                "id": pl.Utf8,
+                "text_normalized": pl.Utf8,
+                "sentiment_label": pl.Utf8,
+                "confidence_score": pl.Float64,
+            },
+        )
+        with pytest.raises(EmptyDatasetError):
+            _validate_relabel_inputs(
+                df,
+                id_column="id",
+                text_column="text_normalized",
+                label_column="sentiment_label",
+                confidence_column="confidence_score",
+            )
+
+    def test_raises_data_validation_error_for_missing_columns(self) -> None:
+        """Um corpus sem alguma das colunas exigidas deve levantar ``DataValidationError``."""
+        df = pl.DataFrame({"id": ["1"], "sentiment_label": ["positivo"]})
+        with pytest.raises(DataValidationError):
+            _validate_relabel_inputs(
+                df,
+                id_column="id",
+                text_column="text_normalized",
+                label_column="sentiment_label",
+                confidence_column="confidence_score",
+            )
+
+    def test_does_not_raise_for_valid_corpus(self) -> None:
+        """Um corpus válido não deve levantar exceção."""
+        df = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text_normalized": ["ótimo"],
+                "sentiment_label": ["positivo"],
+                "confidence_score": [0.9],
+            }
+        )
+        _validate_relabel_inputs(
+            df,
+            id_column="id",
+            text_column="text_normalized",
+            label_column="sentiment_label",
+            confidence_column="confidence_score",
+        )
+
+
+class TestRunRelabelWorkers:
+    """Testes de :func:`labeling.llm_relabeling._run_relabel_workers`."""
+
+    def test_preserves_original_order_with_parallel_workers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Os resultados devem ser retornados na ordem original dos textos, mesmo em paralelo."""
+        texts = ["texto-0", "texto-1", "texto-2", "texto-3"]
+
+        def _fake_generate_completion(*, prompt: str, **kwargs: object) -> str:
+            index = prompt.split("texto-")[1]
+            return f'{{"label": "positivo", "confidence": 0.{index}5}}'
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _fake_generate_completion)
+        results = _run_relabel_workers(
+            texts,
+            "{{TEXTO}}",
+            model="modelo-teste",
+            temperature=0.0,
+            max_retries=1,
+            allowed_labels=SENTIMENT_CLASSES,
+            n_workers=4,
+            show_progress=False,
+        )
+        assert results == [
+            ("positivo", 0.05),
+            ("positivo", 0.15),
+            ("positivo", 0.25),
+            ("positivo", 0.35),
+        ]
+
+    def test_keeps_none_for_failed_items_without_affecting_others(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Uma falha isolada em um item não deve afetar o resultado dos demais."""
+
+        def _fake_generate_completion(*, prompt: str, **kwargs: object) -> str:
+            if prompt == "texto-falho":
+                raise RuntimeError("falha simulada")
+            return '{"label": "negativo", "confidence": 0.9}'
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _fake_generate_completion)
+        results = _run_relabel_workers(
+            ["texto-ok", "texto-falho"],
+            "{{TEXTO}}",
+            model="modelo-teste",
+            temperature=0.0,
+            max_retries=1,
+            allowed_labels=SENTIMENT_CLASSES,
+            n_workers=2,
+            show_progress=False,
+        )
+        assert results == [("negativo", 0.9), None]
+
+
+class TestRelabelLowConfidenceSamples:
+    """Testes de :func:`labeling.llm_relabeling.relabel_low_confidence_samples`."""
+
+    def test_returns_unchanged_corpus_when_no_sample_is_below_threshold(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sem amostras abaixo do limiar, o corpus deve ser retornado inalterado."""
+
+        def _fail_if_called(**kwargs: object) -> str:
+            raise AssertionError("generate_completion não deveria ser chamado")
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _fail_if_called)
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text_normalized": ["ótimo produto"],
+                "sentiment_label": ["positivo"],
+                "confidence_score": [0.9],
+            }
+        )
+        result = relabel_low_confidence_samples(
+            labeled_corpus,
+            score_threshold=0.5,
+            prompt_name="prompt-inexistente",
+            show_progress=False,
+        )
+        assert result.equals(labeled_corpus)
+
+    def test_updates_label_and_confidence_for_successfully_relabeled_samples(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Amostras abaixo do limiar, re-rotuladas com sucesso, devem ter rótulo/confiança
+        atualizados."""
+        monkeypatch.setattr(llm_relabeling, "load_prompt_template", lambda name: "{{TEXTO}}")
+        monkeypatch.setattr(
+            llm_relabeling,
+            "generate_completion",
+            lambda **kwargs: '{"label": "negativo", "confidence": 0.85}',
+        )
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ["1", "2"],
+                "text_normalized": ["texto ambíguo", "ótimo produto"],
+                "sentiment_label": ["neutro", "positivo"],
+                "confidence_score": [0.2, 0.9],
+            }
+        )
+        result = relabel_low_confidence_samples(
+            labeled_corpus,
+            score_threshold=0.5,
+            prompt_name="algum_prompt",
+            show_progress=False,
+        ).sort("id")
+        assert result["sentiment_label"].to_list() == ["negativo", "positivo"]
+        assert result["confidence_score"].to_list() == pytest.approx([0.85, 0.9])
+
+    def test_preserves_original_label_when_relabeling_fails(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Uma falha na re-rotulagem deve preservar o rótulo/confiança originais (fail-safe)."""
+        monkeypatch.setattr(llm_relabeling, "load_prompt_template", lambda name: "{{TEXTO}}")
+
+        def _always_raises(**kwargs: object) -> str:
+            raise RuntimeError("falha simulada de rede")
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _always_raises)
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text_normalized": ["texto ambíguo"],
+                "sentiment_label": ["neutro"],
+                "confidence_score": [0.2],
+            }
+        )
+        result = relabel_low_confidence_samples(
+            labeled_corpus,
+            score_threshold=0.5,
+            prompt_name="algum_prompt",
+            max_retries=1,
+            show_progress=False,
+        )
+        assert result["sentiment_label"].to_list() == ["neutro"]
+        assert result["confidence_score"].to_list() == pytest.approx([0.2])
+
+    def test_only_relabels_samples_below_threshold(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Amostras com confiança acima do limiar não devem ser reenviadas ao LLM."""
+        monkeypatch.setattr(llm_relabeling, "load_prompt_template", lambda name: "{{TEXTO}}")
+        called_texts: list[str] = []
+
+        def _fake_generate_completion(*, prompt: str, **kwargs: object) -> str:
+            called_texts.append(prompt)
+            return '{"label": "negativo", "confidence": 0.7}'
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _fake_generate_completion)
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ["1", "2"],
+                "text_normalized": ["texto baixa confianca", "texto alta confianca"],
+                "sentiment_label": ["neutro", "positivo"],
+                "confidence_score": [0.1, 0.95],
+            }
+        )
+        relabel_low_confidence_samples(
+            labeled_corpus,
+            score_threshold=0.5,
+            prompt_name="algum_prompt",
+            show_progress=False,
+        )
+        assert called_texts == ["texto baixa confianca"]
+
+    def test_raises_for_empty_corpus(self) -> None:
+        """Um corpus vazio deve levantar ``EmptyDatasetError``."""
+        df = pl.DataFrame(
+            {"id": [], "text_normalized": [], "sentiment_label": [], "confidence_score": []},
+            schema={
+                "id": pl.Utf8,
+                "text_normalized": pl.Utf8,
+                "sentiment_label": pl.Utf8,
+                "confidence_score": pl.Float64,
+            },
+        )
+        with pytest.raises(EmptyDatasetError):
+            relabel_low_confidence_samples(
+                df, score_threshold=0.5, prompt_name="algum_prompt", show_progress=False
+            )
+
+    def test_raises_for_missing_required_columns(self) -> None:
+        """Um corpus sem alguma coluna exigida deve levantar ``DataValidationError``."""
+        df = pl.DataFrame({"id": ["1"], "sentiment_label": ["positivo"]})
+        with pytest.raises(DataValidationError):
+            relabel_low_confidence_samples(
+                df, score_threshold=0.5, prompt_name="algum_prompt", show_progress=False
+            )
 
 
 class TestLabelingProperties:

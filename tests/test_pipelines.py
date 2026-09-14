@@ -23,6 +23,7 @@ from exceptions.data import DataValidationError, EmptyDatasetError
 from exceptions.pipeline import PipelineStageError, UnknownPipelineStageError
 from labeling.automatic import LexicalHeuristicLabeler
 from pipelines import hypothesaes_analysis, training_deep_learning, workflow
+from pipelines import labeling as labeling_pipeline
 from pipelines.comparative_evaluation import run_comparative_evaluation_stage
 from pipelines.features import run_features_stage
 from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
@@ -254,6 +255,114 @@ class TestRunLabelingStage:
 
         labeled_corpus = read_dataset_file(labeled_path)
         assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
+
+    def test_relabels_low_confidence_samples_via_llm_when_enabled(
+        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Com ``llm_relabeling_enabled=True``, deve repassar o corpus rotulado à re-rotulagem
+        via LLM."""
+        normalized_corpus = pl.DataFrame(
+            {
+                "id": ["1", "2"],
+                "text": ["adorei o produto", "produto pessimo"],
+                "text_normalized": ["adorei o produto", "produto pessimo"],
+            }
+        )
+        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+
+        def _fake_relabel(labeled_corpus: pl.DataFrame, **kwargs: Any) -> pl.DataFrame:
+            return labeled_corpus.with_columns(pl.lit("neutro").alias("sentiment_label"))
+
+        monkeypatch.setattr(labeling_pipeline, "relabel_low_confidence_samples", _fake_relabel)
+
+        labeled_path = run_labeling_stage(
+            pipeline_paths,
+            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            llm_relabeling_enabled=True,
+            llm_relabeling_prompt_name="algum_prompt",
+            show_progress=False,
+        )
+
+        labeled_corpus = read_dataset_file(labeled_path)
+        assert labeled_corpus["sentiment_label"].to_list() == ["neutro", "neutro"]
+
+    def test_does_not_relabel_via_llm_when_disabled(
+        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Com ``llm_relabeling_enabled=False`` (padrão), a re-rotulagem via LLM não é chamada."""
+        normalized_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text": ["adorei o produto"],
+                "text_normalized": ["adorei o produto"],
+            }
+        )
+        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+
+        def _fail_if_called(labeled_corpus: pl.DataFrame, **kwargs: Any) -> pl.DataFrame:
+            raise AssertionError("relabel_low_confidence_samples não deveria ser chamada")
+
+        monkeypatch.setattr(labeling_pipeline, "relabel_low_confidence_samples", _fail_if_called)
+
+        run_labeling_stage(
+            pipeline_paths,
+            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            show_progress=False,
+        )
+
+    def test_raises_when_llm_relabeling_enabled_without_prompt_name(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Ativar a re-rotulagem via LLM sem informar ``llm_relabeling_prompt_name`` deve levantar
+        ``ValueError``."""
+        normalized_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text": ["adorei o produto"],
+                "text_normalized": ["adorei o produto"],
+            }
+        )
+        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+
+        with pytest.raises(ValueError, match="llm_relabeling_prompt_name"):
+            run_labeling_stage(
+                pipeline_paths,
+                {"heuristica_lexica": LexicalHeuristicLabeler()},
+                llm_relabeling_enabled=True,
+                show_progress=False,
+            )
+
+    def test_human_validation_takes_precedence_over_llm_relabeling(
+        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """O rótulo humano deve prevalecer mesmo quando a re-rotulagem via LLM altera o rótulo."""
+        normalized_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text": ["adorei o produto"],
+                "text_normalized": ["adorei o produto"],
+            }
+        )
+        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+        human_validation_labels = pl.DataFrame({"id": ["1"], "sentiment_label": ["negativo"]})
+
+        def _fake_relabel(labeled_corpus: pl.DataFrame, **kwargs: Any) -> pl.DataFrame:
+            return labeled_corpus.with_columns(pl.lit("neutro").alias("sentiment_label"))
+
+        monkeypatch.setattr(labeling_pipeline, "relabel_low_confidence_samples", _fake_relabel)
+
+        labeled_path = run_labeling_stage(
+            pipeline_paths,
+            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            select_for_human_validation=False,
+            human_validation_labels=human_validation_labels,
+            llm_relabeling_enabled=True,
+            llm_relabeling_prompt_name="algum_prompt",
+            show_progress=False,
+        )
+
+        labeled_corpus = read_dataset_file(labeled_path)
+        assert labeled_corpus["sentiment_label"].to_list() == ["negativo"]
 
 
 class TestRunFeaturesStage:

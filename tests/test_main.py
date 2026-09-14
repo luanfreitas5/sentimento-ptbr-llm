@@ -62,3 +62,23 @@ class TestBuildLabelingStageKwargs:
         kwargs = _build_labeling_stage_kwargs(paths, general_config, settings, args)
 
         assert kwargs["max_workers"] is None
+
+    def test_includes_llm_relabeling_kwargs_from_config(self) -> None:
+        """Os parâmetros de ``configs/labeling.yaml -> llm_relabeling`` devem chegar aos kwargs."""
+        args = parse_arguments(["--stage", "labeling"])
+        paths = load_project_paths()
+        general_config = load_general_config()
+        settings = create_settings()
+
+        kwargs = _build_labeling_stage_kwargs(paths, general_config, settings, args)
+
+        assert kwargs["llm_relabeling_enabled"] is True
+        assert kwargs["llm_relabeling_score_threshold"] == 0.5
+        assert (
+            kwargs["llm_relabeling_prompt_name"]
+            == "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
+        )
+        assert kwargs["llm_relabeling_model"] == "UnB-Llama-3.3-70B-Instruct"
+        assert kwargs["llm_relabeling_temperature"] == 0.0
+        assert kwargs["llm_relabeling_max_retries"] == 3
+        assert kwargs["llm_relabeling_n_workers"] == 8
