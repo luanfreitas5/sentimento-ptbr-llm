@@ -1,0 +1,69 @@
+Os textos são tweets em português brasileiro, anotados com um sentimento
+(positivo, negativo ou neutro) e um score de confiança do classificador.
+Estamos analisando os tweets de BAIXA confiança — casos em que o classificador
+ficou em dúvida sobre o sentimento.
+
+Sua tarefa: descrever o conceito ativador como uma característica textual concisa
+que ajude a explicar POR QUE esses tweets são difíceis de classificar.
+
+RUBRICA — um bom conceito:
+- Descreve uma propriedade OBSERVÁVEL do texto (estrutura, léxico, pragmática),
+  nunca o rótulo de sentimento nem o estado do classificador.
+- É discriminativo: verdadeiro para os exemplos de alta ativação e falso para os
+  de baixa ativação. Se serve para quase qualquer tweet, está errado.
+- Aponta o MECANISMO da ambiguidade, não a ambiguidade em si. "é ambíguo" e
+  "confunde o modelo" são tautologias e estão proibidos.
+- Tem entre 4 e 12 palavras, em português, no presente da terceira pessoa.
+- Não cita o tópico do tweet (futebol, política, empresa X) a menos que o tópico
+  seja o próprio mecanismo.
+
+CATEGORIAS DE AMBIGUIDADE (para a distribuição):
+- ironia_sarcasmo: a intenção contradiz a literalidade.
+- polaridade_mista: elogio e crítica coexistem no mesmo tweet.
+- alvo_indefinido: há carga afetiva, mas não se sabe sobre quem ou o quê.
+- contexto_ausente: depende de thread, citação, link ou imagem não vistos.
+- ruido_lexical: gíria, abreviação, erro de digitação, emoji ambíguo, caixa alta.
+- factual_com_carga: relato de fato negativo/positivo sem avaliação do autor.
+- negacao_condicional: negação, ressalva, hipótese ou pergunta retórica invertem
+  ou suspendem a polaridade.
+
+EXEMPLOS:
+
+Exemplos de alta ativação:
+- "parabéns pela atualização, agora trava DUAS vezes por hora 👏👏"
+- "nossa que serviço impecável, só 40 min esperando na linha"
+- "adorei receber o produto quebrado, experiência linda"
+Resposta:
+{"conceito":"usa elogio literal para expressar reclamação",
+ "categoria_probs":{"ironia_sarcasmo":0.88,"polaridade_mista":0.05,"alvo_indefinido":0.01,"contexto_ausente":0.01,"ruido_lexical":0.03,"factual_com_carga":0.01,"negacao_condicional":0.01},
+ "cobertura":0.95,"especificidade":0.85}
+
+Exemplos de alta ativação:
+- "o app é rápido mas a interface é horrível"
+- "atendimento excelente, pena que o preço não compensa"
+- "gostei da história, a atuação que me matou"
+Resposta:
+{"conceito":"contrasta um aspecto positivo e outro negativo com conector adversativo",
+ "categoria_probs":{"ironia_sarcasmo":0.02,"polaridade_mista":0.90,"alvo_indefinido":0.02,"contexto_ausente":0.01,"ruido_lexical":0.01,"factual_com_carga":0.02,"negacao_condicional":0.02},
+ "cobertura":1.0,"especificidade":0.80}
+
+Exemplos de alta ativação:
+- "kkkkk n acredito nisso mds"
+- "aff sla mano"
+- "pqp véi 💀💀"
+Resposta:
+{"conceito":"é muito curto e composto de interjeições e abreviações da internet",
+ "categoria_probs":{"ironia_sarcasmo":0.05,"polaridade_mista":0.02,"alvo_indefinido":0.20,"contexto_ausente":0.25,"ruido_lexical":0.45,"factual_com_carga":0.01,"negacao_condicional":0.02},
+ "cobertura":0.90,"especificidade":0.70}
+
+Contraexemplo (NÃO faça isso):
+{"conceito":"tweets que o classificador tem dificuldade em rotular"}
+Motivo: repete a premissa, não descreve nenhuma propriedade do texto.
+
+FORMATO DE SAÍDA:
+Responda APENAS com um objeto JSON válido, sem markdown e sem explicação.
+- categoria_probs deve conter as 7 categorias e somar 1.0.
+- cobertura: fração dos exemplos de ALTA ativação em que o conceito se verifica.
+- especificidade: sua probabilidade de que o conceito NÃO se verifique nos
+  exemplos de baixa ativação.
+Responda em português.

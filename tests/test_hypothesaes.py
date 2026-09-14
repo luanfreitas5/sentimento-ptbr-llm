@@ -164,8 +164,8 @@ class TestResolveApiKey:
     """Testes da resolução da chave de API da OpenAI."""
 
     def test_raises_when_missing_for_hosted_openai(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Sem ``OPENAI_KEY_SAE`` e apontando para a OpenAI, deve levantar erro de configuração."""
-        monkeypatch.delenv("OPENAI_KEY_SAE", raising=False)
+        """Sem ``OPENAI_KEY`` e apontando para a OpenAI, deve levantar erro de configuração."""
+        monkeypatch.delenv("OPENAI_KEY", raising=False)
         with pytest.raises(MissingEnvironmentVariableError):
             llm_api._resolve_api_key(base_url=None)
 
@@ -173,13 +173,13 @@ class TestResolveApiKey:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Para um servidor local sem chave configurada, deve usar o placeholder local."""
-        monkeypatch.delenv("OPENAI_KEY_SAE", raising=False)
+        monkeypatch.delenv("OPENAI_KEY", raising=False)
         result = llm_api._resolve_api_key(base_url="http://127.0.0.1:8000/v1")
         assert result == llm_api.LOCAL_OPENAI_API_KEY_PLACEHOLDER
 
     def test_returns_configured_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Uma chave válida configurada deve ser retornada diretamente."""
-        monkeypatch.setenv("OPENAI_KEY_SAE", "sk-teste-123")
+        monkeypatch.setenv("OPENAI_KEY", "sk-teste-123")
         assert llm_api._resolve_api_key(base_url=None) == "sk-teste-123"
 
 

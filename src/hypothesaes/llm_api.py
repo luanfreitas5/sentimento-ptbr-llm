@@ -1,11 +1,13 @@
 """Cliente OpenAI-compatível para geração de completions (Responses API).
 
 Camada fina sobre a Responses API da OpenAI (ou qualquer servidor
-compatível, ex.: vLLM local), usada por ``interpret_neurons`` (interpretação
-de neurônios) e ``annotate`` (checagem de conceitos em texto). Isola o
-projeto do SDK ``openai`` (dependência pesada e opcional) e centraliza
-autenticação, retomada com backoff exponencial e normalização de parâmetros
-específicos de modelos ``gpt-5.x`` (``reasoning_effort``, ``verbosity``).
+compatível, ex.: vLLM local, ou o endpoint UnB usado pela re-rotulagem via
+LLM da etapa ``labeling`` — ``src/labeling/llm_relabeling.py``), usada por
+``interpret_neurons`` (interpretação de neurônios) e ``annotate`` (checagem
+de conceitos em texto). Isola o projeto do SDK ``openai`` (dependência
+pesada e opcional) e centraliza autenticação, retomada com backoff
+exponencial e normalização de parâmetros específicos de modelos ``gpt-5.x``
+(``reasoning_effort``, ``verbosity``).
 
 ``openai`` não está listado nas dependências base do projeto: o import
 ocorre de forma tardia, dentro das funções deste módulo, para que o restante
@@ -207,7 +209,7 @@ def _uses_openai_hosted_auth(base_url: str | None) -> bool:
 
 
 def _resolve_api_key(base_url: str | None) -> str:
-    """Resolve a chave de API a partir de ``OPENAI_KEY_SAE``.
+    """Resolve a chave de API a partir de ``OPENAI_KEY``.
 
     Parameters
     ----------
@@ -224,24 +226,25 @@ def _resolve_api_key(base_url: str | None) -> str:
     ------
     MissingEnvironmentVariableError
         Se a requisição for destinada à API oficial da OpenAI e
-        ``OPENAI_KEY_SAE`` não estiver definida.
+        ``OPENAI_KEY`` não estiver definida.
     """
     import os
 
-    api_key = os.environ.get("OPENAI_KEY_SAE")
+    api_key = os.environ.get("OPENAI_KEY")
     if api_key and "..." not in api_key:
         return api_key
     if _uses_openai_hosted_auth(base_url):
-        raise MissingEnvironmentVariableError("OPENAI_KEY_SAE")
+        raise MissingEnvironmentVariableError("OPENAI_KEY")
     return LOCAL_OPENAI_API_KEY_PLACEHOLDER
 
 
 def create_client() -> Any:
     """Cria (ou reaproveita do cache) um cliente OpenAI-compatível.
 
-    Lê ``OPENAI_KEY_SAE`` (obrigatória para requisições hospedadas pela
+    Lê ``OPENAI_KEY`` (obrigatória para requisições hospedadas pela
     OpenAI) e ``OPENAI_BASE_URL`` (opcional, para apontar a um servidor
-    local/compatível, ex.: vLLM). Clientes são cacheados por
+    local/compatível, ex.: vLLM, ou o endpoint UnB usado pelas etapas
+    ``labeling`` e ``hypothesaes_analysis``). Clientes são cacheados por
     ``(api_key, base_url)`` para evitar reconexões desnecessárias.
 
     Returns
@@ -254,7 +257,7 @@ def create_client() -> Any:
     ModelError
         Se a biblioteca ``openai`` não estiver instalada.
     MissingEnvironmentVariableError
-        Se ``OPENAI_KEY_SAE`` for necessária e não estiver definida.
+        Se ``OPENAI_KEY`` for necessária e não estiver definida.
     """
     import os
 

@@ -2,7 +2,9 @@
 
 Funções de apoio usadas por praticamente todos os outros módulos de
 ``hypothesaes`` (``annotate``, ``interpret_neurons``, ``evaluation``): carga
-e cache de templates de prompt (``src/hypothesaes/prompts/*.txt``),
+e cache de templates de prompt (``prompts/*.txt``, na raiz do repositório —
+compartilhado com ``src/labeling/llm_relabeling.py``, ver CLAUDE.md "os
+códigos devem ler e carregar prompts de arquivos txt em prompts/"),
 truncamento de texto por palavras/caracteres/tokens antes de enviá-lo a um
 LLM, filtragem de textos inválidos e leitura/escrita simples de JSON.
 """
@@ -13,17 +15,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from config.paths import PROJECT_ROOT
 from exceptions.data import DataNotFoundError
 
 logger = logging.getLogger(__name__)
 
-PROMPTS_DIR: Path = Path(__file__).resolve().parent / "prompts"
+PROMPTS_DIR: Path = PROJECT_ROOT / "prompts"
 
 _PROMPT_TEMPLATE_CACHE: dict[str, str] = {}
 
 
 def load_prompt_template(prompt_name: str) -> str:
-    """Carrega um template de prompt de ``src/hypothesaes/prompts/`` (com cache em memória).
+    """Carrega um template de prompt de ``prompts/`` (com cache em memória).
 
     Parameters
     ----------

@@ -46,3 +46,18 @@ diagnostics:
   autoencoder_reconstruction_error:
     enabled: true
     anomaly_percentile: 95
+
+# Re-rotulagem via LLM das amostras com confidence_score (concordância da
+# cascata) abaixo de score_threshold. Roda após a cascata/consenso e antes
+# da incorporação de rótulos humanos (que sempre prevalece sobre o LLM).
+# Credenciais do endpoint OpenAI-compatível em OPENAI_BASE_URL/OPENAI_KEY
+# (.env — ver .env.example), lidas por src/hypothesaes/llm_api.py.
+llm_relabeling:
+  enabled: true
+  score_threshold: 0.5
+  # Nome do template em prompts/ (sem a extensão .txt).
+  prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
+  model: "UnB-Llama-3.3-70B-Instruct"
+  temperature: 0.0
+  max_retries: 3
+  n_workers: 8

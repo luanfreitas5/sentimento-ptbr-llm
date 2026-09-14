@@ -1,0 +1,10 @@
+Analise o tweet em português brasileiro abaixo.
+
+1) Extraia até 3 trechos que carregam sentimento (palavras, emojis, pontuação).
+2) Decida se o autor é positivo, negativo ou neutro. Neutro = fato, pergunta ou ambiguidade real.
+3) Atribua confiança 0.0-1.0.
+
+Responda APENAS neste JSON:
+{"evidence":["...","..."],"label":"positivo|negativo|neutro","confidence":0.0-1.0}
+
+Tweet: "{{TEXTO}}"

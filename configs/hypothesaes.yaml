@@ -36,24 +36,18 @@ evaluation:
   validation_size: 0.1 # fração p/ validação (early stopping do SAE)
 
 llm:
-  # Endpoint OpenAI-compatível (Ollama local, por padrão); sobrescrito por
-  # settings.ollama_base_url (.env), se definida (ver src/main.py).
-  base_url: "http://localhost:11434/v1"
-  interpreter_model: "llama3.1:latest"
-  annotator_model: "llama3.1:latest"
+  # Endpoint OpenAI-compatível resolvido exclusivamente via
+  # OPENAI_BASE_URL/OPENAI_KEY (.env — ver .env.example), lidas por
+  # src/hypothesaes/llm_api.py::create_client. Nenhum endpoint/segredo é
+  # lido daqui (ver CLAUDE.md, "Data Privacy & LGPD").
+  interpreter_model: "UnB-Llama-3.3-70B-Instruct"
+  annotator_model: "UnB-Llama-3.3-70B-Instruct"
   n_examples_for_interpretation: 12
   max_words_per_example: 60
   max_interpretation_tokens: 200
   n_workers: 8
-  task_specific_instructions: >
-    Os textos são tweets em português brasileiro, anotados com um
-    sentimento (positivo, negativo ou neutro) e um score de confiança do
-    classificador. Estamos analisando os tweets de BAIXA confiança — casos
-    em que o classificador ficou em dúvida sobre o sentimento. Descreva o
-    conceito como uma característica concisa do texto que ajude a explicar
-    por que esses tweets são ambíguos ou difíceis de classificar. Exemplos
-    de características possíveis: "mistura elogio e crítica no mesmo
-    tweet", "usa ironia ou sarcasmo", "contém gírias ou abreviações da
-    internet", "é muito curto e sem contexto claro". Responda em português.
+  # Nome do template em prompts/ (sem a extensão .txt), usado como
+  # task_specific_instructions na interpretação de neurônios.
+  task_specific_instructions_prompt_name: "hypothesaes_1_rubrica_few-shot_distribuicao_probabilidade"
 
 random_seed: 42

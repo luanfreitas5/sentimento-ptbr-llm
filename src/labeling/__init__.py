@@ -25,6 +25,10 @@ manual
 validation
     Validação dos rótulos contra gold sets de referência via Kappa de
     Cohen e Alpha de Krippendorff.
+llm_relabeling
+    Re-rotulagem via LLM (``UnB-Llama-3.3-70B-Instruct``, ver
+    ``configs/labeling.yaml -> llm_relabeling``) das amostras com
+    ``confidence_score`` abaixo de um limiar configurável.
 """
 
 from labeling.automatic import (
@@ -43,6 +47,11 @@ from labeling.confidence import (
     flag_low_confidence_samples,
 )
 from labeling.consensus import aggregate_by_weighted_majority_vote, merge_consensus_into_corpus
+from labeling.llm_relabeling import (
+    DEFAULT_RELABEL_MODEL,
+    parse_relabel_response,
+    relabel_low_confidence_samples,
+)
 from labeling.manual import (
     apply_human_validation_labels,
     calculate_labeling_error_rate,
@@ -56,6 +65,7 @@ from labeling.validation import (
 )
 
 __all__: list[str] = [
+    "DEFAULT_RELABEL_MODEL",
     "NEGATIVE_WORDS",
     "POSITIVE_WORDS",
     "GoldSetValidationResult",
@@ -74,6 +84,8 @@ __all__: list[str] = [
     "evaluate_against_gold_set",
     "flag_low_confidence_samples",
     "merge_consensus_into_corpus",
+    "parse_relabel_response",
+    "relabel_low_confidence_samples",
     "run_cascade_labeling",
     "select_samples_for_human_validation",
 ]

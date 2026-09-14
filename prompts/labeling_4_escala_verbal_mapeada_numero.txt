@@ -1,0 +1,9 @@
+Classifique o sentimento do autor deste tweet em português.
+
+Rótulo: positivo, negativo ou neutro.
+Certeza: alta, media ou baixa.
+
+Formato exato, uma linha, sem mais nada:
+rotulo=<rotulo>;certeza=<certeza>
+
+Tweet: "{{TEXTO}}"

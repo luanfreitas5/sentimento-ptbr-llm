@@ -471,7 +471,7 @@ def _build_hypothesis_rows_with_scoring(
 
 
 def _select_predictive_neurons(
-    activations: torch.Tensor,
+    activations: np.ndarray,
     labels: np.ndarray,
     n_selected_neurons: int,
     selection_method: str,
@@ -496,7 +496,7 @@ def _select_predictive_neurons(
 
 def _interpret_selected_neurons(
     texts: list[str],
-    activations: torch.Tensor,
+    activations: np.ndarray,
     selected_neurons: list[int],
     *,
     cache_name: str | None,

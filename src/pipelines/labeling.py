@@ -6,7 +6,9 @@ corpus normalizado, agrega os candidatos por votação majoritária ponderada
 (``src/labeling/consensus.py``), sinaliza e amostra candidatos à validação
 humana (``src/labeling/manual.py``), incorpora rótulos humanos e/ou valida
 contra um gold set de referência (``src/labeling/validation.py``) quando
-informados, e grava o corpus rotulado final (``paths.labeled_corpus_file``).
+informados, re-rotula via LLM as amostras de baixa confiança remanescentes
+(``src/labeling/llm_relabeling.py``), e grava o corpus rotulado final
+(``paths.labeled_corpus_file``).
 """
 
 import logging
@@ -22,6 +24,7 @@ from io_utils.csv import write_csv
 from labeling.automatic import SentimentLabeler, run_cascade_labeling
 from labeling.confidence import calculate_discordance_score, flag_low_confidence_samples
 from labeling.consensus import aggregate_by_weighted_majority_vote, merge_consensus_into_corpus
+from labeling.llm_relabeling import DEFAULT_RELABEL_MODEL, relabel_low_confidence_samples
 from labeling.manual import apply_human_validation_labels, select_samples_for_human_validation
 from labeling.validation import evaluate_against_gold_set
 
@@ -100,6 +103,13 @@ def run_labeling_stage(
     human_validation_labels: pl.DataFrame | None = None,
     gold_set: pl.DataFrame | None = None,
     minimum_kappa: float = 0.6,
+    llm_relabeling_enabled: bool = False,
+    llm_relabeling_score_threshold: float = 0.5,
+    llm_relabeling_prompt_name: str | None = None,
+    llm_relabeling_model: str = DEFAULT_RELABEL_MODEL,
+    llm_relabeling_temperature: float = 0.0,
+    llm_relabeling_max_retries: int = 3,
+    llm_relabeling_n_workers: int = 8,
     max_workers: int | None = None,
     show_progress: bool = True,
 ) -> Path:
@@ -138,6 +148,28 @@ def run_labeling_stage(
     minimum_kappa : float, optional
         Repassado a :func:`labeling.validation.evaluate_against_gold_set`,
         by default 0.6.
+    llm_relabeling_enabled : bool, optional
+        Se ``True``, re-rotula via LLM as amostras com ``confidence_score``
+        abaixo de ``llm_relabeling_score_threshold`` (ver
+        :func:`labeling.llm_relabeling.relabel_low_confidence_samples`),
+        antes da incorporação de ``human_validation_labels`` — que, quando
+        informado, sempre prevalece sobre o rótulo do LLM, by default
+        False (``configs/labeling.yaml -> llm_relabeling.enabled``).
+    llm_relabeling_score_threshold : float, optional
+        Repassado como ``score_threshold``, by default 0.5.
+    llm_relabeling_prompt_name : str | None, optional
+        Nome do template de prompt em ``prompts/`` (sem ``.txt``),
+        repassado como ``prompt_name``; obrigatório quando
+        ``llm_relabeling_enabled=True``, by default None.
+    llm_relabeling_model : str, optional
+        Repassado como ``model``, by default
+        :data:`labeling.llm_relabeling.DEFAULT_RELABEL_MODEL`.
+    llm_relabeling_temperature : float, optional
+        Repassado como ``temperature``, by default 0.0.
+    llm_relabeling_max_retries : int, optional
+        Repassado como ``max_retries``, by default 3.
+    llm_relabeling_n_workers : int, optional
+        Repassado como ``n_workers``, by default 8.
     max_workers : int | None, optional
         Repassado a :func:`labeling.automatic.run_cascade_labeling`, by
         default None (o executor escolhe automaticamente).
@@ -156,6 +188,9 @@ def run_labeling_stage(
         Se o corpus normalizado ou ``labelers`` estiverem vazios.
     DataValidationError
         Se o corpus rotulado final violar o contrato de dados.
+    ValueError
+        Se ``llm_relabeling_enabled=True`` e ``llm_relabeling_prompt_name``
+        não for informado.
 
     Examples
     --------
@@ -180,6 +215,24 @@ def run_labeling_stage(
     if select_for_human_validation:
         _select_and_write_human_validation_sample(
             labeling_results, paths, sample_size=human_validation_sample_size
+        )
+
+    if llm_relabeling_enabled:
+        if not llm_relabeling_prompt_name:
+            raise ValueError(
+                "llm_relabeling_prompt_name é obrigatório quando llm_relabeling_enabled=True "
+                "(ver configs/labeling.yaml -> llm_relabeling.prompt_name)"
+            )
+        labeled_corpus = relabel_low_confidence_samples(
+            labeled_corpus,
+            text_column=text_column,
+            score_threshold=llm_relabeling_score_threshold,
+            prompt_name=llm_relabeling_prompt_name,
+            model=llm_relabeling_model,
+            temperature=llm_relabeling_temperature,
+            max_retries=llm_relabeling_max_retries,
+            n_workers=llm_relabeling_n_workers,
+            show_progress=show_progress,
         )
 
     if human_validation_labels is not None:

@@ -1,0 +1,4 @@
+Classifique o sentimento do tweet como positivo, negativo ou neutro e dê um score de confiança de 0 a 1.
+Responda em JSON: {"label": "...", "confidence": ...}
+
+Tweet: "{{TEXTO}}"

@@ -1,0 +1,3 @@
+O que você acha do sentimento desse tweet? Diga se é positivo, negativo ou neutro e o quanto você está confiante.
+
+Tweet: "{{TEXTO}}"
