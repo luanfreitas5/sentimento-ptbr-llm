@@ -63,3 +63,6 @@ llm_relabeling:
   temperature: 0.0
   max_retries: 3
   n_workers: 8
+  # Pausa (segundos) antes de cada chamada/tentativa ao LLM, para reduzir a
+  # taxa de requisições e evitar bloqueios por limite de taxa (HTTP 429).
+  request_interval_seconds: 1.0

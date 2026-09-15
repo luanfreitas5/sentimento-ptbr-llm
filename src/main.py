@@ -410,6 +410,9 @@ def _build_labeling_stage_kwargs(
         "llm_relabeling_temperature": llm_relabeling_config["temperature"],
         "llm_relabeling_max_retries": llm_relabeling_config["max_retries"],
         "llm_relabeling_n_workers": llm_relabeling_config["n_workers"],
+        "llm_relabeling_request_interval_seconds": llm_relabeling_config[
+            "request_interval_seconds"
+        ],
     }
 
 

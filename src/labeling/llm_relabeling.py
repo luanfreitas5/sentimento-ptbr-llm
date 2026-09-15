@@ -19,6 +19,7 @@ import concurrent.futures
 import json
 import logging
 import re
+import time
 from collections.abc import Sequence
 from typing import Any
 
@@ -118,6 +119,7 @@ def _relabel_single_text(
     temperature: float,
     max_retries: int,
     allowed_labels: Sequence[str],
+    request_interval_seconds: float = 0.0,
 ) -> tuple[str, float] | None:
     """Reenvia um único texto ao LLM e tenta interpretar a resposta, com retentativas.
 
@@ -135,6 +137,10 @@ def _relabel_single_text(
         Número máximo de tentativas até obter uma resposta interpretável.
     allowed_labels : Sequence[str]
         Classes de sentimento aceitas.
+    request_interval_seconds : float, optional
+        Pausa (``time.sleep``) antes de cada chamada/tentativa ao LLM, para
+        reduzir a taxa de requisições e evitar bloqueios por limite de taxa
+        (HTTP 429) da API OpenAI-compatível, by default 0.0 (sem pausa).
 
     Returns
     -------
@@ -144,6 +150,8 @@ def _relabel_single_text(
     """
     prompt = prompt_template.replace(_TEXT_PLACEHOLDER, text)
     for attempt in range(max_retries):
+        if request_interval_seconds > 0:
+            time.sleep(request_interval_seconds)
         try:
             raw_response = generate_completion(prompt=prompt, model=model, temperature=temperature)
         except Exception:
@@ -188,6 +196,7 @@ def _run_relabel_workers(
     allowed_labels: Sequence[str],
     n_workers: int,
     show_progress: bool,
+    request_interval_seconds: float = 0.0,
 ) -> list[tuple[str, float] | None]:
     """Dispara a re-rotulagem de ``texts`` em paralelo e coleta os resultados na ordem original."""
     results: list[tuple[str, float] | None] = [None] * len(texts)
@@ -201,6 +210,7 @@ def _run_relabel_workers(
                 temperature=temperature,
                 max_retries=max_retries,
                 allowed_labels=allowed_labels,
+                request_interval_seconds=request_interval_seconds,
             ): index
             for index, text in enumerate(texts)
         }
@@ -272,6 +282,7 @@ def relabel_low_confidence_samples(
     n_workers: int = 8,
     allowed_labels: Sequence[str] = SENTIMENT_CLASSES,
     show_progress: bool = True,
+    request_interval_seconds: float = 0.0,
 ) -> pl.DataFrame:
     """Re-rotula, via LLM, as amostras de ``labeled_corpus`` com confiança abaixo do limiar.
 
@@ -320,6 +331,12 @@ def relabel_low_confidence_samples(
         :data:`constants.labels.SENTIMENT_CLASSES`.
     show_progress : bool, optional
         Se exibe uma barra de progresso no console, by default True.
+    request_interval_seconds : float, optional
+        Pausa (``time.sleep``) antes de cada chamada/tentativa ao LLM (por
+        worker), para reduzir a taxa de requisições à API OpenAI-compatível
+        e evitar bloqueios por limite de taxa (HTTP 429), by default 0.0
+        (sem pausa) (``configs/labeling.yaml ->
+        llm_relabeling.request_interval_seconds``).
 
     Returns
     -------
@@ -368,6 +385,7 @@ def relabel_low_confidence_samples(
         allowed_labels=allowed_labels,
         n_workers=n_workers,
         show_progress=show_progress,
+        request_interval_seconds=request_interval_seconds,
     )
 
     n_success = sum(result is not None for result in results)

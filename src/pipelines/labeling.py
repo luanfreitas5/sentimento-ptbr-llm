@@ -120,6 +120,7 @@ def run_labeling_stage(
     llm_relabeling_temperature: float = 0.0,
     llm_relabeling_max_retries: int = 3,
     llm_relabeling_n_workers: int = 8,
+    llm_relabeling_request_interval_seconds: float = 0.0,
     show_progress: bool = True,
 ) -> Path:
     """Executa a etapa de rotulagem via pipeline Hugging Face sobre o corpus normalizado.
@@ -191,6 +192,10 @@ def run_labeling_stage(
         Repassado como ``max_retries``, by default 3.
     llm_relabeling_n_workers : int, optional
         Repassado como ``n_workers``, by default 8.
+    llm_relabeling_request_interval_seconds : float, optional
+        Repassado como ``request_interval_seconds`` — pausa antes de cada
+        chamada/tentativa ao LLM, para reduzir a taxa de requisições e
+        evitar bloqueios por limite de taxa (HTTP 429), by default 0.0.
     show_progress : bool, optional
         Se ``True``, exibe uma barra de progresso no console, by default
         True.
@@ -251,6 +256,7 @@ def run_labeling_stage(
             temperature=llm_relabeling_temperature,
             max_retries=llm_relabeling_max_retries,
             n_workers=llm_relabeling_n_workers,
+            request_interval_seconds=llm_relabeling_request_interval_seconds,
             show_progress=show_progress,
         )
 
