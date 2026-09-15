@@ -154,6 +154,56 @@ def calculate_discordance_score(labeling_results: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def flag_low_confidence_predictions(
+    labeled_corpus: pl.DataFrame,
+    *,
+    confidence_column: str = "confidence_score",
+    low_confidence_threshold: float = 0.5,
+) -> pl.DataFrame:
+    """Sinaliza amostras cuja confiança do modelo esteja abaixo do limiar mínimo.
+
+    Usada pela rotulagem via pipeline único do Hugging Face
+    (``src/labeling/huggingface.py``) no lugar de
+    :func:`flag_low_confidence_samples`: sem múltiplos rotuladores da
+    cascata não há discordância a medir, apenas a confiança que o próprio
+    modelo atribuiu ao rótulo previsto.
+
+    Parameters
+    ----------
+    labeled_corpus : pl.DataFrame
+        Corpus rotulado, contendo ao menos ``confidence_column``.
+    confidence_column : str, optional
+        Coluna de confiança usada para sinalizar candidatos, by default
+        "confidence_score".
+    low_confidence_threshold : float, optional
+        Abaixo deste valor, a amostra é sinalizada, by default 0.5
+        (``configs/labeling.yaml -> confidence.low_confidence_threshold``).
+
+    Returns
+    -------
+    pl.DataFrame
+        ``labeled_corpus`` acrescido da coluna booleana
+        ``requires_human_validation``.
+
+    Examples
+    --------
+    >>> df = pl.DataFrame({"id": ["1", "2"], "confidence_score": [0.4, 0.9]})
+    >>> flag_low_confidence_predictions(df)["requires_human_validation"].to_list()
+    [True, False]
+    """
+    flagged = labeled_corpus.with_columns(
+        (pl.col(confidence_column) < low_confidence_threshold).alias("requires_human_validation")
+    )
+    n_flagged = flagged.filter(pl.col("requires_human_validation")).height
+    logger.info(
+        "%d/%d amostra(s) sinalizada(s) para validação humana (confiança < %.2f).",
+        n_flagged,
+        flagged.height,
+        low_confidence_threshold,
+    )
+    return flagged
+
+
 def flag_low_confidence_samples(
     discordance_scores: pl.DataFrame,
     *,

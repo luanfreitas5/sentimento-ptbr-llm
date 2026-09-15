@@ -121,7 +121,7 @@ sentimento-ptbr-llm/
 │   │   └── prompts/
 │   ├── inference/                      # Camada comum de inferência
 │   ├── io_utils/                        # Leitura/escrita (YAML, JSON, CSV, Parquet, modelo)
-│   ├── labeling/                         # Rotulagem em cascata
+│   ├── labeling/                         # Rotulagem via pipeline Hugging Face
 │   ├── llm/                               # LLMs locais e orquestração LangChain
 │   ├── logging_utils/                      # Handlers, formatadores e utilitários de log
 │   ├── metrics/                             # Métricas de classificação/ranking/confiança

@@ -1,4 +1,4 @@
-"""Testes do pipeline de rotulagem semiautomática em cascata (``src/labeling``)."""
+"""Testes do pipeline de rotulagem de sentimento (``src/labeling``)."""
 
 import polars as pl
 import pytest
@@ -20,9 +20,16 @@ from labeling.confidence import (
     calculate_agreement_ratio,
     calculate_discordance_score,
     calculate_weighted_label_scores,
+    flag_low_confidence_predictions,
     flag_low_confidence_samples,
 )
 from labeling.consensus import aggregate_by_weighted_majority_vote, merge_consensus_into_corpus
+from labeling.huggingface import (
+    DEFAULT_LABEL_MAPPING,
+    _map_prediction_to_label,
+    _resolve_pipeline_device,
+    label_corpus_with_huggingface_pipeline,
+)
 from labeling.llm_relabeling import (
     _extract_confidence,
     _relabel_single_text,
@@ -248,6 +255,151 @@ class TestLabelIndexedItem:
         )
 
 
+class _FakeHuggingFacePipeline:
+    """Dublê de teste do pipeline Hugging Face, sem ``transformers``/``torch`` instalados.
+
+    Devolve, para cada texto, a predição correspondente informada em
+    ``predictions_by_text`` (por posição na chamada), permitindo simular
+    lotes com rótulos e pontuações controladas.
+    """
+
+    def __init__(self, predictions: list[dict]) -> None:
+        self._predictions = predictions
+        self.calls: list[list[str]] = []
+
+    def __call__(self, texts):
+        self.calls.append(list(texts))
+        start = sum(len(call) for call in self.calls[:-1])
+        return self._predictions[start : start + len(texts)]
+
+
+class TestResolvePipelineDevice:
+    """Testes da resolução do dispositivo do pipeline Hugging Face."""
+
+    class _FakeTorchCudaAvailable:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+    class _FakeTorchCudaUnavailable:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+    def test_resolves_to_cuda_when_available_and_device_none(self) -> None:
+        """``device=None`` deve resolver para ``"cuda"`` quando disponível."""
+
+        class _FakeTorch:
+            cuda = TestResolvePipelineDevice._FakeTorchCudaAvailable()
+
+        assert _resolve_pipeline_device(None, _FakeTorch()) == "cuda"
+
+    def test_resolves_to_cpu_when_unavailable_and_device_auto(self) -> None:
+        """``device="auto"`` deve resolver para ``"cpu"`` quando cuda indisponível."""
+
+        class _FakeTorch:
+            cuda = TestResolvePipelineDevice._FakeTorchCudaUnavailable()
+
+        assert _resolve_pipeline_device("auto", _FakeTorch()) == "cpu"
+
+    def test_respects_explicit_device(self) -> None:
+        """Um dispositivo explícito não deve ser sobrescrito."""
+
+        class _FakeTorch:
+            cuda = TestResolvePipelineDevice._FakeTorchCudaAvailable()
+
+        assert _resolve_pipeline_device("cuda:1", _FakeTorch()) == "cuda:1"
+
+
+class TestMapPredictionToLabel:
+    """Testes da conversão da predição bruta do pipeline em rótulo pt-BR + confiança."""
+
+    def test_maps_known_label_and_rounds_confidence_to_four_decimals(self) -> None:
+        """O rótulo mapeado e a confiança arredondada a 4 casas devem ser retornados."""
+        label, confidence = _map_prediction_to_label(
+            {"label": "POS", "score": 0.987654321}, label_mapping=DEFAULT_LABEL_MAPPING
+        )
+        assert label == "positivo"
+        assert confidence == 0.9877
+
+    def test_raises_for_label_outside_mapping(self) -> None:
+        """Um rótulo bruto fora do mapeamento deve levantar ``DataValidationError``."""
+        with pytest.raises(DataValidationError):
+            _map_prediction_to_label(
+                {"label": "DESCONHECIDO", "score": 0.5}, label_mapping=DEFAULT_LABEL_MAPPING
+            )
+
+
+class TestLabelCorpusWithHuggingfacePipeline:
+    """Testes da classificação em lote do corpus via pipeline Hugging Face."""
+
+    def test_produces_sentiment_label_and_confidence_score_columns(self) -> None:
+        """Deve produzir ``sentiment_label``/``confidence_score`` sem nenhum valor vazio."""
+        df = pl.DataFrame(
+            {"id": ["1", "2"], "text_normalized": ["adorei o produto", "produto pessimo"]}
+        )
+        pipeline = _FakeHuggingFacePipeline(
+            [{"label": "POS", "score": 0.9}, {"label": "NEG", "score": 0.8}]
+        )
+
+        result = label_corpus_with_huggingface_pipeline(df, pipeline, show_progress=False)
+
+        assert result["sentiment_label"].to_list() == ["positivo", "negativo"]
+        assert result["confidence_score"].to_list() == [0.9, 0.8]
+        assert result["sentiment_label"].null_count() == 0
+        assert result["confidence_score"].null_count() == 0
+
+    def test_rounds_confidence_score_to_four_decimal_places(self) -> None:
+        """A confiança gravada deve sempre ter 4 casas decimais."""
+        df = pl.DataFrame({"id": ["1"], "text_normalized": ["texto qualquer"]})
+        pipeline = _FakeHuggingFacePipeline([{"label": "NEU", "score": 0.123456}])
+
+        result = label_corpus_with_huggingface_pipeline(df, pipeline, show_progress=False)
+
+        assert result["confidence_score"].to_list() == [0.1235]
+
+    def test_classifies_in_batches_of_configured_size(self) -> None:
+        """Deve agrupar os textos em lotes de ``batch_size`` ao chamar o pipeline."""
+        df = pl.DataFrame(
+            {
+                "id": ["1", "2", "3"],
+                "text_normalized": ["a", "b", "c"],
+            }
+        )
+        pipeline = _FakeHuggingFacePipeline([{"label": "NEU", "score": 0.5}] * 3)
+
+        label_corpus_with_huggingface_pipeline(df, pipeline, batch_size=2, show_progress=False)
+
+        assert [len(call) for call in pipeline.calls] == [2, 1]
+
+    def test_uses_custom_label_mapping(self) -> None:
+        """Um ``label_mapping`` customizado deve ser respeitado."""
+        df = pl.DataFrame({"id": ["1"], "text_normalized": ["texto"]})
+        pipeline = _FakeHuggingFacePipeline([{"label": "LABEL_2", "score": 0.7}])
+
+        result = label_corpus_with_huggingface_pipeline(
+            df, pipeline, label_mapping={"LABEL_2": "positivo"}, show_progress=False
+        )
+
+        assert result["sentiment_label"].to_list() == ["positivo"]
+
+    def test_raises_for_empty_dataframe(self) -> None:
+        """Um DataFrame vazio deve levantar ``EmptyDatasetError``."""
+        df = pl.DataFrame(
+            {"id": [], "text_normalized": []},
+            schema={"id": pl.Utf8, "text_normalized": pl.Utf8},
+        )
+        with pytest.raises(EmptyDatasetError):
+            label_corpus_with_huggingface_pipeline(df, _FakeHuggingFacePipeline([]))
+
+    def test_raises_when_pipeline_returns_unmapped_label(self) -> None:
+        """Um rótulo bruto fora de ``label_mapping`` deve levantar ``DataValidationError``."""
+        df = pl.DataFrame({"id": ["1"], "text_normalized": ["texto"]})
+        pipeline = _FakeHuggingFacePipeline([{"label": "DESCONHECIDO", "score": 0.5}])
+        with pytest.raises(DataValidationError):
+            label_corpus_with_huggingface_pipeline(df, pipeline, show_progress=False)
+
+
 class TestCalculateWeightedLabelScores:
     """Testes da soma de scores ponderados por amostra e rótulo candidato."""
 
@@ -384,6 +536,28 @@ class TestFlagLowConfidenceSamples:
         assert result["requires_human_validation"].to_list() == [False]
 
 
+class TestFlagLowConfidencePredictions:
+    """Testes da sinalização de amostras por confiança abaixo do limiar (pipeline único)."""
+
+    def test_flags_sample_below_threshold(self) -> None:
+        """Uma amostra com confiança abaixo do limiar deve ser sinalizada."""
+        df = pl.DataFrame({"id": ["1", "2"], "confidence_score": [0.4, 0.9]})
+        result = flag_low_confidence_predictions(df)
+        assert result["requires_human_validation"].to_list() == [True, False]
+
+    def test_respects_custom_threshold(self) -> None:
+        """Um limiar customizado deve ser respeitado."""
+        df = pl.DataFrame({"id": ["1"], "confidence_score": [0.4]})
+        result = flag_low_confidence_predictions(df, low_confidence_threshold=0.0)
+        assert result["requires_human_validation"].to_list() == [False]
+
+    def test_respects_custom_confidence_column(self) -> None:
+        """Deve ler o limiar da coluna informada, não apenas de ``confidence_score``."""
+        df = pl.DataFrame({"id": ["1"], "outra_coluna": [0.1]})
+        result = flag_low_confidence_predictions(df, confidence_column="outra_coluna")
+        assert result["requires_human_validation"].to_list() == [True]
+
+
 class TestAggregateByWeightedMajorityVote:
     """Testes da agregação de candidatos em um rótulo de consenso."""
 
@@ -493,6 +667,21 @@ class TestSelectSamplesForHumanValidation:
         )
         with pytest.raises(EmptyDatasetError):
             select_samples_for_human_validation(df)
+
+    def test_stratifies_by_confidence_score_column(self) -> None:
+        """Deve estratificar por ``confidence_score`` quando informado (pipeline único)."""
+        df = pl.DataFrame(
+            {
+                "id": [str(i) for i in range(6)],
+                "sentiment_label": ["positivo"] * 3 + ["negativo"] * 3,
+                "confidence_score": [0.2, 0.25, 0.28, 0.35, 0.4, 0.45],
+                "requires_human_validation": [True] * 6,
+            }
+        )
+        result = select_samples_for_human_validation(
+            df, confidence_column="confidence_score", sample_size=6
+        )
+        assert result.height == 6
 
 
 class TestApplyHumanValidationLabels:

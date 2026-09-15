@@ -48,7 +48,7 @@ from exceptions.configuration import InvalidConfigurationError
 from features.lexical import pivot_tfidf_features_to_wide
 from hypothesaes.utils import load_prompt_template
 from io_utils.yaml import read_yaml
-from labeling.automatic import LexicalHeuristicLabeler, SentimentLabeler
+from labeling.huggingface import load_huggingface_sentiment_pipeline
 from pipelines.training_classical import DEFAULT_CLASSICAL_MODEL_NAMES
 from pipelines.training_deep_learning import DEFAULT_DEEP_LEARNING_MODEL_NAMES
 from pipelines.workflow import STAGE_REGISTRY, run_pipeline_stage
@@ -363,11 +363,9 @@ def _build_labeling_stage_kwargs(
 ) -> dict[str, Any]:
     """Monta os argumentos de :func:`pipelines.labeling.run_labeling_stage`.
 
-    Apenas o rotulador heurístico-lexical (:class:`labeling.automatic.LexicalHeuristicLabeler`)
-    é injetado nesta composição: os demais rotuladores de ``configs/labeling.yaml
-    -> cascade.labelers`` (``llm_zero_shot``, ``modelo_referencia``) dependem de
-    módulos ainda não implementados neste projeto (um rotulador via LLM e um
-    classificador de referência já treinado, respectivamente).
+    Carrega o pipeline de sentimento do Hugging Face (ver
+    ``configs/labeling.yaml -> huggingface``) e o injeta já pronto, seguindo
+    o mesmo padrão de composição raiz das demais etapas.
 
     Parameters
     ----------
@@ -379,32 +377,31 @@ def _build_labeling_stage_kwargs(
         Configurações sensíveis ao ambiente, não utilizadas diretamente
         nesta etapa.
     args : argparse.Namespace
-        Argumentos de linha de comando (``--max-workers``).
+        Argumentos de linha de comando, não utilizados diretamente nesta
+        etapa.
 
     Returns
     -------
     dict[str, Any]
         Argumentos nomeados para :func:`pipelines.labeling.run_labeling_stage`.
     """
-    del general_config, settings
+    del general_config, settings, args
     labeling_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["labeling"])
-    labelers: dict[str, SentimentLabeler] = {"heuristica_lexica": LexicalHeuristicLabeler()}
-    weights = {
-        labeler["name"]: labeler["weight"]
-        for labeler in labeling_config["cascade"]["labelers"]
-        if labeler["name"] in labelers
-    }
-    logger.warning(
-        "Rotuladores 'llm_zero_shot'/'modelo_referencia' de configs/labeling.yaml "
-        "ainda não estão implementados neste projeto; usando apenas "
-        "'heuristica_lexica' nesta execução."
+    huggingface_config = labeling_config["huggingface"]
+    pipeline = load_huggingface_sentiment_pipeline(
+        model_name=huggingface_config["model"],
+        device=huggingface_config["device"],
+        batch_size=huggingface_config["batch_size"],
+        max_length=huggingface_config["max_length"],
     )
     llm_relabeling_config = labeling_config["llm_relabeling"]
     return {
         "paths": paths,
-        "labelers": labelers,
-        "weights": weights,
+        "pipeline": pipeline,
+        "label_mapping": huggingface_config["label_mapping"],
+        "huggingface_batch_size": huggingface_config["batch_size"],
         "human_validation_sample_size": labeling_config["human_validation"]["sample_size"],
+        "low_confidence_threshold": labeling_config["confidence"]["low_confidence_threshold"],
         "minimum_kappa": labeling_config["validation"]["minimum_agreement"],
         "llm_relabeling_enabled": llm_relabeling_config["enabled"],
         "llm_relabeling_score_threshold": llm_relabeling_config["score_threshold"],
@@ -413,7 +410,6 @@ def _build_labeling_stage_kwargs(
         "llm_relabeling_temperature": llm_relabeling_config["temperature"],
         "llm_relabeling_max_retries": llm_relabeling_config["max_retries"],
         "llm_relabeling_n_workers": llm_relabeling_config["n_workers"],
-        "max_workers": args.max_workers,
     }
 
 

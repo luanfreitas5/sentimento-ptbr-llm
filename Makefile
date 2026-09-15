@@ -8,7 +8,7 @@ export PYTHONHASHSEED := 42
 
 .DEFAULT_GOAL := help
 .PHONY: help init venv install install-all \
-	install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data \
+	install-labeling install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data \
 	update lock export \
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
@@ -36,6 +36,9 @@ install:  ## Instala dependências (runtime + dev)
 
 install-all:  ## Instala tudo (todos os extras + dev)
 	uv sync --all-extras --dev
+
+install-labeling:  ## Instala os extras da etapa de rotulagem (PyTorch + Transformers + Accelerate)
+	uv sync --extra labeling --dev
 
 install-llm:  ## Instala os extras de LLM (PyTorch + Transformers + Accelerate + Ollama)
 	uv sync --extra llm --dev
@@ -191,7 +194,7 @@ pipeline-ingestion:  ## Executa a coleta de dados (requer SCRAPE_FUNC=modulo:fun
 pipeline-preprocessing:  ## Executa a etapa de pré-processamento do corpus bruto
 	$(RUN) --stage preprocessing
 
-pipeline-labeling:  ## Executa a etapa de rotulagem semiautomática em cascata
+pipeline-labeling:  ## Executa a etapa de rotulagem via pipeline Hugging Face (requer: make install-labeling)
 	$(RUN) --stage labeling
 
 pipeline-features:  ## Executa o split treino/validação/teste e a extração de features

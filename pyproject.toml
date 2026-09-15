@@ -128,6 +128,17 @@ torchaudio = { index = "pytorch-cu124" }
 
 # --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
 [project.optional-dependencies]
+# Recomendado para o estágio `labeling` (`make install-labeling`): classifica
+# o corpus via transformers.pipeline (src/labeling/huggingface.py, modelo
+# padrão em configs/labeling.yaml -> huggingface.model). Dependência pesada
+# (PyTorch + CUDA) — não instale em ambientes que só rodam etapas anteriores
+# à rotulagem.
+labeling = [
+    "torch>=2.2",                     # backend de tensores para Transformers/DL
+    "transformers>=4.44",             # checkpoints Hugging Face (pysentimiento/bertweet-pt-sentiment)
+    "accelerate>=0.33",               # execução eficiente de modelos Hugging Face (CPU/GPU)
+]
+
 # Recomendado para os estágios `hypothesaes` e a análise HypotheSAEs
 # (`make install-hypothesaes`). Dependências pesadas (PyTorch + CUDA) — não instale
 # em ambientes que só rodam ML clássico/DL sobre embeddings estáticos.

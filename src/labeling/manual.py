@@ -19,18 +19,22 @@ from utils.validation import validate_not_empty_collection
 logger = logging.getLogger(__name__)
 
 
-def _bucket_confidence_level(agreement_ratio: float) -> str:
-    """Classifica uma razão de concordância em uma faixa discreta de confiança.
+def _bucket_confidence_level(confidence_value: float) -> str:
+    """Classifica um valor de confiança em uma faixa discreta.
 
     Usado para estratificar a amostragem de validação humana
     (``sampling_strategy: "stratified_by_confidence"`` em
     ``configs/labeling.yaml``) sem depender de quantis, que exigiriam um
-    número mínimo de amostras distintas por faixa.
+    número mínimo de amostras distintas por faixa. Aplicável tanto à razão
+    de concordância da cascata (``agreement_ratio``, legado) quanto à
+    probabilidade do rótulo previsto pelo pipeline Hugging Face
+    (``confidence_score``, ver ``src/labeling/huggingface.py``) — ambos em
+    ``[0.0, 1.0]``.
 
     Parameters
     ----------
-    agreement_ratio : float
-        Razão de concordância da amostra, em ``[0.0, 1.0]``.
+    confidence_value : float
+        Valor de confiança da amostra, em ``[0.0, 1.0]``.
 
     Returns
     -------
@@ -47,9 +51,9 @@ def _bucket_confidence_level(agreement_ratio: float) -> str:
     >>> _bucket_confidence_level(0.6)
     'moderada'
     """
-    if agreement_ratio < 0.3:
+    if confidence_value < 0.3:
         return "baixa"
-    if agreement_ratio < 0.5:
+    if confidence_value < 0.5:
         return "media"
     return "moderada"
 
@@ -57,18 +61,25 @@ def _bucket_confidence_level(agreement_ratio: float) -> str:
 def select_samples_for_human_validation(
     flagged_consensus: pl.DataFrame,
     *,
+    confidence_column: str = "agreement_ratio",
     sample_size: int = 500,
     stratify_by_confidence: bool = True,
     random_seed: int = DEFAULT_RANDOM_SEED,
 ) -> pl.DataFrame:
-    """Seleciona amostras de baixa confiança/alta discordância para validação humana.
+    """Seleciona amostras de baixa confiança para validação humana.
 
     Parameters
     ----------
     flagged_consensus : pl.DataFrame
         Saída de ``src/labeling/confidence.py``'s
-        ``flag_low_confidence_samples``, contendo ``agreement_ratio`` e
-        ``requires_human_validation``.
+        ``flag_low_confidence_samples`` (cascata, coluna
+        ``agreement_ratio``) ou ``flag_low_confidence_predictions``
+        (pipeline Hugging Face, coluna ``confidence_score``), contendo
+        ``confidence_column`` e ``requires_human_validation``.
+    confidence_column : str, optional
+        Coluna de confiança usada para estratificar a amostra, by default
+        "agreement_ratio" (legado da cascata; use "confidence_score" para o
+        pipeline Hugging Face).
     sample_size : int, optional
         Número de amostras desejado, repassado a
         :func:`data.sampler.sample_random_subset`/
@@ -111,7 +122,7 @@ def select_samples_for_human_validation(
 
     if stratify_by_confidence:
         candidates = candidates.with_columns(
-            pl.col("agreement_ratio")
+            pl.col(confidence_column)
             .map_elements(_bucket_confidence_level, return_dtype=pl.Utf8)
             .alias("confidence_bucket")
         )

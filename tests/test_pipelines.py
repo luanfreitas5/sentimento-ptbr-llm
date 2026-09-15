@@ -21,7 +21,6 @@ from data.loader import read_dataset_file
 from data.writer import write_dataset, write_labeled_corpus
 from exceptions.data import DataValidationError, EmptyDatasetError
 from exceptions.pipeline import PipelineStageError, UnknownPipelineStageError
-from labeling.automatic import LexicalHeuristicLabeler
 from pipelines import hypothesaes_analysis, training_deep_learning, workflow
 from pipelines import labeling as labeling_pipeline
 from pipelines.comparative_evaluation import run_comparative_evaluation_stage
@@ -175,17 +174,32 @@ class TestRunPreprocessingStage:
         assert normalized_corpus.height == 1
 
 
+class _FakeSentimentPipeline:
+    """Dublê de teste do pipeline Hugging Face: POS para textos com "adorei", NEG caso contrário.
+
+    Simula ``transformers.pipeline("sentiment-analysis")`` sem depender de
+    ``transformers``/``torch`` instalados nem de rede (ver
+    ``src/labeling/huggingface.py``'s ``SentimentPipeline``).
+    """
+
+    def __call__(self, texts: Sequence[str]) -> list[dict[str, Any]]:
+        """Classifica um lote de textos pela presença da palavra "adorei"."""
+        return [
+            {"label": "POS", "score": 0.9} if "adorei" in text else {"label": "NEG", "score": 0.8}
+            for text in texts
+        ]
+
+
 class TestRunLabelingStage:
     """Testes de :func:`pipelines.labeling.run_labeling_stage`."""
 
-    def test_writes_labeled_corpus_via_lexical_heuristic_without_human_validation(
+    def test_writes_labeled_corpus_via_huggingface_pipeline_without_human_validation(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Deve rotular o corpus via heurística léxica e não gerar amostra de validação humana.
+        """Deve rotular o corpus via pipeline Hugging Face e não gerar amostra de validação humana.
 
-        Com um único rotulador, a razão de concordância é sempre 1.0
-        (nenhuma discordância possível), portanto nenhuma amostra deve ser
-        sinalizada para validação humana.
+        Com confiança acima do limiar padrão (0.5) para ambas as amostras,
+        nenhuma deve ser sinalizada para validação humana.
         """
         normalized_corpus = pl.DataFrame(
             {
@@ -196,13 +210,12 @@ class TestRunLabelingStage:
         )
         write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
 
-        labeled_path = run_labeling_stage(
-            pipeline_paths, {"heuristica_lexica": LexicalHeuristicLabeler()}
-        )
+        labeled_path = run_labeling_stage(pipeline_paths, _FakeSentimentPipeline())
 
         assert labeled_path == pipeline_paths.labeled_corpus_file
         labeled_corpus = read_dataset_file(labeled_path)
         assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
+        assert labeled_corpus.sort("id")["confidence_score"].to_list() == [0.9, 0.8]
         assert not (pipeline_paths.reports_tables_dir / "human_validation_sample.csv").is_file()
 
     def test_applies_human_validation_labels_and_gold_set_without_raising(
@@ -223,7 +236,7 @@ class TestRunLabelingStage:
 
         labeled_path = run_labeling_stage(
             pipeline_paths,
-            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            _FakeSentimentPipeline(),
             select_for_human_validation=False,
             human_validation_labels=human_validation_labels,
             gold_set=gold_set,
@@ -235,8 +248,8 @@ class TestRunLabelingStage:
             "negativo"
         ]
 
-    def test_accepts_max_workers_and_show_progress(self, pipeline_paths: ProjectPaths) -> None:
-        """Deve aceitar e repassar max_workers/show_progress sem alterar o resultado."""
+    def test_accepts_show_progress(self, pipeline_paths: ProjectPaths) -> None:
+        """Deve aceitar e repassar show_progress sem alterar o resultado."""
         normalized_corpus = pl.DataFrame(
             {
                 "id": ["1", "2"],
@@ -248,13 +261,35 @@ class TestRunLabelingStage:
 
         labeled_path = run_labeling_stage(
             pipeline_paths,
-            {"heuristica_lexica": LexicalHeuristicLabeler()},
-            max_workers=2,
+            _FakeSentimentPipeline(),
             show_progress=False,
         )
 
         labeled_corpus = read_dataset_file(labeled_path)
         assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
+
+    def test_flags_low_confidence_sample_for_human_validation(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Uma amostra com confiança abaixo do limiar deve gerar a amostra de validação humana."""
+        normalized_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text": ["produto pessimo"],
+                "text_normalized": ["produto pessimo"],
+            }
+        )
+        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+
+        run_labeling_stage(
+            pipeline_paths,
+            _FakeSentimentPipeline(),
+            low_confidence_threshold=0.85,
+            human_validation_sample_size=1,
+            show_progress=False,
+        )
+
+        assert (pipeline_paths.reports_tables_dir / "human_validation_sample.csv").is_file()
 
     def test_relabels_low_confidence_samples_via_llm_when_enabled(
         self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
@@ -277,7 +312,7 @@ class TestRunLabelingStage:
 
         labeled_path = run_labeling_stage(
             pipeline_paths,
-            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            _FakeSentimentPipeline(),
             llm_relabeling_enabled=True,
             llm_relabeling_prompt_name="algum_prompt",
             show_progress=False,
@@ -306,7 +341,7 @@ class TestRunLabelingStage:
 
         run_labeling_stage(
             pipeline_paths,
-            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            _FakeSentimentPipeline(),
             show_progress=False,
         )
 
@@ -327,7 +362,7 @@ class TestRunLabelingStage:
         with pytest.raises(ValueError, match="llm_relabeling_prompt_name"):
             run_labeling_stage(
                 pipeline_paths,
-                {"heuristica_lexica": LexicalHeuristicLabeler()},
+                _FakeSentimentPipeline(),
                 llm_relabeling_enabled=True,
                 show_progress=False,
             )
@@ -353,7 +388,7 @@ class TestRunLabelingStage:
 
         labeled_path = run_labeling_stage(
             pipeline_paths,
-            {"heuristica_lexica": LexicalHeuristicLabeler()},
+            _FakeSentimentPipeline(),
             select_for_human_validation=False,
             human_validation_labels=human_validation_labels,
             llm_relabeling_enabled=True,
