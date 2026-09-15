@@ -435,7 +435,7 @@ nvidia-nccl-cu12==2.21.5 ; python_full_version < '3.12' and sys_platform == 'lin
     # via xgboost
 nvidia-nccl-cu13==2.31.2 ; python_full_version >= '3.12' and sys_platform == 'linux'
     # via xgboost
-onnxruntime==1.20.1
+onnxruntime==1.24.3
     # via magika
 opentelemetry-api==1.44.0
     # via
