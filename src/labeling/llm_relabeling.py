@@ -3,11 +3,13 @@
 Implementa a etapa opcional ``llm_relabeling`` de ``configs/labeling.yaml``:
 para cada tweet cujo ``confidence_score`` (rótulo de consenso da cascata, ver
 ``labeling.consensus.aggregate_by_weighted_majority_vote``) esteja abaixo de
-``score_threshold``, reenvia o texto a um LLM OpenAI-compatível
-(:func:`hypothesaes.llm_api.generate_completion`, endpoint/credenciais em
-``OPENAI_BASE_URL``/``OPENAI_KEY`` — ``.env``, modelo padrão
-``UnB-Llama-3.3-70B-Instruct``) com um prompt carregado de ``prompts/``
-(:func:`hypothesaes.utils.load_prompt_template`,
+``score_threshold``, reenvia o texto a um LLM
+(:func:`hypothesaes.llm_api.generate_completion`, provedor escolhido via
+``provider`` — ``configs/llm.yaml -> active_provider``: ``"openai"``,
+endpoint/credenciais em ``OPENAI_BASE_URL``/``OPENAI_KEY`` — ``.env``, modelo
+padrão ``UnB-Llama-3.3-70B-Instruct``; ou ``"ollama"``, servidor local em
+``ollama_base_url`` — ``configs/llm.yaml -> backends.ollama.base_url``) com
+um prompt carregado de ``prompts/`` (:func:`hypothesaes.utils.load_prompt_template`,
 ``configs/labeling.yaml -> llm_relabeling.prompt_name``).
 
 Falhas de chamada/parsing preservam o rótulo e a confiança originais da
@@ -28,13 +30,19 @@ from tqdm.auto import tqdm
 
 from constants.labels import SENTIMENT_CLASSES
 from exceptions.data import DataValidationError
-from hypothesaes.llm_api import generate_completion
+from hypothesaes.llm_api import (
+    DEFAULT_OLLAMA_BASE_URL,
+    DEFAULT_OLLAMA_MODEL,
+    LLMProvider,
+    generate_completion,
+)
 from hypothesaes.utils import load_prompt_template
 from utils.validation import validate_not_empty_collection
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_RELABEL_MODEL = "UnB-Llama-3.3-70B-Instruct"
+DEFAULT_RELABEL_MODEL_OLLAMA = DEFAULT_OLLAMA_MODEL
 _TEXT_PLACEHOLDER = "{{TEXTO}}"
 _JSON_OBJECT_PATTERN = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -119,6 +127,8 @@ def _relabel_single_text(
     temperature: float,
     max_retries: int,
     allowed_labels: Sequence[str],
+    provider: LLMProvider = "openai",
+    ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL,
     request_interval_seconds: float = 0.0,
 ) -> tuple[str, float] | None:
     """Reenvia um único texto ao LLM e tenta interpretar a resposta, com retentativas.
@@ -137,6 +147,13 @@ def _relabel_single_text(
         Número máximo de tentativas até obter uma resposta interpretável.
     allowed_labels : Sequence[str]
         Classes de sentimento aceitas.
+    provider : {"openai", "ollama"}, optional
+        Provedor de LLM (``configs/llm.yaml -> active_provider``), by
+        default "openai".
+    ollama_base_url : str, optional
+        URL do servidor Ollama local, usada apenas quando
+        ``provider="ollama"``, by default
+        :data:`hypothesaes.llm_api.DEFAULT_OLLAMA_BASE_URL`.
     request_interval_seconds : float, optional
         Pausa (``time.sleep``) antes de cada chamada/tentativa ao LLM, para
         reduzir a taxa de requisições e evitar bloqueios por limite de taxa
@@ -153,7 +170,13 @@ def _relabel_single_text(
         if request_interval_seconds > 0:
             time.sleep(request_interval_seconds)
         try:
-            raw_response = generate_completion(prompt=prompt, model=model, temperature=temperature)
+            raw_response = generate_completion(
+                prompt=prompt,
+                model=model,
+                temperature=temperature,
+                provider=provider,
+                ollama_base_url=ollama_base_url,
+            )
         except Exception:
             logger.exception(
                 "Falha na chamada ao LLM de re-rotulagem (tentativa %d/%d).",
@@ -196,6 +219,8 @@ def _run_relabel_workers(
     allowed_labels: Sequence[str],
     n_workers: int,
     show_progress: bool,
+    provider: LLMProvider = "openai",
+    ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL,
     request_interval_seconds: float = 0.0,
 ) -> list[tuple[str, float] | None]:
     """Dispara a re-rotulagem de ``texts`` em paralelo e coleta os resultados na ordem original."""
@@ -210,6 +235,8 @@ def _run_relabel_workers(
                 temperature=temperature,
                 max_retries=max_retries,
                 allowed_labels=allowed_labels,
+                provider=provider,
+                ollama_base_url=ollama_base_url,
                 request_interval_seconds=request_interval_seconds,
             ): index
             for index, text in enumerate(texts)
@@ -276,12 +303,14 @@ def relabel_low_confidence_samples(
     confidence_column: str = "confidence_score",
     score_threshold: float,
     prompt_name: str,
-    model: str = DEFAULT_RELABEL_MODEL,
+    model: str | None = None,
     temperature: float = 0.0,
     max_retries: int = 3,
     n_workers: int = 8,
     allowed_labels: Sequence[str] = SENTIMENT_CLASSES,
     show_progress: bool = True,
+    provider: LLMProvider = "openai",
+    ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL,
     request_interval_seconds: float = 0.0,
 ) -> pl.DataFrame:
     """Re-rotula, via LLM, as amostras de ``labeled_corpus`` com confiança abaixo do limiar.
@@ -316,9 +345,11 @@ def relabel_low_confidence_samples(
         ``.txt``), carregado via
         :func:`hypothesaes.utils.load_prompt_template``
         (``configs/labeling.yaml -> llm_relabeling.prompt_name``).
-    model : str, optional
-        Modelo LLM usado na re-rotulagem, by default
-        :data:`DEFAULT_RELABEL_MODEL` (``"UnB-Llama-3.3-70B-Instruct"``).
+    model : str | None, optional
+        Modelo LLM usado na re-rotulagem, by default ``None`` — resolvido
+        conforme ``provider`` para :data:`DEFAULT_RELABEL_MODEL`
+        (``"UnB-Llama-3.3-70B-Instruct"``, ``provider="openai"``) ou
+        :data:`DEFAULT_RELABEL_MODEL_OLLAMA` (``provider="ollama"``).
     temperature : float, optional
         Temperatura de amostragem, by default 0.0 (determinístico).
     max_retries : int, optional
@@ -331,6 +362,14 @@ def relabel_low_confidence_samples(
         :data:`constants.labels.SENTIMENT_CLASSES`.
     show_progress : bool, optional
         Se exibe uma barra de progresso no console, by default True.
+    provider : {"openai", "ollama"}, optional
+        Provedor de LLM (``configs/llm.yaml -> active_provider``), by
+        default "openai".
+    ollama_base_url : str, optional
+        URL do servidor Ollama local, usada apenas quando
+        ``provider="ollama"``, by default
+        :data:`hypothesaes.llm_api.DEFAULT_OLLAMA_BASE_URL`
+        (``configs/llm.yaml -> backends.ollama.base_url``).
     request_interval_seconds : float, optional
         Pausa (``time.sleep``) antes de cada chamada/tentativa ao LLM (por
         worker), para reduzir a taxa de requisições à API OpenAI-compatível
@@ -365,6 +404,10 @@ def relabel_low_confidence_samples(
         confidence_column=confidence_column,
     )
 
+    resolved_model = model or (
+        DEFAULT_RELABEL_MODEL if provider == "openai" else DEFAULT_RELABEL_MODEL_OLLAMA
+    )
+
     candidate_rows = labeled_corpus.filter(pl.col(confidence_column) < score_threshold)
     if candidate_rows.height == 0:
         logger.info(
@@ -379,22 +422,25 @@ def relabel_low_confidence_samples(
     results = _run_relabel_workers(
         texts,
         prompt_template,
-        model=model,
+        model=resolved_model,
         temperature=temperature,
         max_retries=max_retries,
         allowed_labels=allowed_labels,
         n_workers=n_workers,
         show_progress=show_progress,
+        provider=provider,
+        ollama_base_url=ollama_base_url,
         request_interval_seconds=request_interval_seconds,
     )
 
     n_success = sum(result is not None for result in results)
     logger.info(
         "Re-rotulagem via LLM concluída: %d/%d amostra(s) reinterpretada(s) com sucesso "
-        "(modelo='%s', limiar=%.2f).",
+        "(provider='%s', modelo='%s', limiar=%.2f).",
         n_success,
         len(texts),
-        model,
+        provider,
+        resolved_model,
         score_threshold,
     )
 

@@ -4,12 +4,25 @@
 # Nomes de modelos devem ser revalidados quanto à disponibilidade local
 # (download prévio via `ollama pull` / Hugging Face Hub) antes da execução.
 
+# Provedor de LLM usado pela re-rotulagem via LLM (etapa `labeling` ->
+# llm_relabeling) e pelo HypotheSAEs (etapa `hypothesaes_analysis`:
+# interpretação/anotação de neurônios, geração e avaliação de hipóteses),
+# via src/hypothesaes/llm_api.py::generate_completion. Distinto da seção
+# `backends` abaixo, que escolhe o backend (ollama/huggingface) do
+# classificador LLM principal (etapa `llm_evaluation`).
+# "openai": endpoint OpenAI-compatível via OPENAI_BASE_URL/OPENAI_KEY
+#           (.env) — inclui a API oficial da OpenAI e servidores
+#           compatíveis (ex.: o endpoint UnB usado por padrão em
+#           configs/labeling.yaml e configs/hypothesaes.yaml).
+# "ollama": servidor Ollama local, usando `backends.ollama.base_url` abaixo.
+active_provider: "openai" # "openai" | "ollama"
+
 backends:
   ollama:
     enabled: true
     base_url: "http://localhost:11434"
     models:
-      - name: "llama3.1:8b"
+      - name: "llama3.2:1b"
         role: "classifier"
       - name: "gemma2:9b"
         role: "classifier"

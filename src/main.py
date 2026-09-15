@@ -46,6 +46,7 @@ from config.settings import GeneralConfig, Settings, create_settings, load_gener
 from data.loader import load_labeled_corpus, load_training_example_dataset, read_dataset_file
 from exceptions.configuration import InvalidConfigurationError
 from features.lexical import pivot_tfidf_features_to_wide
+from hypothesaes.llm_api import LLM_PROVIDER_NAMES
 from hypothesaes.utils import load_prompt_template
 from io_utils.yaml import read_yaml
 from labeling.huggingface import load_huggingface_sentiment_pipeline
@@ -358,6 +359,39 @@ def _build_preprocessing_stage_kwargs(
     return {"paths": paths, "max_workers": args.max_workers}
 
 
+def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:
+    """Valida e retorna ``configs/llm.yaml -> active_provider``.
+
+    Provedor compartilhado pela re-rotulagem via LLM (etapa ``labeling``) e
+    pelo HypotheSAEs (etapa ``hypothesaes_analysis``) — distinto de
+    ``backends.ollama.enabled``/``backends.huggingface.enabled``, que
+    escolhem o backend do classificador LLM principal (etapa
+    ``llm_evaluation``).
+
+    Parameters
+    ----------
+    llm_config : dict[str, Any]
+        Conteúdo de ``configs/llm.yaml``.
+
+    Returns
+    -------
+    str
+        ``"openai"`` ou ``"ollama"``.
+
+    Raises
+    ------
+    InvalidConfigurationError
+        Se ``active_provider`` não for um de :data:`hypothesaes.llm_api.LLM_PROVIDER_NAMES`.
+    """
+    provider = llm_config["active_provider"]
+    if provider not in LLM_PROVIDER_NAMES:
+        raise InvalidConfigurationError(
+            f"configs/llm.yaml -> active_provider inválido: '{provider}'. "
+            f"Valores aceitos: {list(LLM_PROVIDER_NAMES)}"
+        )
+    return provider
+
+
 def _build_labeling_stage_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
@@ -394,6 +428,8 @@ def _build_labeling_stage_kwargs(
         batch_size=huggingface_config["batch_size"],
         max_length=huggingface_config["max_length"],
     )
+    llm_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["llm"])
+    llm_provider = _resolve_active_llm_provider(llm_config)
     llm_relabeling_config = labeling_config["llm_relabeling"]
     return {
         "paths": paths,
@@ -406,10 +442,12 @@ def _build_labeling_stage_kwargs(
         "llm_relabeling_enabled": llm_relabeling_config["enabled"],
         "llm_relabeling_score_threshold": llm_relabeling_config["score_threshold"],
         "llm_relabeling_prompt_name": llm_relabeling_config["prompt_name"],
-        "llm_relabeling_model": llm_relabeling_config["model"],
+        "llm_relabeling_model": llm_relabeling_config[f"model_{llm_provider}"],
         "llm_relabeling_temperature": llm_relabeling_config["temperature"],
         "llm_relabeling_max_retries": llm_relabeling_config["max_retries"],
         "llm_relabeling_n_workers": llm_relabeling_config["n_workers"],
+        "llm_relabeling_provider": llm_provider,
+        "llm_relabeling_ollama_base_url": llm_config["backends"]["ollama"]["base_url"],
         "llm_relabeling_request_interval_seconds": llm_relabeling_config[
             "request_interval_seconds"
         ],
@@ -656,8 +694,11 @@ def _build_hypothesaes_analysis_stage_kwargs(
         Configuração geral validada, não utilizada diretamente nesta etapa.
     settings : Settings
         Configurações sensíveis ao ambiente, não utilizadas diretamente
-        nesta etapa (o endpoint LLM vem de ``OPENAI_BASE_URL``/
-        ``OPENAI_KEY``, não de ``settings.ollama_base_url``).
+        nesta etapa. O provedor de LLM (``configs/llm.yaml ->
+        active_provider``) escolhe entre o endpoint OpenAI-compatível
+        (``OPENAI_BASE_URL``/``OPENAI_KEY``, ``.env``) e o servidor Ollama
+        local (``configs/llm.yaml -> backends.ollama.base_url``) — nenhum
+        dos dois vem de ``settings.ollama_base_url``.
     args : argparse.Namespace
         Argumentos de linha de comando (``--hypothesaes-evaluate``,
         ``--max-workers``, ``--random-seed``).
@@ -673,6 +714,8 @@ def _build_hypothesaes_analysis_stage_kwargs(
     task_specific_instructions = load_prompt_template(
         hypothesaes_config["llm"]["task_specific_instructions_prompt_name"]
     )
+    llm_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["llm"])
+    llm_provider = _resolve_active_llm_provider(llm_config)
 
     return {
         "labeled_corpus": load_labeled_corpus(paths.labeled_corpus_file),
@@ -687,12 +730,14 @@ def _build_hypothesaes_analysis_stage_kwargs(
         "selection_method": hypothesaes_config["hypotheses"]["selection_method"],
         "n_selected_neurons": hypothesaes_config["hypotheses"]["n_selected_neurons"],
         "n_scoring_examples": hypothesaes_config["hypotheses"]["n_scoring_examples"],
-        "interpreter_model": hypothesaes_config["llm"]["interpreter_model"],
-        "annotator_model": hypothesaes_config["llm"]["annotator_model"],
+        "interpreter_model": hypothesaes_config["llm"][f"interpreter_model_{llm_provider}"],
+        "annotator_model": hypothesaes_config["llm"][f"annotator_model_{llm_provider}"],
         "n_examples_for_interpretation": hypothesaes_config["llm"]["n_examples_for_interpretation"],
         "max_words_per_example": hypothesaes_config["llm"]["max_words_per_example"],
         "max_interpretation_tokens": hypothesaes_config["llm"]["max_interpretation_tokens"],
         "task_specific_instructions": task_specific_instructions,
+        "llm_provider": llm_provider,
+        "llm_ollama_base_url": llm_config["backends"]["ollama"]["base_url"],
         "n_workers": args.max_workers or hypothesaes_config["llm"]["n_workers"],
         "evaluate_on_holdout": args.hypothesaes_evaluate
         or hypothesaes_config["evaluation"]["enabled"],

@@ -67,6 +67,7 @@ from labeling.huggingface import (
 )
 from labeling.llm_relabeling import (
     DEFAULT_RELABEL_MODEL,
+    DEFAULT_RELABEL_MODEL_OLLAMA,
     parse_relabel_response,
     relabel_low_confidence_samples,
 )
@@ -86,6 +87,7 @@ __all__: list[str] = [
     "DEFAULT_HUGGINGFACE_MODEL",
     "DEFAULT_LABEL_MAPPING",
     "DEFAULT_RELABEL_MODEL",
+    "DEFAULT_RELABEL_MODEL_OLLAMA",
     "NEGATIVE_WORDS",
     "POSITIVE_WORDS",
     "GoldSetValidationResult",

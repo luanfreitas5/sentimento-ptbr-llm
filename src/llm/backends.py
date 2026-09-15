@@ -108,7 +108,7 @@ class HuggingFaceLLMBackend:
 
 
 def load_ollama_llm_backend(
-    model_name: str = "llama3.1:8b",
+    model_name: str = "llama3.2:1b",
     *,
     base_url: str = "http://localhost:11434",
     temperature: float = 0.0,

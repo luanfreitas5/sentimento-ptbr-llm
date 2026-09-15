@@ -20,11 +20,12 @@ import polars as pl
 from config.paths import ProjectPaths
 from data.loader import read_dataset_file
 from data.writer import write_labeled_corpus
+from hypothesaes.llm_api import DEFAULT_OLLAMA_BASE_URL, LLMProvider
 from io_utils.csv import write_csv
 from labeling.confidence import flag_low_confidence_predictions
 from labeling.consensus import merge_consensus_into_corpus
 from labeling.huggingface import SentimentPipeline, label_corpus_with_huggingface_pipeline
-from labeling.llm_relabeling import DEFAULT_RELABEL_MODEL, relabel_low_confidence_samples
+from labeling.llm_relabeling import relabel_low_confidence_samples
 from labeling.manual import apply_human_validation_labels, select_samples_for_human_validation
 from labeling.validation import evaluate_against_gold_set
 
@@ -116,10 +117,12 @@ def run_labeling_stage(
     llm_relabeling_enabled: bool = False,
     llm_relabeling_score_threshold: float = 0.5,
     llm_relabeling_prompt_name: str | None = None,
-    llm_relabeling_model: str = DEFAULT_RELABEL_MODEL,
+    llm_relabeling_model: str | None = None,
     llm_relabeling_temperature: float = 0.0,
     llm_relabeling_max_retries: int = 3,
     llm_relabeling_n_workers: int = 8,
+    llm_relabeling_provider: LLMProvider = "openai",
+    llm_relabeling_ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL,
     llm_relabeling_request_interval_seconds: float = 0.0,
     show_progress: bool = True,
 ) -> Path:
@@ -183,15 +186,24 @@ def run_labeling_stage(
         Nome do template de prompt em ``prompts/`` (sem ``.txt``),
         repassado como ``prompt_name``; obrigatório quando
         ``llm_relabeling_enabled=True``, by default None.
-    llm_relabeling_model : str, optional
-        Repassado como ``model``, by default
-        :data:`labeling.llm_relabeling.DEFAULT_RELABEL_MODEL`.
+    llm_relabeling_model : str | None, optional
+        Repassado como ``model``, by default None (resolvido conforme
+        ``llm_relabeling_provider`` — ver
+        :func:`labeling.llm_relabeling.relabel_low_confidence_samples`).
     llm_relabeling_temperature : float, optional
         Repassado como ``temperature``, by default 0.0.
     llm_relabeling_max_retries : int, optional
         Repassado como ``max_retries``, by default 3.
     llm_relabeling_n_workers : int, optional
         Repassado como ``n_workers``, by default 8.
+    llm_relabeling_provider : {"openai", "ollama"}, optional
+        Repassado como ``provider`` (``configs/llm.yaml ->
+        active_provider``), by default "openai".
+    llm_relabeling_ollama_base_url : str, optional
+        Repassado como ``ollama_base_url``, usado apenas quando
+        ``llm_relabeling_provider="ollama"``, by default
+        :data:`hypothesaes.llm_api.DEFAULT_OLLAMA_BASE_URL`
+        (``configs/llm.yaml -> backends.ollama.base_url``).
     llm_relabeling_request_interval_seconds : float, optional
         Repassado como ``request_interval_seconds`` — pausa antes de cada
         chamada/tentativa ao LLM, para reduzir a taxa de requisições e
@@ -256,6 +268,8 @@ def run_labeling_stage(
             temperature=llm_relabeling_temperature,
             max_retries=llm_relabeling_max_retries,
             n_workers=llm_relabeling_n_workers,
+            provider=llm_relabeling_provider,
+            ollama_base_url=llm_relabeling_ollama_base_url,
             request_interval_seconds=llm_relabeling_request_interval_seconds,
             show_progress=show_progress,
         )

@@ -52,14 +52,19 @@ diagnostics:
 # Re-rotulagem via LLM das amostras com confidence_score (concordância da
 # cascata) abaixo de score_threshold. Roda após a cascata/consenso e antes
 # da incorporação de rótulos humanos (que sempre prevalece sobre o LLM).
-# Credenciais do endpoint OpenAI-compatível em OPENAI_BASE_URL/OPENAI_KEY
-# (.env — ver .env.example), lidas por src/hypothesaes/llm_api.py.
+# Provedor escolhido em configs/llm.yaml -> active_provider ("openai" ou
+# "ollama"): "openai" usa o endpoint OpenAI-compatível via
+# OPENAI_BASE_URL/OPENAI_KEY (.env — ver .env.example), lidas por
+# src/hypothesaes/llm_api.py; "ollama" usa o servidor local em
+# configs/llm.yaml -> backends.ollama.base_url.
 llm_relabeling:
   enabled: true
   score_threshold: 0.5
   # Nome do template em prompts/ (sem a extensão .txt).
   prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
-  model: "UnB-Llama-3.3-70B-Instruct"
+  # Nome do modelo por provedor; apenas o do provedor ativo é usado.
+  model_openai: "UnB-Llama-3.3-70B-Instruct"
+  model_ollama: "llama3.2:1b"
   temperature: 0.0
   max_retries: 3
   n_workers: 8

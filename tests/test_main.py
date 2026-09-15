@@ -125,3 +125,33 @@ class TestBuildLabelingStageKwargs:
         assert kwargs["llm_relabeling_temperature"] == 0.0
         assert kwargs["llm_relabeling_max_retries"] == 3
         assert kwargs["llm_relabeling_n_workers"] == 8
+        assert kwargs["llm_relabeling_provider"] == "openai"
+        assert kwargs["llm_relabeling_ollama_base_url"] == "http://localhost:11434"
+
+    def test_resolves_ollama_model_when_active_provider_is_ollama(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Com ``configs/llm.yaml -> active_provider: "ollama"``, deve usar ``model_ollama``."""
+        monkeypatch.setattr(
+            main,
+            "load_huggingface_sentiment_pipeline",
+            lambda **kwargs: _FakeSentimentPipeline(),
+        )
+        original_read_yaml = main.read_yaml
+
+        def _fake_read_yaml(path):
+            config = original_read_yaml(path)
+            if path.name == "llm.yaml":
+                config["active_provider"] = "ollama"
+            return config
+
+        monkeypatch.setattr(main, "read_yaml", _fake_read_yaml)
+        args = parse_arguments(["--stage", "labeling"])
+        paths = load_project_paths()
+        general_config = load_general_config()
+        settings = create_settings()
+
+        kwargs = _build_labeling_stage_kwargs(paths, general_config, settings, args)
+
+        assert kwargs["llm_relabeling_provider"] == "ollama"
+        assert kwargs["llm_relabeling_model"] == "llama3.2:1b"

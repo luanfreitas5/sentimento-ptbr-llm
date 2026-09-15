@@ -1252,6 +1252,65 @@ class TestRelabelLowConfidenceSamples:
                 df, score_threshold=0.5, prompt_name="algum_prompt", show_progress=False
             )
 
+    def test_forwards_provider_and_resolves_default_ollama_model(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sem ``model`` explícito e ``provider='ollama'``, deve usar o modelo Ollama padrão."""
+        monkeypatch.setattr(llm_relabeling, "load_prompt_template", lambda name: "{{TEXTO}}")
+        captured: dict[str, object] = {}
+
+        def _fake_generate_completion(**kwargs: object) -> str:
+            captured.update(kwargs)
+            return '{"label": "negativo", "confidence": 0.7}'
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _fake_generate_completion)
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text_normalized": ["texto ambíguo"],
+                "sentiment_label": ["neutro"],
+                "confidence_score": [0.2],
+            }
+        )
+        relabel_low_confidence_samples(
+            labeled_corpus,
+            score_threshold=0.5,
+            prompt_name="algum_prompt",
+            provider="ollama",
+            show_progress=False,
+        )
+        assert captured["provider"] == "ollama"
+        assert captured["model"] == llm_relabeling.DEFAULT_RELABEL_MODEL_OLLAMA
+
+    def test_uses_openai_default_model_when_provider_is_openai(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sem ``model`` explícito e ``provider='openai'`` (padrão), usa o modelo OpenAI/UnB."""
+        monkeypatch.setattr(llm_relabeling, "load_prompt_template", lambda name: "{{TEXTO}}")
+        captured: dict[str, object] = {}
+
+        def _fake_generate_completion(**kwargs: object) -> str:
+            captured.update(kwargs)
+            return '{"label": "negativo", "confidence": 0.7}'
+
+        monkeypatch.setattr(llm_relabeling, "generate_completion", _fake_generate_completion)
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text_normalized": ["texto ambíguo"],
+                "sentiment_label": ["neutro"],
+                "confidence_score": [0.2],
+            }
+        )
+        relabel_low_confidence_samples(
+            labeled_corpus,
+            score_threshold=0.5,
+            prompt_name="algum_prompt",
+            show_progress=False,
+        )
+        assert captured["provider"] == "openai"
+        assert captured["model"] == llm_relabeling.DEFAULT_RELABEL_MODEL
+
 
 class TestLabelingProperties:
     """Testes baseados em propriedade (hypothesis) para invariantes do módulo."""

@@ -18,6 +18,7 @@ torch = pytest.importorskip("torch")
 
 from exceptions.configuration import MissingEnvironmentVariableError
 from exceptions.data import DataNotFoundError
+from exceptions.model import UnsupportedModelError
 from hypothesaes import (
     annotate,
     embedding,
@@ -189,6 +190,141 @@ class TestModelAbbreviationMap:
     def test_known_abbreviations_resolve(self) -> None:
         """Abreviações conhecidas devem mapear para o ID de modelo completo."""
         assert llm_api.MODEL_ABBREVIATION_TO_ID["gpt5-mini"] == "gpt-5-mini"
+
+
+class TestExtractOllamaOptions:
+    """Testes da tradução de kwargs genéricos para ``options`` do Ollama."""
+
+    def test_maps_known_kwargs_to_options(self) -> None:
+        """``temperature``/``top_p``/``seed``/``max_output_tokens`` devem virar ``options``."""
+        options = llm_api._extract_ollama_options(
+            {"temperature": 0.2, "top_p": 0.9, "seed": 42, "max_output_tokens": 128}
+        )
+        assert options == {"temperature": 0.2, "top_p": 0.9, "seed": 42, "num_predict": 128}
+
+    def test_ignores_openai_only_kwargs(self) -> None:
+        """Kwargs específicos da Responses API não têm equivalente em ``options``."""
+        options = llm_api._extract_ollama_options({"reasoning_effort": "low", "verbosity": "high"})
+        assert options == {}
+
+    def test_accepts_max_output_tokens_aliases(self) -> None:
+        """Aliases legados de ``max_output_tokens`` também devem virar ``num_predict``."""
+        assert llm_api._extract_ollama_options({"max_tokens": 64}) == {"num_predict": 64}
+
+
+class TestBuildOllamaMessages:
+    """Testes da montagem da lista de mensagens de chat do Ollama."""
+
+    def test_wraps_plain_prompt_as_single_user_message(self) -> None:
+        """Um ``prompt`` isolado deve virar uma única mensagem ``user``."""
+        assert llm_api._build_ollama_messages("Olá", None, None) == [
+            {"role": "user", "content": "Olá"}
+        ]
+
+    def test_passes_through_explicit_messages(self) -> None:
+        """Uma lista de ``messages`` já pronta deve ser repassada sem alterações."""
+        messages = [{"role": "user", "content": "oi"}]
+        assert llm_api._build_ollama_messages(None, messages, None) == messages
+
+    def test_prepends_system_prompt_to_plain_prompt(self) -> None:
+        """``system_prompt`` deve virar a primeira mensagem, antes do ``prompt``."""
+        result = llm_api._build_ollama_messages("Olá", None, "Você é útil.")
+        assert result == [
+            {"role": "system", "content": "Você é útil."},
+            {"role": "user", "content": "Olá"},
+        ]
+
+
+class TestGenerateCompletionOllama:
+    """Testes de :func:`hypothesaes.llm_api.generate_completion_ollama`."""
+
+    def test_returns_message_content_on_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Deve extrair o texto de ``response["message"]["content"]``."""
+
+        class _FakeClient:
+            def chat(self, *, model: str, messages: list, options: dict) -> dict:
+                return {"message": {"content": "positivo"}}
+
+        monkeypatch.setattr(llm_api, "create_ollama_client", lambda base_url=None: _FakeClient())
+        result = llm_api.generate_completion_ollama(prompt="Classifique: bom dia")
+        assert result == "positivo"
+
+    def test_retries_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Uma falha de conexão isolada deve ser reprocessada até obter sucesso."""
+        monkeypatch.setattr(llm_api.time, "sleep", lambda *_: None)
+        attempts = {"count": 0}
+
+        class _FakeClient:
+            def chat(self, *, model: str, messages: list, options: dict) -> dict:
+                attempts["count"] += 1
+                if attempts["count"] == 1:
+                    raise ConnectionError("servidor Ollama indisponível")
+                return {"message": {"content": "ok"}}
+
+        monkeypatch.setattr(llm_api, "create_ollama_client", lambda base_url=None: _FakeClient())
+        result = llm_api.generate_completion_ollama(prompt="teste", max_retries=3, timeout=0.0)
+        assert result == "ok"
+        assert attempts["count"] == 2
+
+    def test_raises_after_exhausting_retries(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Se todas as tentativas falharem, a última exceção deve ser propagada."""
+        monkeypatch.setattr(llm_api.time, "sleep", lambda *_: None)
+
+        class _FakeClient:
+            def chat(self, *, model: str, messages: list, options: dict) -> dict:
+                raise ConnectionError("indisponível")
+
+        monkeypatch.setattr(llm_api, "create_ollama_client", lambda base_url=None: _FakeClient())
+        with pytest.raises(ConnectionError):
+            llm_api.generate_completion_ollama(prompt="teste", max_retries=2, timeout=0.0)
+
+    def test_raises_value_error_without_prompt_or_messages(self) -> None:
+        """Sem ``prompt`` nem ``messages``, deve levantar ``ValueError``."""
+        with pytest.raises(ValueError):
+            llm_api.generate_completion_ollama()
+
+
+class TestGenerateCompletionDispatch:
+    """Testes do despacho de :func:`hypothesaes.llm_api.generate_completion` por ``provider``."""
+
+    def test_dispatches_to_openai_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Sem ``provider`` explícito, deve chamar a implementação OpenAI."""
+        monkeypatch.setattr(
+            llm_api, "_generate_completion_openai", lambda *args, **kwargs: "resp-openai"
+        )
+        assert llm_api.generate_completion(prompt="oi") == "resp-openai"
+
+    def test_dispatches_to_ollama_when_requested(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Com ``provider='ollama'``, deve chamar :func:`generate_completion_ollama`."""
+        captured: dict[str, Any] = {}
+
+        def _fake_ollama(*args: Any, **kwargs: Any) -> str:
+            captured.update(kwargs)
+            return "resp-ollama"
+
+        monkeypatch.setattr(llm_api, "generate_completion_ollama", _fake_ollama)
+        result = llm_api.generate_completion(prompt="oi", provider="ollama", model="llama3.2:1b")
+        assert result == "resp-ollama"
+        assert captured["model"] == "llama3.2:1b"
+
+    def test_falls_back_to_ollama_default_model_when_not_overridden(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sem sobrescrever ``model``, deve usar o padrão do Ollama, não o padrão da OpenAI."""
+        captured: dict[str, Any] = {}
+
+        def _fake_ollama(*args: Any, **kwargs: Any) -> str:
+            captured.update(kwargs)
+            return "resp"
+
+        monkeypatch.setattr(llm_api, "generate_completion_ollama", _fake_ollama)
+        llm_api.generate_completion(prompt="oi", provider="ollama")
+        assert captured["model"] == llm_api.DEFAULT_OLLAMA_MODEL
+
+    def test_raises_for_unsupported_provider(self) -> None:
+        """Um ``provider`` fora de :data:`LLM_PROVIDER_NAMES` deve levantar erro tipado."""
+        with pytest.raises(UnsupportedModelError):
+            llm_api.generate_completion(prompt="oi", provider="anthropic")  # type: ignore[arg-type]
 
 
 # =============================================================================

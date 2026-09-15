@@ -8,7 +8,7 @@ export PYTHONHASHSEED := 42
 
 .DEFAULT_GOAL := help
 .PHONY: help init venv install install-all \
-	install-labeling install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data \
+	install-labeling install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data ollama \
 	update lock export \
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
@@ -56,6 +56,9 @@ spacy-model:  ## Baixa o modelo do spaCy para português (habilita a lematizaç�
 
 nltk-data:  ## Baixa o corpus de stopwords do nltk (enriquece a lista curada em pt-BR)
 	uv run python -m nltk.downloader stopwords
+
+ollama:  ## Baixa o modelo llama3.2:1b para uso local via Ollama (requer: make install-llm)
+	uv run ollama pull llama3.2:1b
 
 install-viz:  ## Instala os extras de visualização (wordcloud, networkx, umap-learn)
 	uv sync --extra viz --dev

@@ -36,12 +36,20 @@ evaluation:
   validation_size: 0.1 # fração p/ validação (early stopping do SAE)
 
 llm:
-  # Endpoint OpenAI-compatível resolvido exclusivamente via
-  # OPENAI_BASE_URL/OPENAI_KEY (.env — ver .env.example), lidas por
-  # src/hypothesaes/llm_api.py::create_client. Nenhum endpoint/segredo é
-  # lido daqui (ver CLAUDE.md, "Data Privacy & LGPD").
-  interpreter_model: "UnB-Llama-3.3-70B-Instruct"
-  annotator_model: "UnB-Llama-3.3-70B-Instruct"
+  # Provedor escolhido em configs/llm.yaml -> active_provider ("openai" ou
+  # "ollama"). Cada papel (interpreter/annotator) tem um nome de modelo por
+  # provedor; apenas o par do provedor ativo é usado.
+  # "openai": endpoint OpenAI-compatível resolvido exclusivamente via
+  #           OPENAI_BASE_URL/OPENAI_KEY (.env — ver .env.example), lidas
+  #           por src/hypothesaes/llm_api.py::create_client. Nenhum
+  #           endpoint/segredo é lido daqui (ver CLAUDE.md, "Data Privacy &
+  #           LGPD").
+  # "ollama": servidor local em configs/llm.yaml -> backends.ollama.base_url;
+  #           modelo deve estar previamente baixado (`ollama pull <nome>`).
+  interpreter_model_openai: "UnB-Llama-3.3-70B-Instruct"
+  interpreter_model_ollama: "llama3.2:1b"
+  annotator_model_openai: "UnB-Llama-3.3-70B-Instruct"
+  annotator_model_ollama: "gemma2:9b"
   n_examples_for_interpretation: 12
   max_words_per_example: 60
   max_interpretation_tokens: 200

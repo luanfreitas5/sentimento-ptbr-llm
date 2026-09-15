@@ -1,27 +1,38 @@
-"""Cliente OpenAI-compatível para geração de completions (Responses API).
+"""Cliente de geração de completions via LLM (OpenAI-compatível ou Ollama local).
 
-Camada fina sobre a Responses API da OpenAI (ou qualquer servidor
-compatível, ex.: vLLM local, ou o endpoint UnB usado pela re-rotulagem via
-LLM da etapa ``labeling`` — ``src/labeling/llm_relabeling.py``), usada por
-``interpret_neurons`` (interpretação de neurônios) e ``annotate`` (checagem
-de conceitos em texto). Isola o projeto do SDK ``openai`` (dependência
-pesada e opcional) e centraliza autenticação, retomada com backoff
-exponencial e normalização de parâmetros específicos de modelos ``gpt-5.x``
-(``reasoning_effort``, ``verbosity``).
+Camada fina sobre duas APIs de completions, escolhida via o parâmetro
+``provider`` de :func:`generate_completion` (``configs/llm.yaml ->
+active_provider``):
 
-``openai`` não está listado nas dependências base do projeto: o import
-ocorre de forma tardia, dentro das funções deste módulo, para que o restante
-de ``hypothesaes`` permaneça importável sem ela. Instale com
-``uv add openai tiktoken`` antes de usar geração de hipóteses via LLM.
+- ``"openai"``: Responses API da OpenAI ou qualquer servidor compatível
+  (ex.: vLLM local, o endpoint UnB usado pela re-rotulagem via LLM da etapa
+  ``labeling`` — ``src/labeling/llm_relabeling.py``), autenticado via
+  ``OPENAI_BASE_URL``/``OPENAI_KEY`` (``.env``).
+- ``"ollama"``: servidor Ollama local (``configs/llm.yaml ->
+  backends.ollama.base_url``, tipicamente ``http://localhost:11434``), via
+  o SDK ``ollama`` nativo (sem LangChain, mantendo este módulo independente
+  do stack LCEL de ``src/llm/``).
+
+Usada por ``interpret_neurons`` (interpretação de neurônios) e ``annotate``
+(checagem de conceitos em texto). Isola o projeto dos SDKs ``openai``/
+``ollama`` (dependências pesadas e opcionais) e centraliza autenticação,
+retomada com backoff exponencial e normalização de parâmetros específicos
+de modelos ``gpt-5.x`` (``reasoning_effort``, ``verbosity``).
+
+``openai``/``ollama`` não estão listados nas dependências base do projeto:
+o import ocorre de forma tardia, dentro das funções deste módulo, para que
+o restante de ``hypothesaes`` permaneça importável sem eles. Instale com
+``uv add openai ollama tiktoken`` (ou ``uv sync --extra hypothesaes``) antes
+de usar geração de hipóteses via LLM.
 """
 
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from exceptions.configuration import MissingEnvironmentVariableError
-from exceptions.model import ModelError
+from exceptions.model import ModelError, UnsupportedModelError
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +68,12 @@ MODEL_ABBREVIATION_TO_ID: dict[str, str] = {
 
 DEFAULT_MODEL = "gpt-5-mini"
 LOCAL_OPENAI_API_KEY_PLACEHOLDER = "local-no-auth"
+
+LLMProvider = Literal["openai", "ollama"]
+LLM_PROVIDER_NAMES: tuple[LLMProvider, ...] = ("openai", "ollama")
+
+DEFAULT_OLLAMA_MODEL = "llama3.2:1b"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
 
 def _import_openai() -> Any:
@@ -277,6 +294,191 @@ def create_client() -> Any:
     return _CLIENT_CACHE[cache_key]
 
 
+def _import_ollama() -> Any:
+    """Importa o SDK ``ollama``, levantando ``ModelError`` se ausente.
+
+    Returns
+    -------
+    Any
+        Módulo ``ollama`` importado.
+
+    Raises
+    ------
+    ModelError
+        Se a biblioteca ``ollama`` não estiver instalada.
+    """
+    try:
+        import ollama  # type: ignore[reportMissingImports]
+    except ImportError as exception:
+        raise ModelError(
+            "A biblioteca 'ollama' não está instalada. Instale com `uv add ollama` "
+            "(ou `uv sync --extra hypothesaes`) para usar o backend Ollama local no "
+            "HypotheSAEs/re-rotulagem."
+        ) from exception
+    return ollama
+
+
+_OLLAMA_CLIENT_CACHE: dict[str, Any] = {}
+
+
+def create_ollama_client(base_url: str = DEFAULT_OLLAMA_BASE_URL) -> Any:
+    """Cria (ou reaproveita do cache) um cliente do servidor Ollama local.
+
+    Parameters
+    ----------
+    base_url : str, optional
+        URL do servidor Ollama local, by default :data:`DEFAULT_OLLAMA_BASE_URL`
+        (``configs/llm.yaml -> backends.ollama.base_url``).
+
+    Returns
+    -------
+    Any
+        Instância de ``ollama.Client``.
+
+    Raises
+    ------
+    ModelError
+        Se a biblioteca ``ollama`` não estiver instalada.
+    """
+    if base_url in _OLLAMA_CLIENT_CACHE:
+        return _OLLAMA_CLIENT_CACHE[base_url]
+
+    ollama = _import_ollama()
+    _OLLAMA_CLIENT_CACHE[base_url] = ollama.Client(host=base_url)
+    return _OLLAMA_CLIENT_CACHE[base_url]
+
+
+def _build_ollama_messages(
+    prompt: str | None, messages: list[dict[str, Any]] | None, system_prompt: str | None
+) -> list[dict[str, Any]]:
+    """Monta a lista de mensagens de chat do Ollama a partir de prompt/mensagens/sistema.
+
+    Reaproveita :func:`_build_request_input` (mesma semântica da Responses
+    API) e normaliza um ``prompt`` isolado para uma mensagem ``user`` única,
+    já que a API de chat do Ollama sempre espera uma lista de mensagens.
+    """
+    request_input = _build_request_input(prompt, messages, system_prompt)
+    if isinstance(request_input, str):
+        return [{"role": "user", "content": request_input}]
+    return request_input
+
+
+# Kwargs aceitos pela Responses API da OpenAI sem equivalente em
+# ``ollama.Client.chat`` (ex.: ``reasoning_effort``/``verbosity``, específicos
+# de modelos ``gpt-5.x``): ignorados silenciosamente ao gerar via Ollama.
+_OLLAMA_OPTION_ALIASES: dict[str, str] = {
+    "temperature": "temperature",
+    "top_p": "top_p",
+    "seed": "seed",
+}
+
+
+def _extract_ollama_options(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Traduz os kwargs genéricos de :func:`generate_completion` para ``options`` do Ollama."""
+    options: dict[str, Any] = {}
+    for source_key, option_key in _OLLAMA_OPTION_ALIASES.items():
+        if source_key in kwargs:
+            options[option_key] = kwargs[source_key]
+
+    max_output_tokens = _pop_max_output_tokens(dict(kwargs))
+    if max_output_tokens is not None:
+        options["num_predict"] = max_output_tokens
+
+    return options
+
+
+def _extract_ollama_message_content(response: Any) -> str:
+    """Extrai o texto gerado pelo assistente de uma resposta de ``ollama.Client.chat``."""
+    message = _extract_field(response, "message")
+    content = _extract_field(message, "content")
+    return content or ""
+
+
+def generate_completion_ollama(
+    prompt: str | None = None,
+    *,
+    messages: list[dict[str, Any]] | None = None,
+    system_prompt: str | None = None,
+    model: str = DEFAULT_OLLAMA_MODEL,
+    base_url: str = DEFAULT_OLLAMA_BASE_URL,
+    timeout: float | None = None,
+    max_retries: int = 3,
+    backoff_factor: float = 2.0,
+    **kwargs: Any,
+) -> str:
+    """Gera uma completion via servidor Ollama local, com retomada e backoff exponencial.
+
+    Parameters
+    ----------
+    prompt : str | None, optional
+        Prompt de texto puro (ignorado se ``messages`` for informado), by
+        default None.
+    messages : list[dict[str, Any]] | None, optional
+        Lista opcional de mensagens de chat, by default None.
+    system_prompt : str | None, optional
+        Mensagem de sistema opcional, by default None.
+    model : str, optional
+        Nome do modelo Ollama (previamente baixado via ``ollama pull``), by
+        default :data:`DEFAULT_OLLAMA_MODEL`.
+    base_url : str, optional
+        URL do servidor Ollama local, by default :data:`DEFAULT_OLLAMA_BASE_URL`
+        (``configs/llm.yaml -> backends.ollama.base_url``).
+    timeout : float | None, optional
+        Tempo de espera inicial (segundos) usado como base do backoff entre
+        tentativas, by default None.
+    max_retries : int, optional
+        Número máximo de tentativas em caso de erro de conexão/resposta, by
+        default 3.
+    backoff_factor : float, optional
+        Fator multiplicador do tempo de espera entre tentativas, by
+        default 2.0.
+    **kwargs : Any
+        Argumentos adicionais; ``temperature``, ``top_p``, ``seed`` e
+        ``max_output_tokens`` (ou aliases, ver :func:`_pop_max_output_tokens`)
+        são traduzidos para ``options`` do Ollama, os demais (específicos da
+        Responses API da OpenAI, ex.: ``reasoning_effort``, ``verbosity``)
+        são ignorados.
+
+    Returns
+    -------
+    str
+        Texto gerado pelo modelo.
+
+    Raises
+    ------
+    ValueError
+        Se nem ``prompt`` nem ``messages`` forem informados.
+    ModelError
+        Se a biblioteca ``ollama`` não estiver instalada.
+
+    Examples
+    --------
+    >>> generate_completion_ollama(prompt="Olá!")  # doctest: +SKIP
+    """
+    if prompt is None is messages is None:
+        raise ValueError(
+            "É necessário informar 'prompt' ou 'messages' para generate_completion_ollama()"
+        )
+
+    ollama = _import_ollama()
+    client = create_ollama_client(base_url)
+    chat_messages = _build_ollama_messages(prompt, messages, system_prompt)
+    options = _extract_ollama_options(kwargs)
+
+    base_wait = timeout if timeout is not None else 1.0
+    for attempt in range(max_retries):
+        try:
+            response = client.chat(model=model, messages=chat_messages, options=options)
+            return _extract_ollama_message_content(response)
+
+        except (ollama.ResponseError, ConnectionError, TimeoutError) as exception:
+            if attempt == max_retries - 1:
+                raise
+            _wait_before_retry(base_wait, backoff_factor, attempt, max_retries, exception)
+
+    return ""
+
+
 def _pop_max_output_tokens(kwargs: dict[str, Any]) -> Any:
     """Extrai o limite de tokens de saída de ``kwargs``, aceitando aliases legados."""
     max_output_tokens = kwargs.pop("max_output_tokens", None)
@@ -373,12 +575,22 @@ def generate_completion(
     messages: list[dict[str, Any]] | None = None,
     system_prompt: str | None = None,
     model: str = DEFAULT_MODEL,
+    provider: LLMProvider = "openai",
+    ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL,
     timeout: float | None = None,
     max_retries: int = 3,
     backoff_factor: float = 2.0,
     **kwargs: Any,
 ) -> str:
-    """Gera uma completion via Responses API, com retomada e backoff exponencial.
+    """Gera uma completion via LLM, despachando para o provedor configurado.
+
+    Ponto de entrada único usado por ``interpret_neurons``, ``annotate`` e
+    ``labeling.llm_relabeling``: ``provider="openai"`` (padrão) chama
+    :func:`_generate_completion_openai` (Responses API da OpenAI ou
+    endpoint compatível, ex.: UnB); ``provider="ollama"`` chama
+    :func:`generate_completion_ollama` (servidor Ollama local). A escolha
+    do provedor é resolvida fora deste módulo, a partir de
+    ``configs/llm.yaml -> active_provider``.
 
     Parameters
     ----------
@@ -391,7 +603,15 @@ def generate_completion(
         Mensagem de sistema opcional, by default None.
     model : str, optional
         Modelo (ou abreviação, ver :data:`MODEL_ABBREVIATION_TO_ID`), by
-        default :data:`DEFAULT_MODEL`.
+        default :data:`DEFAULT_MODEL`. Se ``provider="ollama"`` e ``model``
+        não for sobrescrito, usa :data:`DEFAULT_OLLAMA_MODEL` no lugar.
+    provider : {"openai", "ollama"}, optional
+        Provedor de LLM (``configs/llm.yaml -> active_provider``), by
+        default "openai".
+    ollama_base_url : str, optional
+        URL do servidor Ollama local, usada apenas quando
+        ``provider="ollama"``, by default :data:`DEFAULT_OLLAMA_BASE_URL`
+        (``configs/llm.yaml -> backends.ollama.base_url``).
     timeout : float | None, optional
         Timeout da requisição, em segundos, by default None.
     max_retries : int, optional
@@ -401,8 +621,10 @@ def generate_completion(
         Fator multiplicador do tempo de espera entre tentativas, by
         default 2.0.
     **kwargs : Any
-        Argumentos adicionais repassados à Responses API (``max_output_tokens``,
-        ``reasoning_effort``, ``verbosity``, ``temperature`` etc.).
+        Argumentos adicionais repassados ao provedor (``max_output_tokens``,
+        ``reasoning_effort``, ``verbosity``, ``temperature`` etc. — nem
+        todos se aplicam a ``provider="ollama"``, ver
+        :func:`generate_completion_ollama`).
 
     Returns
     -------
@@ -413,12 +635,69 @@ def generate_completion(
     ------
     ValueError
         Se nem ``prompt`` nem ``messages`` forem informados.
+    UnsupportedModelError
+        Se ``provider`` não for um de :data:`LLM_PROVIDER_NAMES`.
     ModelError
-        Se a biblioteca ``openai`` não estiver instalada.
+        Se a biblioteca do provedor (``openai``/``ollama``) não estiver
+        instalada.
 
     Examples
     --------
     >>> generate_completion(prompt="Olá!")  # doctest: +SKIP
+    >>> generate_completion(prompt="Olá!", provider="ollama")  # doctest: +SKIP
+    """
+    if provider not in LLM_PROVIDER_NAMES:
+        raise UnsupportedModelError(provider, list(LLM_PROVIDER_NAMES))
+
+    if provider == "ollama":
+        if model == DEFAULT_MODEL:
+            model = DEFAULT_OLLAMA_MODEL
+        return generate_completion_ollama(
+            prompt,
+            messages=messages,
+            system_prompt=system_prompt,
+            model=model,
+            base_url=ollama_base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            backoff_factor=backoff_factor,
+            **kwargs,
+        )
+
+    return _generate_completion_openai(
+        prompt,
+        messages=messages,
+        system_prompt=system_prompt,
+        model=model,
+        timeout=timeout,
+        max_retries=max_retries,
+        backoff_factor=backoff_factor,
+        **kwargs,
+    )
+
+
+def _generate_completion_openai(
+    prompt: str | None = None,
+    *,
+    messages: list[dict[str, Any]] | None = None,
+    system_prompt: str | None = None,
+    model: str = DEFAULT_MODEL,
+    timeout: float | None = None,
+    max_retries: int = 3,
+    backoff_factor: float = 2.0,
+    **kwargs: Any,
+) -> str:
+    """Gera uma completion via Responses API da OpenAI (ou endpoint compatível).
+
+    Implementação de ``provider="openai"`` de :func:`generate_completion`;
+    ver esta última para a documentação dos parâmetros.
+
+    Raises
+    ------
+    ValueError
+        Se nem ``prompt`` nem ``messages`` forem informados.
+    ModelError
+        Se a biblioteca ``openai`` não estiver instalada.
     """
     if prompt is None is messages is None:
         raise ValueError("É necessário informar 'prompt' ou 'messages' para generate_completion()")

@@ -27,6 +27,7 @@ from constants.defaults import DEFAULT_RANDOM_SEED
 from data.splitter import create_stratified_split
 from evaluation.hypothesaes_report import build_top_hypotheses_table, save_top_hypotheses_table
 from exceptions.data import DataValidationError, EmptyDatasetError
+from hypothesaes.llm_api import DEFAULT_OLLAMA_BASE_URL, LLMProvider
 from io_utils.csv import write_csv
 from io_utils.json import write_json
 from utils.timing import measure_execution_time
@@ -333,6 +334,7 @@ def _discover_and_save_patterns(
     max_words_per_example: int,
     max_interpretation_tokens: int | None,
     task_specific_instructions: str | None,
+    interpret_llm_kwargs: dict[str, Any] | None = None,
 ) -> pl.DataFrame:
     """Interpreta uma amostra de neurônios do SAE (descoberta de padrões) e salva o resultado."""
     logger.info("Descoberta de padrões: interpretando neurônios do SAE...")
@@ -347,6 +349,7 @@ def _discover_and_save_patterns(
             max_words_per_example=max_words_per_example,
             max_interpretation_tokens=max_interpretation_tokens,
             task_specific_instructions=task_specific_instructions,
+            interpret_llm_kwargs=interpret_llm_kwargs,
         )
     )
     write_csv(patterns, paths.reports_interpretability_dir / _PATTERNS_FILE_NAME)
@@ -380,6 +383,8 @@ def _generate_and_save_hypotheses(
     n_scoring_examples: int,
     n_workers: int,
     task_specific_instructions: str | None,
+    interpret_llm_kwargs: dict[str, Any] | None = None,
+    annotation_llm_kwargs: dict[str, Any] | None = None,
 ) -> _HypothesesArtifacts:
     """Gera as hipóteses de inconsistência, consolida a tabela top-N e salva o gráfico."""
     logger.info("Identificação de inconsistências: gerando hipóteses...")
@@ -403,6 +408,8 @@ def _generate_and_save_hypotheses(
             n_workers_interpretation=n_workers,
             n_workers_annotation=n_workers,
             task_specific_instructions=task_specific_instructions,
+            interpret_llm_kwargs=interpret_llm_kwargs,
+            annotation_llm_kwargs=annotation_llm_kwargs,
         ).sort_values(by=target_column, ascending=False)
     )
     write_csv(hypotheses, paths.reports_interpretability_dir / _HYPOTHESES_FILE_NAME)
@@ -434,6 +441,7 @@ def _evaluate_hypotheses_on_holdout(
     cache_name: str,
     annotator_model: str,
     n_workers: int,
+    annotation_llm_kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Avalia as hipóteses em holdout via LLM, quando habilitado; ``None`` caso contrário."""
     if not evaluate_on_holdout:
@@ -450,6 +458,7 @@ def _evaluate_hypotheses_on_holdout(
         annotator_model=annotator_model,
         classification=True,
         n_workers_annotation=n_workers,
+        annotation_llm_kwargs=annotation_llm_kwargs,
     )
     write_csv(
         pl.from_pandas(evaluation_df),
@@ -486,6 +495,8 @@ def run_hypothesaes_analysis_stage(
     max_words_per_example: int = 60,
     max_interpretation_tokens: int | None = 200,
     task_specific_instructions: str | None = None,
+    llm_provider: LLMProvider = "openai",
+    llm_ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL,
     n_workers: int = 8,
     evaluate_on_holdout: bool = False,
     holdout_size: float = 0.1,
@@ -554,6 +565,14 @@ def run_hypothesaes_analysis_stage(
         Instruções específicas da tarefa injetadas no prompt de
         interpretação (``configs/hypothesaes.yaml -> llm.task_specific_instructions``),
         by default None.
+    llm_provider : {"openai", "ollama"}, optional
+        Provedor de LLM usado em toda a interpretação/anotação/avaliação
+        (``configs/llm.yaml -> active_provider``), by default "openai".
+    llm_ollama_base_url : str, optional
+        URL do servidor Ollama local, usada apenas quando
+        ``llm_provider="ollama"``, by default
+        :data:`hypothesaes.llm_api.DEFAULT_OLLAMA_BASE_URL`
+        (``configs/llm.yaml -> backends.ollama.base_url``).
     n_workers : int, optional
         Threads paralelas para chamadas ao LLM (interpretação/anotação), by
         default 8.
@@ -610,6 +629,8 @@ def run_hypothesaes_analysis_stage(
         corpus.height,
     )
 
+    llm_kwargs = {"provider": llm_provider, "ollama_base_url": llm_ollama_base_url}
+
     with measure_execution_time() as execution_timing:
         split = _split_corpus_for_analysis(
             corpus,
@@ -646,6 +667,7 @@ def run_hypothesaes_analysis_stage(
             max_words_per_example=max_words_per_example,
             max_interpretation_tokens=max_interpretation_tokens,
             task_specific_instructions=task_specific_instructions,
+            interpret_llm_kwargs=llm_kwargs,
         )
         hypotheses_artifacts = _generate_and_save_hypotheses(
             split.texts,
@@ -664,6 +686,8 @@ def run_hypothesaes_analysis_stage(
             n_scoring_examples=n_scoring_examples,
             n_workers=n_workers,
             task_specific_instructions=task_specific_instructions,
+            interpret_llm_kwargs=llm_kwargs,
+            annotation_llm_kwargs=llm_kwargs,
         )
         holdout_metrics = _evaluate_hypotheses_on_holdout(
             hypotheses_artifacts.hypotheses,
@@ -674,6 +698,7 @@ def run_hypothesaes_analysis_stage(
             cache_name=split.cache_name,
             annotator_model=annotator_model,
             n_workers=n_workers,
+            annotation_llm_kwargs=llm_kwargs,
         )
 
     summary = _build_dataset_summary(
@@ -686,6 +711,7 @@ def run_hypothesaes_analysis_stage(
         "embedder_model_name": embedder_model_name,
         "interpreter_model": interpreter_model,
         "annotator_model": annotator_model,
+        "llm_provider": llm_provider,
         "evaluate_on_holdout": evaluate_on_holdout,
     }
     summary["elapsed_seconds"] = round(execution_timing.elapsed_seconds, 1)
