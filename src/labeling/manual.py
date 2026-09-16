@@ -147,8 +147,20 @@ def apply_human_validation_labels(
     *,
     id_column: str = "id",
     label_column: str = "sentiment_label",
+    manual_label_column: str = "sentiment_label_manual",
+    manual_confidence_column: str = "confidence_score_manual",
+    manual_confidence_score: float = 1.0,
 ) -> pl.DataFrame:
     """Sobrescreve o rótulo de consenso pelo rótulo humano, quando disponível.
+
+    O rótulo humano é sempre gravado em ``manual_label_column`` (nulo para
+    amostras não revisadas) — nunca sobrescrevendo
+    ``sentiment_label_huggingface``/``confidence_score_huggingface`` (ver
+    ``src/labeling/consensus.py``'s ``merge_consensus_into_corpus``) nem
+    ``{label_column}_llm_relabel``/``{confidence_column}_llm_relabel`` (ver
+    ``src/labeling/llm_relabeling.py``). ``label_column`` continua sendo
+    atualizada como a coluna de trabalho (rótulo final usado pelas etapas
+    seguintes), agora priorizando sempre o rótulo humano quando disponível.
 
     Parameters
     ----------
@@ -165,12 +177,24 @@ def apply_human_validation_labels(
     label_column : str, optional
         Nome da coluna de rótulo em ambos os DataFrames, by default
         "sentiment_label".
+    manual_label_column : str, optional
+        Nome da coluna que recebe o rótulo humano bruto (nula para amostras
+        não revisadas), by default "sentiment_label_manual".
+    manual_confidence_column : str, optional
+        Nome da coluna que recebe a confiança da validação manual (nula
+        para amostras não revisadas), by default "confidence_score_manual".
+    manual_confidence_score : float, optional
+        Confiança atribuída a todo rótulo humano incorporado — a validação
+        manual não produz uma pontuação própria, então assume-se confiança
+        máxima por padrão —, gravada em ``manual_confidence_column`` apenas
+        onde há rótulo humano disponível, by default 1.0.
 
     Returns
     -------
     pl.DataFrame
         ``consensus`` com ``label_column`` substituído pelo rótulo humano
-        onde disponível, acrescido da coluna booleana
+        onde disponível, acrescido de ``manual_label_column``,
+        ``manual_confidence_column`` e da coluna booleana
         ``is_human_validated``.
 
     Examples
@@ -180,6 +204,8 @@ def apply_human_validation_labels(
     >>> resultado = apply_human_validation_labels(consensus, humano).sort("id")
     >>> resultado["sentiment_label"].to_list()
     ['neutro', 'negativo']
+    >>> resultado["sentiment_label_manual"].to_list()
+    ['neutro', None]
     >>> resultado["is_human_validated"].to_list()
     [True, False]
     """
@@ -188,6 +214,11 @@ def apply_human_validation_labels(
     )
     merged = consensus.join(human_labels_renamed, on=id_column, how="left")
     merged = merged.with_columns(
+        pl.col("human_sentiment_label").alias(manual_label_column),
+        pl.when(pl.col("human_sentiment_label").is_not_null())
+        .then(pl.lit(manual_confidence_score))
+        .otherwise(None)
+        .alias(manual_confidence_column),
         pl.coalesce(["human_sentiment_label", label_column]).alias(label_column),
         pl.col("human_sentiment_label").is_not_null().alias("is_human_validated"),
     ).drop("human_sentiment_label")

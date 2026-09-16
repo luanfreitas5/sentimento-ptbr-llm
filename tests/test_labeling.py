@@ -593,6 +593,20 @@ class TestMergeConsensusIntoCorpus:
         result = merge_consensus_into_corpus(corpus, consensus).sort("id")
         assert result["sentiment_label"].to_list() == ["positivo", None]
 
+    def test_preserves_huggingface_source_columns(self) -> None:
+        """Deve preservar o rótulo/confiança do Hugging Face em colunas próprias."""
+        corpus = pl.DataFrame({"id": ["1", "2"], "text": ["ótimo", "sem opinião"]})
+        consensus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "sentiment_label": ["positivo"],
+                "confidence_score": [0.9],
+            }
+        )
+        result = merge_consensus_into_corpus(corpus, consensus).sort("id")
+        assert result["sentiment_label_huggingface"].to_list() == ["positivo", None]
+        assert result["confidence_score_huggingface"].to_list() == [0.9, None]
+
     def test_preserves_original_row_count(self) -> None:
         """A junção à esquerda não deve alterar o número de linhas do corpus original."""
         corpus = pl.DataFrame({"id": ["1", "2"], "text": ["a", "b"]})
@@ -694,6 +708,39 @@ class TestApplyHumanValidationLabels:
         result = apply_human_validation_labels(consensus, human_labels).sort("id")
         assert result["sentiment_label"].to_list() == ["neutro", "negativo"]
         assert result["is_human_validated"].to_list() == [True, False]
+
+    def test_preserves_manual_label_and_confidence_in_own_columns(self) -> None:
+        """O rótulo humano bruto e sua confiança devem ficar em colunas próprias."""
+        consensus = pl.DataFrame({"id": ["1", "2"], "sentiment_label": ["positivo", "negativo"]})
+        human_labels = pl.DataFrame({"id": ["1"], "sentiment_label": ["neutro"]})
+        result = apply_human_validation_labels(consensus, human_labels).sort("id")
+        assert result["sentiment_label_manual"].to_list() == ["neutro", None]
+        assert result["confidence_score_manual"].to_list() == [1.0, None]
+
+    def test_does_not_overwrite_huggingface_or_llm_relabel_columns(self) -> None:
+        """Colunas de outras fontes da cascata devem permanecer intactas."""
+        consensus = pl.DataFrame(
+            {
+                "id": ["1"],
+                "sentiment_label": ["positivo"],
+                "sentiment_label_huggingface": ["positivo"],
+                "confidence_score_huggingface": [0.6],
+                "sentiment_label_llm_relabel": [None],
+                "confidence_score_llm_relabel": [None],
+            }
+        )
+        human_labels = pl.DataFrame({"id": ["1"], "sentiment_label": ["neutro"]})
+        result = apply_human_validation_labels(consensus, human_labels)
+        assert result["sentiment_label_huggingface"].to_list() == ["positivo"]
+        assert result["confidence_score_huggingface"].to_list() == [0.6]
+        assert result["sentiment_label"].to_list() == ["neutro"]
+
+    def test_respects_custom_manual_confidence_score(self) -> None:
+        """Um ``manual_confidence_score`` customizado deve ser respeitado."""
+        consensus = pl.DataFrame({"id": ["1"], "sentiment_label": ["positivo"]})
+        human_labels = pl.DataFrame({"id": ["1"], "sentiment_label": ["neutro"]})
+        result = apply_human_validation_labels(consensus, human_labels, manual_confidence_score=0.8)
+        assert result["confidence_score_manual"].to_list() == [0.8]
 
 
 class TestCalculateLabelingErrorRate:
@@ -1174,6 +1221,33 @@ class TestRelabelLowConfidenceSamples:
         assert result["sentiment_label"].to_list() == ["negativo", "positivo"]
         assert result["confidence_score"].to_list() == pytest.approx([0.85, 0.9])
 
+    def test_records_llm_relabel_source_columns_only_for_candidates(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """O rótulo/confiança do LLM deve ficar em colunas próprias, nulas fora dos candidatos."""
+        monkeypatch.setattr(llm_relabeling, "load_prompt_template", lambda name: "{{TEXTO}}")
+        monkeypatch.setattr(
+            llm_relabeling,
+            "generate_completion",
+            lambda **kwargs: '{"label": "negativo", "confidence": 0.85}',
+        )
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ["1", "2"],
+                "text_normalized": ["texto ambíguo", "ótimo produto"],
+                "sentiment_label": ["neutro", "positivo"],
+                "confidence_score": [0.2, 0.9],
+            }
+        )
+        result = relabel_low_confidence_samples(
+            labeled_corpus,
+            score_threshold=0.5,
+            prompt_name="algum_prompt",
+            show_progress=False,
+        ).sort("id")
+        assert result["sentiment_label_llm_relabel"].to_list() == ["negativo", None]
+        assert result["confidence_score_llm_relabel"].to_list() == [0.85, None]
+
     def test_preserves_original_label_when_relabeling_fails(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1201,6 +1275,7 @@ class TestRelabelLowConfidenceSamples:
         )
         assert result["sentiment_label"].to_list() == ["neutro"]
         assert result["confidence_score"].to_list() == pytest.approx([0.2])
+        assert result["sentiment_label_llm_relabel"].to_list() == [None]
 
     def test_only_relabels_samples_below_threshold(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Amostras com confiança acima do limiar não devem ser reenviadas ao LLM."""

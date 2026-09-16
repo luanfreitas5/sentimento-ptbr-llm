@@ -261,24 +261,44 @@ def _merge_relabel_results(
     label_column: str,
     confidence_column: str,
 ) -> pl.DataFrame:
-    """Combina os resultados da re-rotulagem a `labeled_corpus`, preservando falhas (fail-safe)."""
+    """Combina os resultados da re-rotulagem a `labeled_corpus`, preservando falhas (fail-safe).
+
+    Além de atualizar as colunas de trabalho ``label_column``/
+    ``confidence_column`` (usadas pelas etapas seguintes — validação humana e
+    modelagem), grava o rótulo/confiança do LLM em colunas próprias
+    (``{label_column}_llm_relabel``/``{confidence_column}_llm_relabel``),
+    nulas para amostras não candidatas e para candidatas cuja re-rotulagem
+    falhou — nunca sobrescrevendo ``sentiment_label_huggingface``/
+    ``confidence_score_huggingface`` (ver
+    ``src/labeling/consensus.py``'s ``merge_consensus_into_corpus``).
+    """
     original_labels = candidate_rows[label_column].to_list()
     original_confidences = candidate_rows[confidence_column].to_list()
 
+    relabel_labels = [result[0] if result is not None else None for result in results]
+    relabel_confidences = [result[1] if result is not None else None for result in results]
+
     new_labels = [
-        result[0] if result is not None else original_label
-        for result, original_label in zip(results, original_labels, strict=True)
+        relabel_label if relabel_label is not None else original_label
+        for relabel_label, original_label in zip(relabel_labels, original_labels, strict=True)
     ]
     new_confidences = [
-        result[1] if result is not None else original_confidence
-        for result, original_confidence in zip(results, original_confidences, strict=True)
+        relabel_confidence if relabel_confidence is not None else original_confidence
+        for relabel_confidence, original_confidence in zip(
+            relabel_confidences, original_confidences, strict=True
+        )
     ]
+
+    llm_relabel_label_column = f"{label_column}_llm_relabel"
+    llm_relabel_confidence_column = f"{confidence_column}_llm_relabel"
 
     relabel_updates = pl.DataFrame(
         {
             id_column: candidate_rows[id_column],
             f"__relabel_{label_column}": new_labels,
             f"__relabel_{confidence_column}": new_confidences,
+            llm_relabel_label_column: relabel_labels,
+            llm_relabel_confidence_column: relabel_confidences,
         }
     )
 
@@ -381,7 +401,10 @@ def relabel_low_confidence_samples(
     -------
     pl.DataFrame
         ``labeled_corpus`` com ``label_column``/``confidence_column``
-        atualizadas para as amostras re-rotuladas com sucesso.
+        atualizadas para as amostras re-rotuladas com sucesso, acrescido das
+        colunas ``{label_column}_llm_relabel``/``{confidence_column}_llm_relabel``
+        — o rótulo/confiança bruto do LLM, nulos para amostras não candidatas
+        ou cuja re-rotulagem falhou.
 
     Raises
     ------

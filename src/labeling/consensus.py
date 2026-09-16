@@ -64,6 +64,14 @@ def merge_consensus_into_corpus(
 ) -> pl.DataFrame:
     """Junta os rótulos de consenso ao corpus original pelo identificador da amostra.
 
+    Além das colunas de trabalho ``sentiment_label``/``confidence_score``
+    (usadas pelas etapas seguintes — re-rotulagem via LLM, validação humana e
+    modelagem), preserva o rótulo/confiança originais do modelo Hugging Face
+    em ``sentiment_label_huggingface``/``confidence_score_huggingface``: essas
+    colunas nunca são sobrescritas pelas etapas seguintes da cascata (ver
+    ``src/labeling/llm_relabeling.py``/``src/labeling/manual.py``), mantendo
+    rastreabilidade completa de cada fonte de rotulagem.
+
     Parameters
     ----------
     corpus : pl.DataFrame
@@ -78,9 +86,11 @@ def merge_consensus_into_corpus(
     Returns
     -------
     pl.DataFrame
-        ``corpus`` acrescido das colunas ``sentiment_label`` e
-        ``confidence_score``. Amostras sem consenso correspondente recebem
-        valores nulos nessas colunas (junção à esquerda).
+        ``corpus`` acrescido das colunas ``sentiment_label``,
+        ``confidence_score``, ``sentiment_label_huggingface`` e
+        ``confidence_score_huggingface``. Amostras sem consenso
+        correspondente recebem valores nulos nessas colunas (junção à
+        esquerda).
 
     Examples
     --------
@@ -94,11 +104,18 @@ def merge_consensus_into_corpus(
     ... )
     >>> merge_consensus_into_corpus(corpus, consensus).sort("id")["sentiment_label"].to_list()
     ['positivo', None]
+    >>> merge_consensus_into_corpus(corpus, consensus).sort("id")[
+    ...     "sentiment_label_huggingface"
+    ... ].to_list()
+    ['positivo', None]
     """
     merged = corpus.join(
         consensus.select([id_column, "sentiment_label", "confidence_score"]),
         on=id_column,
         how="left",
+    ).with_columns(
+        pl.col("sentiment_label").alias("sentiment_label_huggingface"),
+        pl.col("confidence_score").alias("confidence_score_huggingface"),
     )
     logger.info("Rótulos de consenso mesclados ao corpus: %d linha(s).", merged.height)
     return merged

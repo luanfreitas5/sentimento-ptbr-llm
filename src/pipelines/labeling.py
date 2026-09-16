@@ -9,6 +9,19 @@ rótulos humanos e/ou valida contra um gold set de referência
 amostras de baixa confiança remanescentes
 (``src/labeling/llm_relabeling.py``), e grava o corpus rotulado final
 (``paths.labeled_corpus_file``).
+
+O corpus rotulado final preserva, em colunas próprias, o rótulo e a
+confiança de cada fonte da cascata — nenhuma etapa sobrescreve a saída de
+outra: ``sentiment_label_huggingface``/``confidence_score_huggingface``
+(modelo Hugging Face, ver ``src/labeling/consensus.py``),
+``sentiment_label_llm_relabel``/``confidence_score_llm_relabel``
+(re-rotulagem via LLM, nulas fora das amostras candidatas) e
+``sentiment_label_manual``/``confidence_score_manual`` (validação humana,
+nulas fora da amostra revisada). ``sentiment_label``/``confidence_score``
+continuam sendo a coluna de trabalho — o rótulo final consumido pelas
+etapas seguintes (``features``, ``hypothesaes_analysis``) —, atualizada em
+cascata (Hugging Face -> LLM -> manual, sempre a fonte mais confiável
+disponível por amostra).
 """
 
 import logging
