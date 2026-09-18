@@ -32,6 +32,7 @@ PROJECT_PACKAGE_NAMES: tuple[str, ...] = (
     "config",
     "constants",
     "data",
+    "diagnostics",
     "evaluation",
     "exceptions",
     "experiment",

@@ -29,6 +29,24 @@ class PipelineStageError(PipelineError):
         )
 
 
+class SanityGateFailedError(PipelineError):
+    """Levantada quando o gate de sanidade indica que o alvo não é previsível pelos embeddings.
+
+    Parameters
+    ----------
+    target_name : str
+        Nome do alvo de diagnóstico avaliado.
+    detail : str
+        Resumo do resultado do gate (métrica, IC e p-valor).
+    """
+
+    def __init__(self, target_name: str, detail: str) -> None:
+        super().__init__(
+            f"Gate de sanidade reprovou o alvo '{target_name}': {detail}",
+            context={"target_name": target_name},
+        )
+
+
 class UnknownPipelineStageError(PipelineError):
     """Levantada quando uma etapa de pipeline solicitada não existe.
 

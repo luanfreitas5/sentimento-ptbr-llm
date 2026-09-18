@@ -330,6 +330,7 @@ known-first-party = [
     "config",
     "constants",
     "data",
+    "diagnostics",
     "evaluation",
     "exceptions",
     "experiment",
