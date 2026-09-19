@@ -53,6 +53,17 @@ jobs:
           uv pip install torch --index-url https://download.pytorch.org/whl/cpu
           uv pip install "openai>=3.8.0" "tiktoken>=0.14.0" "ollama>=0.3" "langchain-core>=0.3"
 
+      # No macOS o XGBoost usa o libomp do Homebrew e o PyTorch traz o seu
+      # próprio: dois runtimes OpenMP no mesmo processo causam segfault (exit
+      # 139) no primeiro teste que treina um modelo torch. KMP_DUPLICATE_LIB_OK
+      # permite a coexistência e OMP_NUM_THREADS=1 evita a disputa entre os
+      # pools de threads (os tensores dos testes são minúsculos).
+      - name: Evitar conflito de OpenMP entre XGBoost e PyTorch (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "KMP_DUPLICATE_LIB_OK=TRUE" >> "$GITHUB_ENV"
+          echo "OMP_NUM_THREADS=1" >> "$GITHUB_ENV"
+
       - name: Rodar testes
         run: uv run --no-sync pytest -m "not slow"
 
