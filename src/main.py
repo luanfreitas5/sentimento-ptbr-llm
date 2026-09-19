@@ -33,6 +33,7 @@ import argparse
 import importlib
 import logging
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -44,12 +45,14 @@ from config.logging import configure_logging
 from config.paths import CONFIGS_DIR, ProjectPaths, load_project_paths
 from config.settings import GeneralConfig, Settings, create_settings, load_general_config
 from data.loader import load_labeled_corpus, load_training_example_dataset, read_dataset_file
+from diagnostics.targets import TARGET_NAMES
 from exceptions.configuration import InvalidConfigurationError
 from features.lexical import pivot_tfidf_features_to_wide
 from hypothesaes.llm_api import LLM_PROVIDER_NAMES
 from hypothesaes.utils import load_prompt_template
 from io_utils.yaml import read_yaml
 from labeling.huggingface import load_huggingface_sentiment_pipeline
+from pipelines.diagnostics_analysis import DIAGNOSTICS_GOLD_CHOICES, DIAGNOSTICS_STEPS
 from pipelines.training_classical import DEFAULT_CLASSICAL_MODEL_NAMES
 from pipelines.training_deep_learning import DEFAULT_DEEP_LEARNING_MODEL_NAMES
 from pipelines.workflow import STAGE_REGISTRY, run_pipeline_stage
@@ -190,6 +193,60 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "`hypothesaes_analysis`); sobrescreve `configs/hypothesaes.yaml -> "
             "evaluation.enabled` apenas para ligar (nunca desliga)."
         ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Apenas estima nº de chamadas de LLM, tokens e custo, sem rede, embeddings, SAE "
+            "ou MLflow (etapa `diagnostics`)."
+        ),
+    )
+    parser.add_argument(
+        "--diagnostics-step",
+        default="hypotheses",
+        choices=DIAGNOSTICS_STEPS,
+        help=(
+            "Passo da etapa `diagnostics`: `hypotheses` (gate de sanidade + hipóteses), "
+            "`validation` (holdout com Bonferroni + amostra para rotulagem) ou "
+            "`comparison` (prompts v1 vs v2 no gold)."
+        ),
+    )
+    parser.add_argument(
+        "--diagnostics-target",
+        default="disagreement",
+        choices=TARGET_NAMES,
+        help="Alvo de diagnóstico (etapa `diagnostics`, passos `hypotheses`/`validation`).",
+    )
+    parser.add_argument(
+        "--diagnostics-model-column",
+        default=None,
+        metavar="LAB_MODELO",
+        help=(
+            "Coluna `lab_<modelo>` dos alvos `pseudo_label`/`gold_error`; por padrão, a de "
+            "`configs/diagnostics.yaml -> targets`."
+        ),
+    )
+    parser.add_argument(
+        "--diagnostics-label",
+        default=None,
+        metavar="CLASSE",
+        help="Classe positiva do alvo `pseudo_label` (one-vs-rest); por padrão, a do YAML.",
+    )
+    parser.add_argument(
+        "--diagnostics-corpus",
+        type=Path,
+        default=None,
+        help=(
+            "Parquet já no contrato de diagnóstico (obrigatório para `gold_error`: predições "
+            "sobre o gold); por padrão adapta o corpus rotulado."
+        ),
+    )
+    parser.add_argument(
+        "--diagnostics-gold",
+        default="tweetsentbr",
+        choices=DIAGNOSTICS_GOLD_CHOICES,
+        help="Gold set do passo `comparison` (etapa `diagnostics`).",
     )
     return parser.parse_args(argv)
 
@@ -749,6 +806,46 @@ def _build_hypothesaes_analysis_stage_kwargs(
     }
 
 
+def _build_diagnostics_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de :func:`pipelines.diagnostics_analysis.run_diagnostics_stage`.
+
+    Etapa opt-in: não faz parte de ``configs/config.yaml -> stages`` (``--stage all`` não a
+    executa). Parâmetros de modelo, SAE, LLM e custo vêm de ``configs/diagnostics.yaml``
+    (validado por Pydantic); a chave da OpenAI, quando usada, vem de ``OPENAI_KEY`` (``.env``).
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada, não utilizada diretamente nesta etapa.
+    settings : Settings
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--diagnostics-*``, ``--dry-run``, ``--random-seed``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para
+        :func:`pipelines.diagnostics_analysis.run_diagnostics_stage`.
+    """
+    del general_config, settings
+    return {
+        "paths": paths,
+        "step": args.diagnostics_step,
+        "target_name": args.diagnostics_target,
+        "model_column": args.diagnostics_model_column,
+        "label": args.diagnostics_label,
+        "corpus_path": args.diagnostics_corpus,
+        "gold": args.diagnostics_gold,
+        "dry_run": args.dry_run,
+        "random_seed": args.random_seed,
+    }
+
+
 _STAGE_KWARGS_BUILDERS: dict[
     str, Callable[[ProjectPaths, GeneralConfig, Settings, argparse.Namespace], dict[str, Any]]
 ] = {
@@ -761,6 +858,7 @@ _STAGE_KWARGS_BUILDERS: dict[
     "llm_evaluation": _build_llm_evaluation_stage_kwargs,
     "comparative_evaluation": _build_comparative_evaluation_stage_kwargs,
     "hypothesaes_analysis": _build_hypothesaes_analysis_stage_kwargs,
+    "diagnostics": _build_diagnostics_stage_kwargs,
 }
 
 

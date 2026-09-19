@@ -28,6 +28,34 @@ def sample_labeled_corpus() -> pl.DataFrame:
 
 
 @pytest.fixture
+def diagnostics_settings() -> Any:
+    """Configuração real de ``configs/diagnostics.yaml``, já validada (sem rede)."""
+    from diagnostics.settings import load_diagnostics_settings
+
+    return load_diagnostics_settings()
+
+
+@pytest.fixture
+def diagnostic_corpus_large() -> pl.DataFrame:
+    """Corpus sintético (120 tweets) no contrato de diagnóstico: 2 modelos, agreement e gold."""
+    classes = ["negativo", "neutro", "positivo"]
+    n_rows = 120
+    lab_a = [classes[i % 3] for i in range(n_rows)]
+    lab_b = [classes[(i + 1) % 3] if i % 4 == 0 else classes[i % 3] for i in range(n_rows)]
+    gold = [classes[(i + 2) % 3] if i % 5 == 0 else classes[i % 3] for i in range(n_rows)]
+    return pl.DataFrame(
+        {
+            "id": [str(i) for i in range(n_rows)],
+            "text_normalized": [f"tweet sintético número {i}" for i in range(n_rows)],
+            "agreement_score": [0.5 if i % 4 == 0 else 0.9 for i in range(n_rows)],
+            "lab_a": lab_a,
+            "lab_b": lab_b,
+            "gold_label": gold,
+        }
+    )
+
+
+@pytest.fixture
 def minimal_general_config_dict() -> dict[str, Any]:
     """Dicionário mínimo válido contra ``GeneralConfig`` (espelha ``configs/config.yaml``)."""
     return {

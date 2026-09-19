@@ -16,6 +16,7 @@ export PYTHONHASHSEED := 42
 	pipeline-ingestion pipeline-preprocessing pipeline-labeling pipeline-features \
 	pipeline-training-classical pipeline-training-deep-learning pipeline-llm-evaluation \
 	pipeline-comparative-evaluation pipeline-all \
+	pipeline-diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
 	mlflow app \
 	docker-build docker-up docker-down docker-ollama \
 	dvc-repro dvc-dag dvc-push dvc-pull \
@@ -217,6 +218,30 @@ pipeline-comparative-evaluation:  ## Avalia e compara os modelos (requer PREDICT
 
 pipeline-all:  ## Executa o workflow completo, na ordem configurada em configs/config.yaml
 	$(RUN) --stage all
+
+# --- Camada de diagnóstico HypotheSAEs (opt-in, fora de `pipeline-all`) -------
+# 'diagnostics' vive em src/, que não está no sys.path do venv: exporta PYTHONPATH=src.
+DIAG := PYTHONPATH=src uv run python -m diagnostics
+TARGET ?= disagreement
+GOLD ?= tweetsentbr
+
+pipeline-diagnostics:  ## Estágio opt-in `diagnostics` via main.py (STEP=hypotheses|validation|comparison, TARGET=..., DRY_RUN=--dry-run)
+	$(RUN) --stage diagnostics --diagnostics-step $(or $(STEP),hypotheses) --diagnostics-target $(TARGET) --diagnostics-gold $(GOLD) $(DRY_RUN)
+
+install-hypothesaes:  ## Instala os extras do HypotheSAEs (torch + sentence-transformers + openai)
+	uv sync --extra hypothesaes --dev
+
+diag-dry-run:  ## Estima chamadas/custo do alvo (TARGET=disagreement|uncertainty|pseudo_label|gold_error), sem rede
+	$(DIAG).hypotheses --target $(TARGET) --dry-run
+
+diag-hypotheses:  ## Gate de sanidade + hipóteses HypotheSAEs para o alvo (TARGET=...)
+	$(DIAG).hypotheses --target $(TARGET)
+
+diag-validate:  ## Valida as hipóteses no holdout (Bonferroni) e gera reports/tables/para_rotular.csv
+	$(DIAG).validation --target $(TARGET)
+
+diag-compare:  ## Compara os prompts v1 e v2 no gold (GOLD=tweetsentbr|repro)
+	$(DIAG).comparison --gold $(GOLD)
 
 # --- Serviços auxiliares ----------------------------------------------------
 mlflow:  ## Sobe a interface do MLflow para inspecionar os experimentos

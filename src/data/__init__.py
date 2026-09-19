@@ -13,6 +13,10 @@ downloader
     Coleta paralela de tweets via scraping e download de gold sets externos.
 loader
     Carregamento de datasets (CSV/Parquet) com validação de schema.
+gold
+    Loaders de gold sets (TweetSentBR, RePro) com sanitização e divisão
+    descoberta/avaliação (:func:`gold.load_gold_set`,
+    :func:`gold.split_gold_discovery_eval`).
 splitter
     Particionamento estratificado em treino/validação/teste, com seed fixa.
 sampler

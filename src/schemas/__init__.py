@@ -10,6 +10,10 @@ Modules
 dataset
     Schemas do corpus de tweets, bruto (:class:`RawTweetSchema`) e rotulado
     (:class:`LabeledCorpusSchema`).
+diagnostics
+    Schemas do corpus e dos alvos da camada de diagnóstico HypotheSAEs
+    (:class:`DiagnosticCorpusSchema`, :class:`BinaryTargetSchema`,
+    :class:`ContinuousTargetSchema`).
 experiment
     Schema de métricas de execuções de experimento (:class:`ExperimentRunMetricSchema`).
 labeling
@@ -26,6 +30,14 @@ from schemas.dataset import (
     validate_labeled_corpus,
     validate_raw_tweet_dataset,
 )
+from schemas.diagnostics import (
+    BinaryTargetSchema,
+    ContinuousTargetSchema,
+    DiagnosticCorpusSchema,
+    validate_binary_target,
+    validate_continuous_target,
+    validate_diagnostic_corpus,
+)
 from schemas.experiment import ExperimentRunMetricSchema, validate_experiment_run_metric
 from schemas.labeling import LabelingResultSchema, validate_labeling_result
 from schemas.prediction import PredictionSchema, validate_prediction
@@ -33,12 +45,18 @@ from schemas.training import DATA_SPLITS, TrainingExampleSchema, validate_traini
 
 __all__: list[str] = [
     "DATA_SPLITS",
+    "BinaryTargetSchema",
+    "ContinuousTargetSchema",
+    "DiagnosticCorpusSchema",
     "ExperimentRunMetricSchema",
     "LabeledCorpusSchema",
     "LabelingResultSchema",
     "PredictionSchema",
     "RawTweetSchema",
     "TrainingExampleSchema",
+    "validate_binary_target",
+    "validate_continuous_target",
+    "validate_diagnostic_corpus",
     "validate_experiment_run_metric",
     "validate_labeled_corpus",
     "validate_labeling_result",

@@ -32,7 +32,12 @@ from exceptions.model import (
     ModelPersistenceError,
     UnsupportedModelError,
 )
-from exceptions.pipeline import PipelineError, PipelineStageError, UnknownPipelineStageError
+from exceptions.pipeline import (
+    PipelineError,
+    PipelineStageError,
+    SanityGateFailedError,
+    UnknownPipelineStageError,
+)
 
 __all__: list[str] = [
     "ConfigurationError",
@@ -49,6 +54,7 @@ __all__: list[str] = [
     "PipelineError",
     "PipelineStageError",
     "ProjectError",
+    "SanityGateFailedError",
     "UnknownPipelineStageError",
     "UnsupportedModelError",
 ]
