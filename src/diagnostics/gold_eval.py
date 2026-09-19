@@ -192,5 +192,5 @@ def evaluate_models_by_concept(
                 confidence_level=confidence_level,
                 seed=random_seed,
             )
-            rows.append({"concept": concept} | {"model": model} | {"n": valid.height} | scores)
+            rows.append({"concept": concept} | {"model": model} | {"n": valid.height} | scores)  # type: ignore[reportArgumentType]
     return pl.DataFrame(rows)
