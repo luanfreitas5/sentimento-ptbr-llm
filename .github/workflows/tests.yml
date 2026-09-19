@@ -1,6 +1,7 @@
 # =============================================================================
 # Tests — pytest na matriz Python (3.10–3.13) × SO (ubuntu/macos/windows).
-# Cobertura mínima de 80% é garantida pelo fail_under do coverage (pyproject).
+# Cobertura mínima de 80% é garantida pelo fail_under do coverage (pyproject);
+# ela só é atingida com os extras opcionais (PyTorch etc.) instalados.
 # O upload para o Codecov roda apenas uma vez (ubuntu + 3.12).
 # Python 3.14 fica de fora até o numba (dependência transitiva do shap)
 # publicar suporte a ela — ver https://github.com/numba/numba/issues.
@@ -41,8 +42,19 @@ jobs:
       - name: Instalar dependências
         run: uv sync --dev
 
+      # `uv sync --dev` não instala extras. Sem estes pacotes, todo o módulo
+      # tests/test_hypothesaes.py (e os testes de CNN/LSTM/redução) é pulado via
+      # `pytest.importorskip` e ~1.400 linhas de src/hypothesaes/ ficam sem
+      # cobertura, derrubando o total para ~73% (< fail_under = 80).
+      # PyTorch entra na build CPU (o índice cu124 do pyproject traria ~2 GB de
+      # CUDA, inútil em runners sem GPU). Versões espelham o extra `hypothesaes`.
+      - name: Instalar extras opcionais dos testes (PyTorch CPU + clientes LLM)
+        run: |
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install "openai>=3.8.0" "tiktoken>=0.14.0" "ollama>=0.3" "langchain-core>=0.3"
+
       - name: Rodar testes
-        run: uv run pytest -m "not slow"
+        run: uv run --no-sync pytest -m "not slow"
 
       - name: Upload de cobertura (Codecov)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
