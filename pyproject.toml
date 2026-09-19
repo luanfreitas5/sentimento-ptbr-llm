@@ -452,6 +452,11 @@ filterwarnings = [
     "ignore:.*`outer_coalesce`.*:DeprecationWarning:polars.*",
     # `matthews_corrcoef` avisa em casos degenerados gerados pelo hypothesis.
     "ignore:.*invalid value encountered in.*:RuntimeWarning",
+    # Estágios do Model Registry (src/experiment/registry.py) foram depreciados
+    # no MLflow 2.9 em favor de aliases; migrar muda a API pública (o estágio
+    # "None" não tem alias equivalente), então fica como dívida técnica explícita.
+    "ignore:.*deprecated since 2.9.0. Model registry stages.*:FutureWarning:mlflow.*",
+    "ignore:.*Model registry stages will be removed.*:FutureWarning",
 ]
 markers = [
     "smoke: testes rápidos rodados no pre-commit",
@@ -474,8 +479,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail-under = 80
-show-missing = true
+fail_under = 80  # coverage.py exige underscore em pyproject (com hífen era ignorado)
+show_missing = true
 
 # =============================================================================
 # INTERROGATE — cobertura de docstrings

@@ -155,7 +155,8 @@ class TestBuildLogisticRegressionClassifier:
         """Os padrões devem espelhar ``configs/model_params.yaml``."""
         classifier = build_logistic_regression_classifier()
         assert classifier.C == 1.0
-        assert classifier.penalty == "l2"
+        # "l2" é o padrão do estimador; no scikit-learn >= 1.8 o atributo vale "deprecated"
+        assert classifier.get_params()["penalty"] in {"l2", "deprecated"}
         assert classifier.solver == "lbfgs"
         assert classifier.max_iter == 1000
         assert classifier.class_weight == "balanced"

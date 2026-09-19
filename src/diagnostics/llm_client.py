@@ -186,8 +186,16 @@ def _default_client_factory(settings: LLMSettings) -> Any:
 
 
 def _transient_exceptions() -> tuple[type[Exception], ...]:
-    """Erros da API considerados transitórios (import tardio)."""
-    import openai
+    """Erros da API considerados transitórios (import tardio).
+
+    Sem o pacote ``openai`` instalado nenhum erro da API pode ocorrer (um cliente
+    injetado, como nos testes, não os levanta); devolve tupla vazia. O caminho
+    real falha de forma explícita em :func:`_default_client_factory`.
+    """
+    try:
+        import openai
+    except ImportError:
+        return ()
 
     return (
         openai.RateLimitError,

@@ -6,6 +6,7 @@ dependência do projeto), permitindo explicar tanto modelos baseados em
 por feature.
 """
 
+import inspect
 import logging
 from collections.abc import Sequence
 
@@ -60,9 +61,21 @@ def plot_shap_summary(
 
     import shap
 
+    # Versões recentes do shap semeiam o RNG global do NumPy (FutureWarning) a
+    # menos que um gerador explícito seja passado; também fixa a semente do jitter.
+    extra_kwargs = (
+        {"rng": np.random.default_rng(42)}
+        if "rng" in inspect.signature(shap.summary_plot).parameters
+        else {}
+    )
     figure = plt.figure(figsize=(8, 6))
     shap.summary_plot(
-        shap_values, feature_matrix, feature_names=list(feature_names), show=False, plot_size=None
+        shap_values,
+        feature_matrix,
+        feature_names=list(feature_names),
+        show=False,
+        plot_size=None,
+        **extra_kwargs,
     )
     figure.gca().set_title(title)
     figure.tight_layout()

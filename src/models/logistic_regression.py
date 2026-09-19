@@ -28,7 +28,9 @@ def build_logistic_regression_classifier(
     C : float, optional
         Inverso da força de regularização, by default 1.0.
     penalty : str, optional
-        Tipo de penalização, by default "l2".
+        Tipo de penalização, by default "l2". O scikit-learn >= 1.8 depreciou o
+        parâmetro (remoção na 1.10); como ``"l2"`` é o padrão do estimador em
+        todas as versões, ele só é repassado quando difere de ``"l2"``.
     solver : str, optional
         Algoritmo de otimização, by default "lbfgs".
     max_iter : int, optional
@@ -51,11 +53,12 @@ def build_logistic_regression_classifier(
     0.5
     """
     logger.info("Construindo classificador de Regressão Logística (C=%.3f).", C)
+    penalty_kwargs = {} if penalty == "l2" else {"penalty": penalty}
     return LogisticRegression(
         C=C,
-        penalty=penalty,
         solver=solver,
         max_iter=max_iter,
         class_weight=class_weight,
         random_state=random_state,
+        **penalty_kwargs,
     )
