@@ -31,11 +31,13 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: schemas.prediction
 ::: schemas.training
 ::: schemas.experiment
+::: schemas.diagnostics
 
 ## `data` — ingestão e carregamento
 
 ::: data.downloader
 ::: data.loader
+::: data.gold
 ::: data.splitter
 ::: data.sampler
 ::: data.writer
@@ -68,6 +70,23 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: hypothesaes.evaluation
 ::: hypothesaes.llm_api
 ::: hypothesaes.utils
+
+## `diagnostics` — camada de diagnóstico HypotheSAEs (opt-in)
+
+::: diagnostics.settings
+::: diagnostics.targets
+::: diagnostics.sanity
+::: diagnostics.llm_client
+::: diagnostics.cost
+::: diagnostics.sae_runner
+::: diagnostics.hypotheses
+::: diagnostics.annotation
+::: diagnostics.validation
+::: diagnostics.sampling
+::: diagnostics.gold_eval
+::: diagnostics.prompt_synthesis
+::: diagnostics.comparison
+::: diagnostics.tracking
 
 ## `features` — representações e engenharia de features
 

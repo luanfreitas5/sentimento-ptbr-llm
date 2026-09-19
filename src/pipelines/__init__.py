@@ -25,6 +25,9 @@ llm_evaluation
     Classificação e avaliação via LLM local (Ollama/Hugging Face).
 comparative_evaluation
     Avaliação comparativa entre múltiplos classificadores de sentimento.
+diagnostics_analysis
+    Estágio opt-in ``diagnostics``: camada de diagnóstico HypotheSAEs
+    (hipóteses, validação no holdout e comparação de prompts v1 vs v2).
 workflow
     Orquestração das etapas do pipeline por nome.
 """
@@ -33,6 +36,7 @@ from pipelines.comparative_evaluation import (
     ComparativeEvaluationResult,
     run_comparative_evaluation_stage,
 )
+from pipelines.diagnostics_analysis import run_diagnostics_stage
 from pipelines.features import FeatureArtifacts, run_features_stage
 from pipelines.ingestion import run_ingestion_stage
 from pipelines.labeling import run_labeling_stage
@@ -55,6 +59,7 @@ __all__: list[str] = [
     "ComparativeEvaluationResult",
     "FeatureArtifacts",
     "run_comparative_evaluation_stage",
+    "run_diagnostics_stage",
     "run_features_stage",
     "run_full_workflow",
     "run_ingestion_stage",

@@ -95,6 +95,7 @@ nav:
   - Início: index.md
   - Guias:
       - Metodologia: guides/metodologia.md
+      - Diagnóstico HypotheSAEs: guides/diagnostico-hypothesaes.md
       - Pipeline: guides/pipeline.md
       - Reprodutibilidade: guides/reprodutibilidade.md
       - Setup: guides/setup.md

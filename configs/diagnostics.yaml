@@ -1,0 +1,106 @@
+# Camada de diagnóstico HypotheSAEs (opt-in, pós-rotulagem).
+# Validado em runtime por src/diagnostics/settings.py (Pydantic, extra="forbid").
+# Segredos (chave OpenAI) NUNCA ficam aqui: use a variável de ambiente OPENAI_KEY (.env).
+
+random_seed: 42
+
+data:
+  # Colunas de origem em data/processed/corpus_rotulado.parquet -> contrato de diagnóstico.
+  # Enquanto a cascata multi-LLM não existe, HF e re-rotulagem por LLM fazem o papel de "modelos".
+  text_column: text_normalized        # texto sanitizado (@menções/URLs removidos); nunca o bruto
+  agreement_column: confidence_score
+  model_columns:
+    sentiment_label_huggingface: lab_huggingface
+    sentiment_label_llm_relabel: lab_llm_relabel
+  output_dir: diagnostics             # subpasta de reports/interpretability/
+
+splits:
+  holdout_size: 0.2
+  validation_size: 0.1
+
+embedding:
+  model_name: neuralmind/bert-base-portuguese-cased
+  batch_size: 128
+
+sae:
+  m_total_neurons: 256
+  k_active_neurons: 8
+  matryoshka_prefix_lengths: [32, 256]
+  checkpoint_subdir: diagnostics
+
+sanity:
+  ridge_alpha: 1.0
+  n_bootstrap: 1000
+  n_permutations: 1000
+  confidence_level: 0.95
+  significance_alpha: 0.05
+  min_effect: 0.0
+
+hypotheses:
+  selection_method: lasso
+  n_selected_neurons: 20
+  n_candidate_interpretations: 3
+  n_examples_for_interpretation: 20
+  max_words_per_example: 60
+  max_interpretation_tokens: 200
+  n_scoring_examples: 100
+  scoring_metric: f1
+  n_workers: 8
+  task_specific_instructions: |
+    Os textos são tweets em português do Brasil sobre sentimento (positivo, neutro, negativo).
+    Gere hipóteses ESPECÍFICAS e verificáveis (evite "expressa emoção" ou "fala de algo").
+    Considere fenômenos típicos do domínio: ironia e sarcasmo (elogio literal com sentido
+    negativo), gírias e abreviações de internet, palavrão como intensificador (pode ser
+    positivo: "muito f*da"), negação, perguntas retóricas e notícias sem opinião.
+    Descreva o padrão em uma frase curta, em português.
+
+llm:
+  # Provedor único, OpenAI-compatível: "ollama" (local) ou "openai" (online).
+  provider: ollama
+  ollama_base_url: http://localhost:11434
+  openai_base_url: null               # null = endpoint padrão da OpenAI (ou OPENAI_BASE_URL)
+  # ATENÇÃO: llama3.2:1b NÃO segue o formato de anotação (smoke test: 0/6 respostas parseáveis).
+  interpreter_model: gemma2:9b
+  annotator_model: gemma2:9b
+  max_concurrency: 8                  # limite de requisições simultâneas (semáforo)
+  request_timeout_seconds: 120
+  max_retries: 3
+  temperature: 0.0
+  cache_dir: data/interim/diagnostics/llm_cache   # fora do git (data/* é ignorado)
+  max_annotation_failure_rate: 0.2    # aborta se >20% das respostas não forem parseáveis
+
+pricing:
+  # USD por 1 milhão de tokens, usado só na estimativa de custo (--dry-run).
+  # Ollama local = 0. Preencha os preços vigentes do provedor antes de confiar na estimativa.
+  default: {input: 0.0, output: 0.0}
+  models: {}
+
+targets:
+  disagreement: {}
+  uncertainty: {}
+  pseudo_label: {model_column: lab_huggingface, label: negativo}
+  gold_error: {model_column: lab_llm_relabel}
+
+validation:
+  corrected_pval_threshold: 0.1       # alfa antes de Bonferroni
+  top_k_concepts: 10
+  max_tweets_per_run: 500             # subamostra do holdout a anotar (N tweets x C conceitos)
+  max_annotation_calls: 10000         # trava de segurança contra explosão de chamadas
+
+sampling:
+  tweets_per_concept: 20
+  salt_env_var: DIAGNOSTICS_SAMPLE_SALT   # sal do pseudônimo (sample_id); definir no .env
+
+prompts:
+  directory: prompts
+  v1: labeling_1_rubrica_few-shot_distribuicao_probabilidade.txt   # NÃO editar
+  v2: v2.md
+  labeling_model_temperature: 0.0
+
+comparison:
+  gold_eval_fraction: 0.5             # G_eval (reporte v1 vs v2); o restante é G_disc (descoberta)
+  gold_max_tweets: 2000
+  n_folds: 10                         # Wilcoxon exige >= 6 pares para p < 0,05 (10 recomendado)
+  n_bootstrap: 1000
+  confidence_level: 0.95
+  significance_alpha: 0.05
