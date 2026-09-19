@@ -141,7 +141,7 @@ def validate_diagnostic_corpus(dataframe: pl.DataFrame) -> pl.DataFrame:
             ),
         )
     optional_gold = [GOLD_LABEL_COLUMN] if GOLD_LABEL_COLUMN in dataframe.columns else []
-    for column in [*model_columns, *optional_gold]:
+    for column in (*model_columns, *optional_gold):
         _validate_label_column_values(dataframe, column)
     return dataframe
 

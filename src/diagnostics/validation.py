@@ -197,14 +197,14 @@ def select_holdout_rows(
     EmptyDatasetError
         Se nenhuma linha do alvo estiver no holdout.
     """
-    partitioned = assign_partitions(
-        corpus,
-        holdout_size=settings.splits.holdout_size,
-        validation_size=settings.splits.validation_size,
-        random_seed=settings.random_seed,
-    )
     holdout = (
-        partitioned.filter(pl.col(PARTITION_COLUMN) == HOLDOUT_PARTITION)
+        assign_partitions(
+            corpus,
+            holdout_size=settings.splits.holdout_size,
+            validation_size=settings.splits.validation_size,
+            random_seed=settings.random_seed,
+        )
+        .filter(pl.col(PARTITION_COLUMN) == HOLDOUT_PARTITION)
         .select("id", "text_normalized")
         .join(target, on="id", how="inner")
     )

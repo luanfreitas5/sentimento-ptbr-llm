@@ -140,7 +140,11 @@ from exceptions.configuration import (
 )
 from exceptions.data import DataNotFoundError, DataValidationError, EmptyDatasetError
 from exceptions.pipeline import PipelineStageError, SanityGateFailedError
-from pipelines.diagnostics_analysis import run_diagnostics_stage
+from pipelines.diagnostics_analysis import (
+    _load_settings,
+    _resolve_target_arguments,
+    run_diagnostics_stage,
+)
 from pipelines.workflow import STAGE_REGISTRY
 from schemas.diagnostics import (
     list_model_label_columns,
@@ -2037,6 +2041,171 @@ class TestRunDiagnosticsStage:
         assert calls["kwargs"]["label"] == "negativo"
         assert calls["kwargs"]["track"] is True
         assert calls["args"][3].random_seed == 3  # settings com a semente sobrescrita
+
+    def test_hypotheses_step_forwards_track_false(
+        self, diagnostic_corpus_large: pl.DataFrame, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``track=False`` desliga o MLflow no passo ``hypotheses``."""
+        seen: dict[str, Any] = {}
+        monkeypatch.setattr(
+            hypotheses_module, "load_diagnostic_corpus", lambda *_: diagnostic_corpus_large
+        )
+        monkeypatch.setattr(sae_runner_module, "prepare_discovery_data", lambda *a: "descoberta")
+        monkeypatch.setattr(
+            hypotheses_module,
+            "run_target_diagnostics",
+            lambda *args, **kwargs: seen.update(args=args, kwargs=kwargs),
+        )
+        run_diagnostics_stage(_namespace(), target_name="uncertainty", track=False)
+        assert seen["kwargs"]["track"] is False
+        assert seen["args"][2] == "descoberta"
+
+    def test_validation_step_wires_yaml_defaults_and_tracking(
+        self, diagnostic_corpus_large: pl.DataFrame, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sem dry-run, ``validation`` usa modelo/classe do YAML e repassa ``track``."""
+        seen: dict[str, Any] = {}
+        paths = _namespace()
+        monkeypatch.setattr(
+            hypotheses_module, "load_diagnostic_corpus", lambda *_: diagnostic_corpus_large
+        )
+
+        def _fake_validation(*args: Any, **kwargs: Any) -> str:
+            seen.update(args=args, kwargs=kwargs)
+            return "validado"
+
+        monkeypatch.setattr(validation, "run_validation_stage", _fake_validation)
+        result = run_diagnostics_stage(
+            paths, step="validation", target_name="pseudo_label", track=False
+        )
+        assert result == "validado"
+        assert seen["args"][0] == "pseudo_label"
+        assert seen["args"][1] is diagnostic_corpus_large
+        assert seen["args"][3] is paths
+        assert seen["kwargs"] == {
+            "track": False,
+            "model_column": "lab_huggingface",
+            "label": "negativo",
+        }
+
+    def test_comparison_step_runs_with_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Sem dry-run: gold ``tweetsentbr`` e o anotador do YAML como modelo padrão."""
+        seen: dict[str, Any] = {}
+
+        def _fake_comparison(gold_file: Path, settings: Any, paths: Any, **kwargs: Any) -> str:
+            seen.update(gold_file=gold_file, paths=paths, **kwargs)
+            return "comparado"
+
+        monkeypatch.setattr(comparison_module, "run_prompt_comparison", _fake_comparison)
+        paths = _namespace(tweetsentbr_file=Path("a.parquet"), repro_file=Path("b.parquet"))
+        assert run_diagnostics_stage(paths, step="comparison", track=False) == "comparado"
+        annotator = load_diagnostics_settings().llm.annotator_model
+        assert seen == {
+            "gold_file": Path("a.parquet"),
+            "paths": paths,
+            "models": [annotator],
+            "track": False,
+        }
+
+    def test_comparison_dry_run_defaults_to_annotator_and_tweetsentbr(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No dry-run, sem ``gold``/``models``, vale o padrão do YAML e do gold TweetSentBR."""
+        seen: dict[str, Any] = {}
+
+        def _fake(gold_file: Path, settings: Any, models: list[str]) -> str:
+            seen.update(gold_file=gold_file, models=models)
+            return "RELATORIO"
+
+        monkeypatch.setattr(comparison_module, "build_comparison_dry_run", _fake)
+        paths = _namespace(tweetsentbr_file=Path("a.parquet"), repro_file=Path("b.parquet"))
+        run_diagnostics_stage(paths, step="comparison", dry_run=True)
+        assert seen["gold_file"] == Path("a.parquet")
+        assert seen["models"] == [load_diagnostics_settings().llm.annotator_model]
+
+    def test_gold_error_with_corpus_path_reaches_loader(
+        self, diagnostic_corpus_large: pl.DataFrame, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Com ``corpus_path``, ``gold_error`` passa a validação e o caminho chega ao carregador."""
+        seen: dict[str, Any] = {}
+
+        def _fake_loader(settings: Any, paths: Any, corpus_path: Path | None) -> pl.DataFrame:
+            seen["corpus_path"] = corpus_path
+            return diagnostic_corpus_large
+
+        def _fake_report(target_name: str, corpus: Any, settings: Any, **arguments: Any) -> str:
+            seen.update(target_name=target_name, arguments=arguments)
+            return "RELATORIO"
+
+        monkeypatch.setattr(hypotheses_module, "load_diagnostic_corpus", _fake_loader)
+        monkeypatch.setattr(hypotheses_module, "build_dry_run_report", _fake_report)
+        report = run_diagnostics_stage(
+            _namespace(),
+            target_name="gold_error",
+            corpus_path=Path("gold_predicoes.parquet"),
+            model_column="lab_a",
+            dry_run=True,
+        )
+        assert report == "RELATORIO"
+        assert seen["corpus_path"] == Path("gold_predicoes.parquet")
+        assert seen["target_name"] == "gold_error"
+        assert seen["arguments"] == {"model_column": "lab_a", "label": None}
+
+    def test_config_file_is_loaded_and_seed_override_wins(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``config_file`` alternativo é lido; ``random_seed`` explícito prevalece sobre o YAML."""
+        raw = yaml.safe_load(DEFAULT_DIAGNOSTICS_CONFIG_FILE.read_text(encoding="utf-8"))
+        raw["random_seed"] = 99
+        config_file = tmp_path / "diagnostics.yaml"
+        config_file.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+        seeds: list[int] = []
+
+        def _fake(gold_file: Path, settings: Any, models: list[str]) -> str:
+            seeds.append(settings.random_seed)
+            return "RELATORIO"
+
+        monkeypatch.setattr(comparison_module, "build_comparison_dry_run", _fake)
+        paths = _namespace(tweetsentbr_file=Path("a.parquet"), repro_file=Path("b.parquet"))
+        run_diagnostics_stage(paths, step="comparison", dry_run=True, config_file=config_file)
+        run_diagnostics_stage(
+            paths, step="comparison", dry_run=True, config_file=config_file, random_seed=0
+        )
+        assert seeds == [99, 0]
+
+    def test_missing_config_file_raises(self, tmp_path: Path) -> None:
+        """``config_file`` inexistente falha cedo com erro de configuração."""
+        with pytest.raises(ConfigurationFileNotFoundError):
+            run_diagnostics_stage(_namespace(), config_file=tmp_path / "nao_existe.yaml")
+
+
+class TestDiagnosticsStageHelpers:
+    """Helpers privados do estágio, isolados do despacho."""
+
+    def test_load_settings_applies_seed_only_when_given(self) -> None:
+        """``random_seed=0`` é um override válido (não é confundido com ``None``)."""
+        default_seed = load_diagnostics_settings().random_seed
+        assert _load_settings(None, None).random_seed == default_seed
+        assert _load_settings(None, 0).random_seed == 0
+
+    def test_resolve_target_arguments_prefers_explicit_values(
+        self, diagnostics_settings: Any
+    ) -> None:
+        """Argumento explícito vence o padrão do YAML; ausente, usa o YAML."""
+        assert _resolve_target_arguments(diagnostics_settings, "pseudo_label", None, None) == {
+            "model_column": "lab_huggingface",
+            "label": "negativo",
+        }
+        assert _resolve_target_arguments(
+            diagnostics_settings, "pseudo_label", "lab_x", "positivo"
+        ) == {"model_column": "lab_x", "label": "positivo"}
+
+    def test_resolve_target_arguments_without_yaml_entry(self, diagnostics_settings: Any) -> None:
+        """Alvo sem entrada em ``targets`` (ex.: ``disagreement``) resulta em ``None``."""
+        assert _resolve_target_arguments(diagnostics_settings, "disagreement", None, None) == {
+            "model_column": None,
+            "label": None,
+        }
 
 
 # ============================================================================

@@ -19,10 +19,13 @@ para que a camada permaneça opt-in (nenhum custo de import nem dependência de
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from config.paths import ProjectPaths
 from exceptions.data import DataValidationError
+
+if TYPE_CHECKING:
+    from diagnostics.settings import DiagnosticsSettings
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,91 @@ def _emit_report(report: str) -> str:
     logger.info("\n%s", report)
     print(report)
     return report
+
+
+def _load_settings(config_file: Path | None, random_seed: int | None) -> "DiagnosticsSettings":
+    """Carrega ``configs/diagnostics.yaml`` e aplica o override opcional da semente."""
+    from diagnostics.settings import DEFAULT_DIAGNOSTICS_CONFIG_FILE, load_diagnostics_settings
+
+    settings = load_diagnostics_settings(config_file or DEFAULT_DIAGNOSTICS_CONFIG_FILE)
+    if random_seed is not None:
+        settings = settings.model_copy(update={"random_seed": random_seed})
+    return settings
+
+
+def _resolve_target_arguments(
+    settings: "DiagnosticsSettings",
+    target_name: str,
+    model_column: str | None,
+    label: str | None,
+) -> dict[str, Any]:
+    """Resolve ``model_column``/``label`` do alvo: argumento explícito ou padrão do YAML."""
+    defaults = settings.targets.get(target_name, {})
+    return {
+        "model_column": model_column or defaults.get("model_column"),
+        "label": label or defaults.get("label"),
+    }
+
+
+def _run_comparison_step(
+    paths: ProjectPaths,
+    settings: "DiagnosticsSettings",
+    *,
+    gold: str,
+    models: Sequence[str] | None,
+    dry_run: bool,
+    track: bool,
+) -> Any:
+    """Executa (ou estima, em ``dry_run``) a comparação de prompts v1 vs v2 no gold set."""
+    from diagnostics.comparison import build_comparison_dry_run, run_prompt_comparison
+
+    gold_file = paths.tweetsentbr_file if gold == "tweetsentbr" else paths.repro_file
+    chosen_models = list(models or [settings.llm.annotator_model])
+    if dry_run:
+        return _emit_report(build_comparison_dry_run(gold_file, settings, chosen_models))
+    return run_prompt_comparison(gold_file, settings, paths, models=chosen_models, track=track)
+
+
+def _run_validation_step(
+    target_name: str,
+    corpus: Any,
+    settings: "DiagnosticsSettings",
+    paths: ProjectPaths,
+    target_arguments: dict[str, Any],
+    *,
+    dry_run: bool,
+    track: bool,
+) -> Any:
+    """Executa (ou estima, em ``dry_run``) a validação das hipóteses no holdout."""
+    from diagnostics.validation import build_dry_run_report, run_validation_stage
+
+    if dry_run:
+        return _emit_report(build_dry_run_report(target_name, corpus, settings, **target_arguments))
+    return run_validation_stage(
+        target_name, corpus, settings, paths, track=track, **target_arguments
+    )
+
+
+def _run_hypotheses_step(
+    target_name: str,
+    corpus: Any,
+    settings: "DiagnosticsSettings",
+    paths: ProjectPaths,
+    target_arguments: dict[str, Any],
+    *,
+    dry_run: bool,
+    track: bool,
+) -> Any:
+    """Executa (ou estima, em ``dry_run``) o gate de sanidade e a geração de hipóteses."""
+    from diagnostics.hypotheses import build_dry_run_report, run_target_diagnostics
+    from diagnostics.sae_runner import prepare_discovery_data
+
+    if dry_run:
+        return _emit_report(build_dry_run_report(target_name, corpus, settings, **target_arguments))
+    discovery = prepare_discovery_data(corpus, settings, paths)
+    return run_target_diagnostics(
+        target_name, corpus, discovery, settings, paths, track=track, **target_arguments
+    )
 
 
 def run_diagnostics_stage(
@@ -103,58 +191,32 @@ def run_diagnostics_stage(
     --------
     >>> run_diagnostics_stage(paths, target_name="uncertainty", dry_run=True)  # doctest: +SKIP
     """
-    from diagnostics.comparison import build_comparison_dry_run, run_prompt_comparison
-    from diagnostics.hypotheses import (
-        build_dry_run_report as build_hypotheses_dry_run,
-    )
-    from diagnostics.hypotheses import load_diagnostic_corpus, run_target_diagnostics
-    from diagnostics.sae_runner import prepare_discovery_data
-    from diagnostics.settings import DEFAULT_DIAGNOSTICS_CONFIG_FILE, load_diagnostics_settings
-    from diagnostics.validation import build_dry_run_report as build_validation_dry_run
-    from diagnostics.validation import run_validation_stage
+    from diagnostics.hypotheses import load_diagnostic_corpus
 
     if step not in DIAGNOSTICS_STEPS:
         raise DataValidationError(
             schema_name="DiagnosticsStage",
             detail=f"passo desconhecido '{step}'; disponíveis: {list(DIAGNOSTICS_STEPS)}",
         )
-    settings = load_diagnostics_settings(config_file or DEFAULT_DIAGNOSTICS_CONFIG_FILE)
-    if random_seed is not None:
-        settings = settings.model_copy(update={"random_seed": random_seed})
+    settings = _load_settings(config_file, random_seed)
 
     if step == "comparison":
-        gold_file = paths.tweetsentbr_file if gold == "tweetsentbr" else paths.repro_file
-        chosen_models = list(models or [settings.llm.annotator_model])
-        if dry_run:
-            return _emit_report(build_comparison_dry_run(gold_file, settings, chosen_models))
-        return run_prompt_comparison(gold_file, settings, paths, models=chosen_models, track=track)
+        return _run_comparison_step(
+            paths, settings, gold=gold, models=models, dry_run=dry_run, track=track
+        )
 
     if target_name == "gold_error" and corpus_path is None:
         raise DataValidationError(
             schema_name="DiagnosticCorpusSchema",
             detail="o alvo 'gold_error' exige --diagnostics-corpus (predições sobre o gold)",
         )
-    defaults = settings.targets.get(target_name, {})
-    target_arguments: dict[str, Any] = {
-        "model_column": model_column or defaults.get("model_column"),
-        "label": label or defaults.get("label"),
-    }
+    target_arguments = _resolve_target_arguments(settings, target_name, model_column, label)
     corpus = load_diagnostic_corpus(settings, paths, corpus_path)
 
     if step == "validation":
-        if dry_run:
-            return _emit_report(
-                build_validation_dry_run(target_name, corpus, settings, **target_arguments)
-            )
-        return run_validation_stage(
-            target_name, corpus, settings, paths, track=track, **target_arguments
+        return _run_validation_step(
+            target_name, corpus, settings, paths, target_arguments, dry_run=dry_run, track=track
         )
-
-    if dry_run:
-        return _emit_report(
-            build_hypotheses_dry_run(target_name, corpus, settings, **target_arguments)
-        )
-    discovery = prepare_discovery_data(corpus, settings, paths)
-    return run_target_diagnostics(
-        target_name, corpus, discovery, settings, paths, track=track, **target_arguments
+    return _run_hypotheses_step(
+        target_name, corpus, settings, paths, target_arguments, dry_run=dry_run, track=track
     )

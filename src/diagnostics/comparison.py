@@ -28,6 +28,7 @@ import re
 from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass
+from itertools import starmap
 from pathlib import Path
 from typing import Any
 
@@ -297,7 +298,7 @@ def _fold_wilcoxon_pvalue(
         scores_v2.append(
             calculate_matthews_correlation_coefficient(truth, [pred_v2[i] for i in fold])
         )
-    if all(math.isclose(a, b) for a, b in zip(scores_v1, scores_v2, strict=True)):
+    if all(starmap(math.isclose, zip(scores_v1, scores_v2, strict=True))):
         return 1.0
     return run_wilcoxon_signed_rank_test(scores_v1, scores_v2)["p_value"]
 

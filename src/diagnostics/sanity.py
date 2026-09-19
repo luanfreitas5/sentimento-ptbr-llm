@@ -144,7 +144,7 @@ def _validate_inputs(
         raise DataValidationError(
             schema_name="SanityGateInputs", detail="dimensão dos embeddings difere entre partições"
         )
-    if x_train.shape[0] == 0 or x_holdout.shape[0] == 0:
+    if 0 in (x_train.shape[0], x_holdout.shape[0]):
         raise DataValidationError(schema_name="SanityGateInputs", detail="partição vazia")
 
 
@@ -264,8 +264,11 @@ def evaluate_sanity_gate(
         logger.warning("Gate de sanidade '%s': %s.", target_name, result.reason)
         return result
 
-    model = make_pipeline(StandardScaler(), Ridge(alpha=ridge_alpha, random_state=random_seed))
-    predictions = model.fit(x_tr, y_tr).predict(x_ho)
+    predictions = (
+        make_pipeline(StandardScaler(), Ridge(alpha=ridge_alpha, random_state=random_seed))
+        .fit(x_tr, y_tr)
+        .predict(x_ho)
+    )
     rng = np.random.default_rng(random_seed)
     observed = _score(metric_name, y_ho, predictions)
     ci_lower, ci_upper = _bootstrap_interval(
