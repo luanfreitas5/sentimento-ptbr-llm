@@ -162,8 +162,8 @@ def load_huggingface_sentiment_pipeline(
     """
     try:
         import torch  # type: ignore[reportMissingImports]
-        from transformers import (
-            pipeline as build_transformers_pipeline,  # type: ignore[reportMissingImports]
+        from transformers import (  # type: ignore[reportMissingImports]
+            pipeline as build_transformers_pipeline,
         )
     except ImportError as exception:
         raise ModelError(

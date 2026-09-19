@@ -174,7 +174,7 @@ def _resolve_endpoint(settings: LLMSettings) -> tuple[str | None, str]:
 
 def _default_client_factory(settings: LLMSettings) -> Any:
     """Cria o ``openai.AsyncOpenAI`` (import tardio: ``openai`` é dependência opcional)."""
-    import openai
+    import openai  # type: ignore[reportMissingImports]
 
     base_url, api_key = _resolve_endpoint(settings)
     return openai.AsyncOpenAI(
@@ -193,7 +193,7 @@ def _transient_exceptions() -> tuple[type[Exception], ...]:
     real falha de forma explícita em :func:`_default_client_factory`.
     """
     try:
-        import openai
+        import openai  # type: ignore[reportMissingImports]
     except ImportError:
         return ()
 

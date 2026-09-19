@@ -6,6 +6,7 @@ sobre representações TF-IDF ou embeddings (``src/features/``), consumido por
 """
 
 import logging
+from typing import Any
 
 from sklearn.linear_model import LogisticRegression
 
@@ -53,7 +54,7 @@ def build_logistic_regression_classifier(
     0.5
     """
     logger.info("Construindo classificador de Regressão Logística (C=%.3f).", C)
-    penalty_kwargs = {} if penalty == "l2" else {"penalty": penalty}
+    penalty_kwargs: dict[str, Any] = {} if penalty == "l2" else {"penalty": penalty}
     return LogisticRegression(
         C=C,
         solver=solver,
