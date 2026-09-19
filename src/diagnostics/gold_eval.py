@@ -192,8 +192,5 @@ def evaluate_models_by_concept(
                 confidence_level=confidence_level,
                 seed=random_seed,
             )
-            row: dict[str, object] = (
-                {"concept": concept} | {"model": model} | {"n": valid.height} | scores
-            )
-            rows.append(row)
+            rows.append({"concept": concept, "model": model, "n": valid.height, **scores})
     return pl.DataFrame(rows)
