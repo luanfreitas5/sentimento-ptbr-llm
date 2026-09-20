@@ -876,9 +876,10 @@
 </tbody>
 </table>
 <h2 id="rotulagem-duas-bases-independentes">Rotulagem: duas bases independentes<a class="headerlink" href="#rotulagem-duas-bases-independentes" title="Permanent link">&para;</a></h2>
-<p>O estágio <code>labeling</code> classifica <strong>todos</strong> os tweets do corpus normalizado com dois LLMs, usando o
-mesmo prompt de <code>prompts/</code> (<code>configs/labeling.yaml -&gt; prompt_name</code>) sobre o texto já sanitizado
-(<code>text_normalized</code>, sem menções/URLs):</p>
+<p>O estágio <code>labeling</code> classifica <strong>todos</strong> os tweets do corpus normalizado com duas fontes, sobre o
+texto já sanitizado (<code>text_normalized</code>, sem menções/URLs). A fonte OpenAI usa o prompt de
+<code>prompts/</code> (<code>configs/labeling.yaml -&gt; prompt_name</code>); a fonte Hugging Face é um classificador
+ajustado e não recebe prompt:</p>
 <table>
 <thead>
 <tr>
@@ -890,7 +891,7 @@ mesmo prompt de <code>prompts/</code> (<code>configs/labeling.yaml -&gt; prompt_
 <tbody>
 <tr>
 <td><code>tweets_data_huggingface</code></td>
-<td>LLM local via <code>transformers</code> (<code>src/labeling/huggingface.py</code>)</td>
+<td>classificador local via <code>transformers</code> (<code>src/labeling/huggingface.py</code>)</td>
 <td><code>configs/labeling.yaml -&gt; huggingface</code></td>
 </tr>
 <tr>
@@ -913,8 +914,10 @@ entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
   (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.</li>
 <li><strong>HTTP 429:</strong> <code>time.sleep(request_interval_seconds)</code> antes de cada chamada à API.</li>
 <li><strong>GPU:</strong> a memória é liberada a cada lote e o modelo é descarregado ao fim da fonte.</li>
-<li><strong>VRAM:</strong> o modelo padrão (Llama 3.1 8B) exige ~16 GB em bfloat16 (~6 GB com <code>load_in_4bit</code>).
-  Em GPUs pequenas, troque <code>huggingface.model</code> por um modelo menor. Fixe <code>huggingface.revision</code> num SHA.</li>
+<li><strong>Modelo Hugging Face:</strong> o padrão é <code>pysentimento/bertweet-pt-sentiment</code> (BERTweet-pt, ~135M de
+  parâmetros; classes NEG/NEU/POS mapeadas para negativo/neutro/positivo). É um classificador
+  ajustado, não um LLM gerativo: não usa prompt, é determinístico e a confiança é a probabilidade
+  softmax da classe. Roda em CPU ou GPU pequena. Fixe <code>huggingface.revision</code> num SHA.</li>
 <li><strong>Corpus das etapas seguintes:</strong> <code>configs/labeling.yaml -&gt; downstream_source</code> escolhe qual base
   vira <code>sentiment_label</code> em <code>corpus_rotulado.parquet</code> (consumido por <code>features</code> e
   <code>hypothesaes_analysis</code>); as duas ficam em <code>sentiment_label_&lt;fonte&gt;</code>/<code>confidence_score_&lt;fonte&gt;</code>.</li>
