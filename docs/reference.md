@@ -125,20 +125,11 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: training.cross_validation
 ::: training.resume
 
-## `llm` — LLMs locais e orquestração LangChain
-
-::: llm.backends
-::: llm.prompts
-::: llm.parsers
-::: llm.chains
-::: llm.classifier
-
 ## `inference` — predição
 
 ::: inference.predictor
 ::: inference.batch
 ::: inference.online
-::: inference.llm_batch
 ::: inference.postprocessing
 
 ## `metrics` e `evaluation` — métricas e análises estatísticas
@@ -154,6 +145,7 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: evaluation.slice_evaluation
 ::: evaluation.hypothesaes_report
 ::: evaluation.reports
+::: evaluation.llm_comparison
 
 ## `visualization` — gráficos e diagnósticos
 
@@ -167,6 +159,7 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: visualization.interpretability
 ::: visualization.diagnostics
 ::: visualization.hypothesaes
+::: visualization.comparison
 
 ## `experiment` — rastreamento de experimentos (MLflow)
 
@@ -183,7 +176,6 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: pipelines.features
 ::: pipelines.training_classical
 ::: pipelines.training_deep_learning
-::: pipelines.llm_evaluation
 ::: pipelines.comparative_evaluation
 ::: pipelines.hypothesaes_analysis
 

@@ -17,14 +17,10 @@ Uso
 Ver ``make help`` para os alvos pré-configurados (um por etapa) e
 ``configs/config.yaml -> stages`` para a lista/ordem canônica de estágios.
 
-Lacunas conhecidas (ver comentários nas funções ``_build_*_stage_kwargs``
-abaixo): as etapas ``ingestion`` e ``comparative_evaluation`` exigem
-componentes que este projeto ainda não implementa como módulos próprios
-(um adaptador de scraping - ``src/data/collector.py`` - e uma
-transformação TF-IDF reutilizável para conjuntos fora do treino -
-``src/features/lexical.py``); por isso, recebem a função necessária via
-caminho pontilhado (``--scrape-func``/``--predictions-func``), informado
-pelo operador da execução.
+Lacunas conhecidas (ver ``_build_ingestion_stage_kwargs``): a etapa ``ingestion``
+exige um adaptador de scraping que este projeto não implementa como módulo
+próprio (``src/data/collector.py``); por isso, recebe a função de coleta via
+caminho pontilhado (``--scrape-func``), informado pelo operador da execução.
 """
 
 from __future__ import annotations
@@ -33,6 +29,8 @@ import argparse
 import importlib
 import logging
 from collections.abc import Callable, Sequence
+from contextlib import nullcontext
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -51,8 +49,10 @@ from features.lexical import pivot_tfidf_features_to_wide
 from hypothesaes.llm_api import LLM_PROVIDER_NAMES
 from hypothesaes.utils import load_prompt_template
 from io_utils.yaml import read_yaml
-from labeling.huggingface import load_huggingface_sentiment_pipeline
+from labeling.huggingface import open_huggingface_classifier
+from labeling.openai_labeler import create_openai_batch_classifier
 from pipelines.diagnostics_analysis import DIAGNOSTICS_GOLD_CHOICES, DIAGNOSTICS_STEPS
+from pipelines.labeling import LABEL_SOURCE_NAMES, LabelingSource
 from pipelines.training_classical import DEFAULT_CLASSICAL_MODEL_NAMES
 from pipelines.training_deep_learning import DEFAULT_DEEP_LEARNING_MODEL_NAMES
 from pipelines.workflow import STAGE_REGISTRY, run_pipeline_stage
@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 
 _ALL_STAGES_OPTION = "all"
 _STAGE_CHOICES: tuple[str, ...] = (*STAGE_REGISTRY, _ALL_STAGES_OPTION)
+_ALL_SOURCES_OPTION = "all"
 _LOG_LEVEL_CHOICES: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 # Espelha `pipelines.features._TFIDF_FEATURES_FILE_NAME` (constante privada
@@ -130,8 +131,8 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Número máximo de threads/processos paralelos (etapas "
-            "`ingestion`/`preprocessing`/`labeling`/`llm_evaluation`/"
-            "`hypothesaes_analysis`)."
+            "`ingestion`/`preprocessing`/`hypothesaes_analysis`; na etapa `labeling`, "
+            "sobrescreve `configs/labeling.yaml -> openai.n_workers`)."
         ),
     )
     parser.add_argument(
@@ -149,16 +150,13 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Habilita o rastreamento MLflow nas etapas de treino.",
     )
     parser.add_argument(
-        "--llm-backend",
-        default=None,
-        choices=["ollama", "huggingface"],
-        help="Sobrescreve o backend LLM de `configs/llm.yaml` (etapa `llm_evaluation`).",
-    )
-    parser.add_argument(
-        "--llm-strategy",
-        default=None,
-        choices=["zero_shot", "few_shot", "chain_of_thought"],
-        help="Sobrescreve a estratégia de prompt de `configs/llm.yaml` (etapa `llm_evaluation`).",
+        "--label-source",
+        default=_ALL_SOURCES_OPTION,
+        choices=[*LABEL_SOURCE_NAMES, _ALL_SOURCES_OPTION],
+        help=(
+            "Fonte(s) de rotulagem da etapa `labeling`: `huggingface` (LLM local), "
+            "`openai` (API) ou `all` (as duas bases, em sequência)."
+        ),
     )
     parser.add_argument(
         "--scrape-func",
@@ -177,12 +175,12 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Consultas de coleta (etapa `ingestion`), ex.: --queries termo1 termo2.",
     )
     parser.add_argument(
-        "--predictions-func",
-        default=None,
-        metavar="MODULO:FUNCAO",
+        "--skip-hypotheses",
+        action="store_true",
         help=(
-            "Caminho pontilhado para uma função sem argumentos que retorna a "
-            "tupla `(model_predictions, y_true)` (etapa `comparative_evaluation`)."
+            "Não executa o HypotheSAEs ao final da etapa `comparative_evaluation` "
+            "(sobrescreve `configs/evaluation.yaml -> llm_comparison.hypotheses.enabled` "
+            "apenas para desligar)."
         ),
     )
     parser.add_argument(
@@ -419,11 +417,9 @@ def _build_preprocessing_stage_kwargs(
 def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:
     """Valida e retorna ``configs/llm.yaml -> active_provider``.
 
-    Provedor compartilhado pela re-rotulagem via LLM (etapa ``labeling``) e
-    pelo HypotheSAEs (etapa ``hypothesaes_analysis``) — distinto de
-    ``backends.ollama.enabled``/``backends.huggingface.enabled``, que
-    escolhem o backend do classificador LLM principal (etapa
-    ``llm_evaluation``).
+    Provedor usado pelo HypotheSAEs (etapa ``hypothesaes_analysis``); a
+    rotulagem dos tweets (etapa ``labeling``) tem configuração própria em
+    ``configs/labeling.yaml``.
 
     Parameters
     ----------
@@ -449,14 +445,91 @@ def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:
     return provider
 
 
+def _build_labeling_sources(
+    labeling_config: dict[str, Any], settings: Settings, args: argparse.Namespace
+) -> list[LabelingSource]:
+    """Monta as fontes de rotulagem pedidas em ``--label-source``.
+
+    O modelo do Hugging Face só é carregado quando a fonte é executada (e a GPU é liberada ao
+    fim dela); o cliente OpenAI usa a chave de ``OPENAI_KEY`` (``.env``), lida sob demanda.
+
+    Parameters
+    ----------
+    labeling_config : dict[str, Any]
+        Conteúdo de ``configs/labeling.yaml``.
+    settings : Settings
+        Configurações sensíveis ao ambiente (``huggingface_token``).
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--label-source``, ``--max-workers``).
+
+    Returns
+    -------
+    list[LabelingSource]
+        Fontes a executar, na ordem ``huggingface`` -> ``openai``.
+    """
+    requested = (
+        LABEL_SOURCE_NAMES if args.label_source == _ALL_SOURCES_OPTION else (args.label_source,)
+    )
+    prompt_name = labeling_config["prompt_name"]
+    prompt_template = load_prompt_template(prompt_name)
+    sources: list[LabelingSource] = []
+
+    if "huggingface" in requested:
+        hf_config = labeling_config["huggingface"]
+        sources.append(
+            LabelingSource(
+                name="huggingface",
+                model_name=f"{hf_config['model']}@{hf_config['revision']}",
+                prompt_name=prompt_name,
+                prompt_template=prompt_template,
+                temperature=hf_config["temperature"],
+                batch_size=hf_config["batch_size"],
+                open_classifier=partial(
+                    open_huggingface_classifier,
+                    prompt_template,
+                    model_name=hf_config["model"],
+                    device=hf_config["device"],
+                    dtype=hf_config["dtype"],
+                    load_in_4bit=hf_config["load_in_4bit"],
+                    token=settings.huggingface_token,
+                    revision=hf_config["revision"],
+                    max_new_tokens=hf_config["max_new_tokens"],
+                    max_input_tokens=hf_config["max_input_tokens"],
+                    max_retries=hf_config["max_retries"],
+                    retry_temperature=hf_config["retry_temperature"],
+                ),
+            )
+        )
+
+    if "openai" in requested:
+        oa_config = labeling_config["openai"]
+        classifier = create_openai_batch_classifier(
+            prompt_template,
+            model=oa_config["model"],
+            temperature=oa_config["temperature"],
+            max_retries=oa_config["max_retries"],
+            n_workers=args.max_workers or oa_config["n_workers"],
+            request_interval_seconds=oa_config["request_interval_seconds"],
+            request_timeout_seconds=oa_config["request_timeout_seconds"],
+        )
+        sources.append(
+            LabelingSource(
+                name="openai",
+                model_name=oa_config["model"],
+                prompt_name=prompt_name,
+                prompt_template=prompt_template,
+                temperature=oa_config["temperature"],
+                batch_size=oa_config["batch_size"],
+                open_classifier=lambda: nullcontext(classifier),
+            )
+        )
+    return sources
+
+
 def _build_labeling_stage_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
     """Monta os argumentos de :func:`pipelines.labeling.run_labeling_stage`.
-
-    Carrega o pipeline de sentimento do Hugging Face (ver
-    ``configs/labeling.yaml -> huggingface``) e o injeta já pronto, seguindo
-    o mesmo padrão de composição raiz das demais etapas.
 
     Parameters
     ----------
@@ -465,49 +538,24 @@ def _build_labeling_stage_kwargs(
     general_config : GeneralConfig
         Configuração geral validada, não utilizada diretamente nesta etapa.
     settings : Settings
-        Configurações sensíveis ao ambiente, não utilizadas diretamente
-        nesta etapa.
+        Configurações sensíveis ao ambiente (``huggingface_token``).
     args : argparse.Namespace
-        Argumentos de linha de comando, não utilizados diretamente nesta
-        etapa.
+        Argumentos de linha de comando (``--label-source``, ``--max-workers``).
 
     Returns
     -------
     dict[str, Any]
         Argumentos nomeados para :func:`pipelines.labeling.run_labeling_stage`.
     """
-    del general_config, settings, args
+    del general_config
     labeling_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["labeling"])
-    huggingface_config = labeling_config["huggingface"]
-    pipeline = load_huggingface_sentiment_pipeline(
-        model_name=huggingface_config["model"],
-        device=huggingface_config["device"],
-        batch_size=huggingface_config["batch_size"],
-        max_length=huggingface_config["max_length"],
-    )
-    llm_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["llm"])
-    llm_provider = _resolve_active_llm_provider(llm_config)
-    llm_relabeling_config = labeling_config["llm_relabeling"]
     return {
         "paths": paths,
-        "pipeline": pipeline,
-        "label_mapping": huggingface_config["label_mapping"],
-        "huggingface_batch_size": huggingface_config["batch_size"],
+        "sources": _build_labeling_sources(labeling_config, settings, args),
+        "downstream_source": labeling_config["downstream_source"],
         "human_validation_sample_size": labeling_config["human_validation"]["sample_size"],
         "low_confidence_threshold": labeling_config["confidence"]["low_confidence_threshold"],
         "minimum_kappa": labeling_config["validation"]["minimum_agreement"],
-        "llm_relabeling_enabled": llm_relabeling_config["enabled"],
-        "llm_relabeling_score_threshold": llm_relabeling_config["score_threshold"],
-        "llm_relabeling_prompt_name": llm_relabeling_config["prompt_name"],
-        "llm_relabeling_model": llm_relabeling_config[f"model_{llm_provider}"],
-        "llm_relabeling_temperature": llm_relabeling_config["temperature"],
-        "llm_relabeling_max_retries": llm_relabeling_config["max_retries"],
-        "llm_relabeling_n_workers": llm_relabeling_config["n_workers"],
-        "llm_relabeling_provider": llm_provider,
-        "llm_relabeling_ollama_base_url": llm_config["backends"]["ollama"]["base_url"],
-        "llm_relabeling_request_interval_seconds": llm_relabeling_config[
-            "request_interval_seconds"
-        ],
     }
 
 
@@ -636,60 +684,15 @@ def _build_training_deep_learning_stage_kwargs(
     }
 
 
-def _build_llm_evaluation_stage_kwargs(
-    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
-) -> dict[str, Any]:
-    """Monta os argumentos de :func:`pipelines.llm_evaluation.run_llm_evaluation_stage`.
-
-    Parameters
-    ----------
-    paths : ProjectPaths
-        Caminhos resolvidos do projeto.
-    general_config : GeneralConfig
-        Configuração geral validada, não utilizada diretamente nesta etapa.
-    settings : Settings
-        Configurações sensíveis ao ambiente (``settings.ollama_base_url``,
-        quando definida, sobrescreve `configs/llm.yaml -> backends.ollama.base_url`).
-    args : argparse.Namespace
-        Argumentos de linha de comando (``--llm-backend``, ``--llm-strategy``,
-        ``--max-workers``).
-
-    Returns
-    -------
-    dict[str, Any]
-        Argumentos nomeados para :func:`pipelines.llm_evaluation.run_llm_evaluation_stage`.
-    """
-    del general_config
-    test_dataframe = load_training_example_dataset(paths.test_corpus_file)
-    llm_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["llm"])
-    backend_name = args.llm_backend or (
-        "ollama" if llm_config["backends"]["ollama"]["enabled"] else "huggingface"
-    )
-    backend_overrides: dict[str, Any] = {}
-    if backend_name == "ollama" and settings.ollama_base_url is not None:
-        backend_overrides["base_url"] = settings.ollama_base_url
-    return {
-        "test_dataframe": test_dataframe,
-        "backend_name": backend_name,
-        "backend_overrides": backend_overrides,
-        "strategy": args.llm_strategy or llm_config["prompting"]["default_strategy"],
-        "prompt_version": llm_config["orchestration"]["prompt_template_version"],
-        "max_workers": args.max_workers,
-    }
-
-
 def _build_comparative_evaluation_stage_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
     """Monta os argumentos de
     :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`.
 
-    A coleta das predições de cada modelo treinado não pode ser reconstruída
-    apenas a partir de artefatos em disco: a etapa ``features`` só calcula
-    TF-IDF para o conjunto de treino (ver ``_build_training_classical_stage_kwargs``),
-    e o projeto ainda não expõe uma transformação TF-IDF reutilizável para o
-    conjunto de teste com o vocabulário de treino (``src/features/lexical.py``).
-    Por isso, ``--predictions-func`` é obrigatório nesta etapa.
+    A etapa lê as bases ``tweets_data_huggingface``/``tweets_data_openai`` direto do disco e
+    não exige nenhum argumento manual: limiares, bootstrap e HypotheSAEs vêm de
+    ``configs/evaluation.yaml -> llm_comparison``.
 
     Parameters
     ----------
@@ -698,36 +701,34 @@ def _build_comparative_evaluation_stage_kwargs(
     general_config : GeneralConfig
         Configuração geral validada, não utilizada diretamente nesta etapa.
     settings : Settings
-        Configurações sensíveis ao ambiente, não utilizadas diretamente
-        nesta etapa.
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
     args : argparse.Namespace
-        Argumentos de linha de comando (``--predictions-func``).
+        Argumentos de linha de comando (``--random-seed``, ``--skip-hypotheses``).
 
     Returns
     -------
     dict[str, Any]
         Argumentos nomeados para
         :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`.
-
-    Raises
-    ------
-    InvalidConfigurationError
-        Se ``--predictions-func`` não for informado.
     """
     del general_config, settings
-    if args.predictions_func is None:
-        raise InvalidConfigurationError(
-            "a etapa 'comparative_evaluation' exige '--predictions-func': informe o "
-            "caminho pontilhado de uma função sem argumentos que retorne a tupla "
-            "'(model_predictions, y_true)' com as predições de cada modelo já "
-            "treinado sobre o conjunto de teste."
-        )
-    predictions_func = _import_callable_from_dotted_path(args.predictions_func)
-    model_predictions, y_true = predictions_func()
+    config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["evaluation"])["llm_comparison"]
+    hypotheses_config = config["hypotheses"]
     return {
-        "model_predictions": model_predictions,
-        "y_true": y_true,
-        "output_path": paths.reports_metrics_dir / "comparativo_modelos.csv",
+        "paths": paths,
+        "output_subdir": config["output_subdir"],
+        "random_seed": args.random_seed if args.random_seed is not None else config["random_seed"],
+        "n_bootstrap": config["n_bootstrap"],
+        "confidence_level": config["confidence_level"],
+        "top_n_divergences": config["top_n_divergences"],
+        "high_confidence_threshold": config["high_confidence_threshold"],
+        "low_confidence_threshold": config["low_confidence_threshold"],
+        "n_length_bins": config["n_length_bins"],
+        "examples_per_transition": config["examples_per_transition"],
+        "run_hypotheses": hypotheses_config["enabled"] and not args.skip_hypotheses,
+        "hypotheses_targets": tuple(hypotheses_config["targets"]),
+        "top_tweets_per_hypothesis": hypotheses_config["top_tweets_per_hypothesis"],
+        "track_with_mlflow": True,
     }
 
 
@@ -855,7 +856,6 @@ _STAGE_KWARGS_BUILDERS: dict[
     "features": _build_features_stage_kwargs,
     "training_classical": _build_training_classical_stage_kwargs,
     "training_deep_learning": _build_training_deep_learning_stage_kwargs,
-    "llm_evaluation": _build_llm_evaluation_stage_kwargs,
     "comparative_evaluation": _build_comparative_evaluation_stage_kwargs,
     "hypothesaes_analysis": _build_hypothesaes_analysis_stage_kwargs,
     "diagnostics": _build_diagnostics_stage_kwargs,

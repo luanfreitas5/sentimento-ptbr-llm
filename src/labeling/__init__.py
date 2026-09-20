@@ -1,18 +1,25 @@
 """Rotulagem de sentimento de tweets em português brasileiro.
 
 Implementa a Fase 7 do plano de elaboração (``PLANO-ELABORACAO.md``) e a
-Seção 4.3 do documento mestre: classificação do corpus via pipeline do
-Hugging Face, sinalização de baixa confiança, amostragem e incorporação de
-validação humana, validação contra gold sets de referência
-(TweetSentBR/RePro) e re-rotulagem via LLM das amostras remanescentes de
-baixa confiança.
+Seção 4.3 do documento mestre: classificação de todo o corpus por dois LLMs
+independentes (Hugging Face e API OpenAI), com checkpoint e retomada,
+sinalização de baixa confiança, amostragem e incorporação de validação
+humana e validação contra gold sets de referência (TweetSentBR/RePro).
 
 Modules
 -------
 huggingface
-    Pipeline de classificação de sentimento via ``transformers.pipeline``
-    (fonte padrão de ``sentiment_label``/``confidence_score``, ver
-    ``configs/labeling.yaml -> huggingface``).
+    Rotulagem via LLM local do Hugging Face Hub (base
+    ``tweets_data_huggingface``, ver ``configs/labeling.yaml -> huggingface``).
+openai_labeler
+    Rotulagem via API OpenAI-compatível, com pausa contra HTTP 429, timeout e
+    retentativa (base ``tweets_data_openai``, ver ``configs/labeling.yaml -> openai``).
+incremental
+    Execução incremental e retomável da rotulagem (comum às duas fontes).
+checkpoint
+    Checkpoint JSON Lines que evita reprocessar tweets já rotulados.
+llm_response
+    Construção do prompt e interpretação da resposta JSON dos LLMs.
 automatic
     Interface comum dos rotuladores (:class:`SentimentLabeler``) e
     rotulador heurístico baseado em léxico de sentimento e emojis —
@@ -26,8 +33,7 @@ confidence
     discordância entre rotuladores.
 consensus
     Agregação dos candidatos da cascata em um rótulo de consenso por
-    votação majoritária ponderada e mesclagem ao corpus original — a
-    mesclagem também é reutilizada pelo pipeline Hugging Face.
+    votação majoritária ponderada e mesclagem ao corpus original.
 manual
     Amostragem estratificada por confiança para validação humana,
     incorporação dos rótulos revisados e estimativa da taxa de erro da
@@ -35,10 +41,6 @@ manual
 validation
     Validação dos rótulos contra gold sets de referência via Kappa de
     Cohen e Alpha de Krippendorff.
-llm_relabeling
-    Re-rotulagem via LLM (``UnB-Llama-3.3-70B-Instruct``, ver
-    ``configs/labeling.yaml -> llm_relabeling``) das amostras com
-    ``confidence_score`` abaixo de um limiar configurável.
 """
 
 from labeling.automatic import (
@@ -60,22 +62,20 @@ from labeling.confidence import (
 from labeling.consensus import aggregate_by_weighted_majority_vote, merge_consensus_into_corpus
 from labeling.huggingface import (
     DEFAULT_HUGGINGFACE_MODEL,
-    DEFAULT_LABEL_MAPPING,
-    SentimentPipeline,
-    label_corpus_with_huggingface_pipeline,
-    load_huggingface_sentiment_pipeline,
+    HuggingFaceLLM,
+    create_huggingface_batch_classifier,
+    load_huggingface_llm,
+    open_huggingface_classifier,
+    unload_huggingface_llm,
 )
-from labeling.llm_relabeling import (
-    DEFAULT_RELABEL_MODEL,
-    DEFAULT_RELABEL_MODEL_OLLAMA,
-    parse_relabel_response,
-    relabel_low_confidence_samples,
-)
+from labeling.incremental import BatchClassifier, run_incremental_labeling
+from labeling.llm_response import build_labeling_prompt, parse_llm_label_response
 from labeling.manual import (
     apply_human_validation_labels,
     calculate_labeling_error_rate,
     select_samples_for_human_validation,
 )
+from labeling.openai_labeler import create_openai_batch_classifier
 from labeling.validation import (
     GoldSetValidationResult,
     calculate_cohen_kappa,
@@ -85,17 +85,16 @@ from labeling.validation import (
 
 __all__: list[str] = [
     "DEFAULT_HUGGINGFACE_MODEL",
-    "DEFAULT_LABEL_MAPPING",
-    "DEFAULT_RELABEL_MODEL",
-    "DEFAULT_RELABEL_MODEL_OLLAMA",
     "NEGATIVE_WORDS",
     "POSITIVE_WORDS",
+    "BatchClassifier",
     "GoldSetValidationResult",
+    "HuggingFaceLLM",
     "LexicalHeuristicLabeler",
     "SentimentLabeler",
-    "SentimentPipeline",
     "aggregate_by_weighted_majority_vote",
     "apply_human_validation_labels",
+    "build_labeling_prompt",
     "calculate_agreement_ratio",
     "calculate_cohen_kappa",
     "calculate_discordance_score",
@@ -104,14 +103,17 @@ __all__: list[str] = [
     "calculate_lexicon_sentiment_counts",
     "calculate_weighted_label_scores",
     "classify_by_lexical_heuristic",
+    "create_huggingface_batch_classifier",
+    "create_openai_batch_classifier",
     "evaluate_against_gold_set",
     "flag_low_confidence_predictions",
     "flag_low_confidence_samples",
-    "label_corpus_with_huggingface_pipeline",
-    "load_huggingface_sentiment_pipeline",
+    "load_huggingface_llm",
     "merge_consensus_into_corpus",
-    "parse_relabel_response",
-    "relabel_low_confidence_samples",
+    "open_huggingface_classifier",
+    "parse_llm_label_response",
     "run_cascade_labeling",
+    "run_incremental_labeling",
     "select_samples_for_human_validation",
+    "unload_huggingface_llm",
 ]

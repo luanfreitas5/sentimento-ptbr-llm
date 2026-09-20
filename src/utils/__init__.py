@@ -9,6 +9,8 @@ decorators
     Decoradores genéricos (log de tempo de execução, retentativa).
 hashing
     Cálculo de hash de arquivos e strings para rastreabilidade.
+memory
+    Liberação de memória de GPU para modelos pesados.
 seed
     Fixação de sementes aleatórias para reprodutibilidade.
 text
@@ -21,6 +23,7 @@ validation
 
 from utils.decorators import log_execution_time, retry_on_exception
 from utils.hashing import calculate_file_hash, calculate_text_hash
+from utils.memory import release_gpu_memory
 from utils.seed import seed_everything
 from utils.text import normalize_whitespace, remove_accents, truncate_text
 from utils.timing import ExecutionTiming, format_duration, measure_execution_time
@@ -39,6 +42,7 @@ __all__: list[str] = [
     "log_execution_time",
     "measure_execution_time",
     "normalize_whitespace",
+    "release_gpu_memory",
     "remove_accents",
     "retry_on_exception",
     "seed_everything",

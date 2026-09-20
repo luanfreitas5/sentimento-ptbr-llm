@@ -50,6 +50,10 @@ class ProjectPaths:
         Arquivos de dados de entrada (coleta própria e gold sets externos).
     normalized_corpus_file, labeled_corpus_file : Path
         Arquivos intermediário normalizado e final rotulado.
+    huggingface_labeled_file, openai_labeled_file : Path
+        Bases ``tweets_data_huggingface``/``tweets_data_openai`` (uma por fonte de rotulagem).
+    labeling_checkpoints_dir : Path
+        Diretório dos checkpoints de retomada da rotulagem por LLM.
     training_corpus_file, validation_corpus_file, test_corpus_file : Path
         Arquivos de particionamento treino/validação/teste.
     models_checkpoints_dir, models_artifacts_dir, models_registry_dir : Path
@@ -76,6 +80,9 @@ class ProjectPaths:
     repro_file: Path
     normalized_corpus_file: Path
     labeled_corpus_file: Path
+    huggingface_labeled_file: Path
+    openai_labeled_file: Path
+    labeling_checkpoints_dir: Path
     training_corpus_file: Path
     validation_corpus_file: Path
     test_corpus_file: Path
@@ -137,6 +144,11 @@ def load_project_paths(config_file_path: Path = DEFAULT_PATHS_CONFIG_FILE) -> Pr
         repro_file=resolve_project_path(dados["data_files"]["repro"]),
         normalized_corpus_file=resolve_project_path(dados["data_files"]["corpus_normalizado"]),
         labeled_corpus_file=resolve_project_path(dados["data_files"]["corpus_rotulado"]),
+        huggingface_labeled_file=resolve_project_path(
+            dados["data_files"]["tweets_data_huggingface"]
+        ),
+        openai_labeled_file=resolve_project_path(dados["data_files"]["tweets_data_openai"]),
+        labeling_checkpoints_dir=resolve_project_path(dados["labeling"]["checkpoints"]),
         training_corpus_file=resolve_project_path(dados["data_files"]["corpus_treino"]),
         validation_corpus_file=resolve_project_path(dados["data_files"]["corpus_validacao"]),
         test_corpus_file=resolve_project_path(dados["data_files"]["corpus_teste"]),

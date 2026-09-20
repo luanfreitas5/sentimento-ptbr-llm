@@ -25,6 +25,12 @@ SENTIMENT_COLOR_PALETTE: dict[str, str] = {
     POSITIVE_LABEL: "#0072B2",
 }
 
+# Cor de cada fonte de rotulagem (LLM do Hugging Face vs. API OpenAI), também Okabe-Ito.
+MODEL_COLOR_PALETTE: dict[str, str] = {
+    "huggingface": "#E69F00",
+    "openai": "#009E73",
+}
+
 FIGURE_DPI = 300
 
 

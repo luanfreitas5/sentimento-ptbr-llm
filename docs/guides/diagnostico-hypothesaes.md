@@ -23,15 +23,16 @@ Nada aqui altera o pipeline de rotulagem; `make pipeline-all` continua igual.
 ## Contrato de entrada e adaptador
 
 O contrato (`schemas.diagnostics`) é: `id`, `text_normalized`, `agreement_score` (0–1), uma ou
-mais colunas `lab_<modelo>` e, opcionalmente, `gold_label`. Enquanto a cascata multi-LLM não
-existe, `diagnostics.targets.adapt_labeled_corpus` mapeia o corpus atual
-(`sentiment_label_huggingface` → `lab_huggingface`, `sentiment_label_llm_relabel` →
-`lab_llm_relabel`, `confidence_score` → `agreement_score`). Só as colunas do contrato passam:
-`user_id` e o texto bruto são descartados (LGPD).
+mais colunas `lab_<modelo>` e, opcionalmente, `gold_label`. `diagnostics.targets.adapt_labeled_corpus`
+mapeia o corpus rotulado (`sentiment_label_huggingface` → `lab_huggingface`,
+`sentiment_label_openai` → `lab_openai`, `confidence_score` → `agreement_score`). Só as colunas do
+contrato passam: `user_id` e o texto bruto são descartados (LGPD). A etapa `comparative_evaluation`
+monta o mesmo contrato direto das duas bases (`agreement_score` = menor confiança) — ver
+[o guia do pipeline](pipeline.md).
 
-!!! note "Viés de seleção no alvo `disagreement`"
-    `sentiment_label_llm_relabel` só existe para os candidatos de baixa confiança. O alvo só usa
-    tweets rotulados por **todos** os modelos, logo é um subconjunto enviesado do corpus.
+!!! note "Alvo `disagreement`"
+    O alvo só usa tweets rotulados por **todos** os modelos; como as duas bases cobrem todos os
+    tweets, não há viés de seleção.
 
 ## Fluxo
 

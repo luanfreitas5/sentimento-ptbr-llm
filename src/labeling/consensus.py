@@ -65,12 +65,11 @@ def merge_consensus_into_corpus(
     """Junta os rótulos de consenso ao corpus original pelo identificador da amostra.
 
     Além das colunas de trabalho ``sentiment_label``/``confidence_score``
-    (usadas pelas etapas seguintes — re-rotulagem via LLM, validação humana e
-    modelagem), preserva o rótulo/confiança originais do modelo Hugging Face
-    em ``sentiment_label_huggingface``/``confidence_score_huggingface``: essas
-    colunas nunca são sobrescritas pelas etapas seguintes da cascata (ver
-    ``src/labeling/llm_relabeling.py``/``src/labeling/manual.py``), mantendo
-    rastreabilidade completa de cada fonte de rotulagem.
+    (usadas pelas etapas seguintes — validação humana e modelagem), preserva o
+    rótulo/confiança originais do consenso em
+    ``sentiment_label_huggingface``/``confidence_score_huggingface``: essas
+    colunas nunca são sobrescritas pela validação humana (ver
+    ``src/labeling/manual.py``), mantendo a rastreabilidade da fonte.
 
     Parameters
     ----------

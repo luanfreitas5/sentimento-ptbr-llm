@@ -23,7 +23,6 @@ keywords = [
     "bertimbau",
     "machine-learning",
     "deep-learning",
-    "langchain",
     "ollama",
     "mlops",
 ]
@@ -129,14 +128,15 @@ torchaudio = { index = "pytorch-cu124" }
 # --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
 [project.optional-dependencies]
 # Recomendado para o estágio `labeling` (`make install-labeling`): classifica
-# o corpus via transformers.pipeline (src/labeling/huggingface.py, modelo
-# padrão em configs/labeling.yaml -> huggingface.model). Dependência pesada
-# (PyTorch + CUDA) — não instale em ambientes que só rodam etapas anteriores
-# à rotulagem.
+# o corpus com um LLM local do Hugging Face (src/labeling/huggingface.py, modelo
+# em configs/labeling.yaml -> huggingface.model) e via API OpenAI-compatível
+# (src/labeling/openai_labeler.py). Dependência pesada (PyTorch + CUDA) — não
+# instale em ambientes que só rodam etapas anteriores à rotulagem.
 labeling = [
     "torch>=2.2",                     # backend de tensores para Transformers/DL
-    "transformers>=4.44",             # checkpoints Hugging Face (pysentimiento/bertweet-pt-sentiment)
-    "accelerate>=0.33",               # execução eficiente de modelos Hugging Face (CPU/GPU)
+    "transformers>=4.56",             # LLMs do Hugging Face (argumento `dtype` de from_pretrained)
+    "accelerate>=0.33",               # carrega o modelo direto na GPU (device_map)
+    "openai>=3.8.0",                  # cliente OpenAI-compatível (base tweets_data_openai)
 ]
 
 # Recomendado para os estágios `hypothesaes` e a análise HypotheSAEs
@@ -155,23 +155,6 @@ hypothesaes = [
     "scipy>=1.15.3",                  # álgebra linear, estatística e otimização
     "statsmodels>=0.15.0",            # testes de significância estatística (Wilcoxon/Friedman)
     "sentence-transformers>=2.7.0",   # embeddings semânticos para textos
-]
-
-# Recomendado para os estágios `llm_evaluation`
-# (`make install-llm`). Dependências pesadas (PyTorch + CUDA) — não instale
-# em ambientes que só rodam ML clássico/DL sobre embeddings estáticos.
-llm = [
-    "torch>=2.2",                     # backend de tensores para Transformers/DL
-    "transformers>=4.44",             # checkpoints Hugging Face (BERTimbau, RoBERTa, DistilBERT, LLMs)
-    "accelerate>=0.33",               # execução eficiente de modelos Hugging Face (CPU/GPU)
-    "datasets>=2.20",                 # carregamento de datasets do Hugging Face Hub
-    "ollama>=0.3",                    # cliente Python do servidor Ollama (LLMs locais)
-    "sentencepiece>=0.2.2",           # tokenizador exigido por alguns checkpoints (ex.: RoBERTa/Llama)
-    "tiktoken>=0.14.0",               # tokenizador exigido pelo cliente OpenAI-compatível
-    "openai>=3.8.0",                  # cliente OpenAI-compatível (usado com o endpoint local do Ollama)
-    "langchain-core>=0.3",            # orquestração LCEL (src/llm/chains.py)
-    "langchain-ollama>=0.2",          # backend Ollama via LangChain (src/llm/backends.py)
-    "langchain-huggingface>=0.1",     # backend Hugging Face via LangChain (src/llm/backends.py)
 ]
 
 # Recomendado apenas para o estágio `ingestion` (`make install-collect`).
@@ -339,7 +322,6 @@ known-first-party = [
     "inference",
     "io_utils",
     "labeling",
-    "llm",
     "logging_utils",
     "metrics",
     "models",

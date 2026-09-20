@@ -102,10 +102,13 @@ def minimal_paths_config_dict() -> dict[str, Any]:
             "repro": "data/external/repro.parquet",
             "corpus_normalizado": "data/interim/normalizado.parquet",
             "corpus_rotulado": "data/processed/rotulado.parquet",
+            "tweets_data_huggingface": "data/processed/tweets_hf.parquet",
+            "tweets_data_openai": "data/processed/tweets_openai.parquet",
             "corpus_treino": "data/processed/treino.parquet",
             "corpus_validacao": "data/processed/validacao.parquet",
             "corpus_teste": "data/processed/teste.parquet",
         },
+        "labeling": {"checkpoints": "data/interim/labeling_checkpoints"},
         "models": {
             "checkpoints": "models/checkpoints",
             "artifacts": "models/artifacts",

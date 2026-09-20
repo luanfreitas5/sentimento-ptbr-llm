@@ -61,7 +61,7 @@ qualquer função deste pacote.
 :func:`__getattr__` (PEP 562), em vez de reexportados no topo deste
 ``__init__``. Isso permite importar submódulos independentes de ``torch``
 (ex.: ``hypothesaes.llm_api``, usado por
-``src/labeling/llm_relabeling.py``) sem exigir a instalação de ``torch``.
+``src/labeling/openai_labeler.py``) sem exigir a instalação de ``torch``.
 """
 
 from importlib import import_module

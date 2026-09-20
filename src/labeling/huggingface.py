@@ -1,116 +1,81 @@
-"""Rotulagem de sentimento via modelo do Hugging Face (``transformers.pipeline``).
+"""Rotulagem de sentimento via LLM do Hugging Face (base ``tweets_data_huggingface``).
 
-Implementa a seção ``huggingface`` de ``configs/labeling.yaml``: substitui a
-rotulagem em cascata (``src/labeling/automatic.py``) por um único modelo de
-linguagem pré-treinado em português brasileiro (por padrão,
-``pysentimiento/bertweet-pt-sentiment``), classificado em lote via
-``transformers.pipeline``. Produz diretamente ``sentiment_label`` e
-``confidence_score`` para cada tweet do corpus — nenhum dos dois pode ficar
-vazio: um rótulo bruto do pipeline fora de ``label_mapping`` é tratado como
-falha (``DataValidationError``), nunca gravado silenciosamente, e
-``confidence_score`` é sempre a probabilidade do rótulo previsto,
-arredondada a 4 casas decimais.
+Implementa a seção ``huggingface`` de ``configs/labeling.yaml``: um LLM
+instruct do Hugging Face Hub (ex.: ``meta-llama/Meta-Llama-3.1-8B-Instruct``)
+é carregado localmente via ``transformers`` e classifica cada tweet com o
+mesmo prompt versionado em ``prompts/`` usado pela base OpenAI, o que torna
+as duas bases comparáveis. A saída é o JSON do prompt
+(``{"label": ..., "probs": {...}}``); a confiança é a probabilidade que o
+próprio modelo atribui ao rótulo (confiança verbalizada, não uma
+probabilidade calibrada de token).
 
-``transformers``/``torch`` são dependências pesadas: o import ocorre de
-forma tardia, dentro de :func:`load_huggingface_sentiment_pipeline`, mesmo
-padrão de ``src/features/contextual_embeddings.py``.
+Decisões de execução:
+
+* geração gulosa (``do_sample=False``) na primeira tentativa, o que a torna
+  determinística; tweets cuja resposta não pôde ser interpretada são
+  regerados com amostragem (``retry_temperature``, semente global fixada);
+* a memória da GPU é liberada a cada lote (``gc.collect`` +
+  ``torch.cuda.empty_cache``), em caso de *out of memory* (o lote é dividido
+  ao meio) e ao descarregar o modelo (:func:`open_huggingface_classifier`);
+* ``transformers``/``torch`` são dependências pesadas: o import ocorre de
+  forma tardia, dentro de :func:`load_huggingface_llm`.
 """
 
 import logging
-from collections.abc import Mapping, Sequence
-from contextlib import nullcontext
-from typing import Any, Protocol
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any
 
-import polars as pl
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
-
-from constants.labels import NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL
-from exceptions.data import DataValidationError
+from constants.labels import SENTIMENT_CLASSES
 from exceptions.model import ModelError
-from utils.validation import validate_not_empty_collection
+from labeling.incremental import BatchClassifier, LabelPrediction
+from labeling.llm_response import build_labeling_prompt, parse_llm_label_response
+from utils.memory import release_gpu_memory
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_HUGGINGFACE_MODEL = "pysentimiento/bertweet-pt-sentiment"
-
-# Mapeamento padrão do rótulo bruto do pipeline (saída do modelo
-# pysentimiento/bertweet-pt-sentiment: "POS"/"NEG"/"NEU") para as classes
-# de sentimento em pt-BR usadas no projeto
-# (``constants.labels.SENTIMENT_CLASSES``). Sobrescrito por
-# ``configs/labeling.yaml -> huggingface.label_mapping``.
-DEFAULT_LABEL_MAPPING: dict[str, str] = {
-    "POS": POSITIVE_LABEL,
-    "NEG": NEGATIVE_LABEL,
-    "NEU": NEUTRAL_LABEL,
-}
+DEFAULT_HUGGINGFACE_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+_DTYPE_CHOICES: tuple[str, ...] = ("auto", "float16", "bfloat16", "float32")
 
 
-class SentimentPipeline(Protocol):
-    """Interface mínima de um pipeline de classificação de sentimento em lote.
+@dataclass
+class HuggingFaceLLM:
+    """LLM do Hugging Face já carregado, pronto para gerar texto.
 
-    Espelha a assinatura de ``transformers.pipeline("sentiment-analysis")``
-    quando chamado com uma lista de textos: devolve, para cada um, o rótulo
-    bruto previsto e sua pontuação. Permite injetar um dublê de teste em
-    :func:`label_corpus_with_huggingface_pipeline` sem depender de
-    ``transformers``/``torch`` instalados (ver ``tests/test_labeling.py``).
+    Attributes
+    ----------
+    model : Any
+        ``transformers.AutoModelForCausalLM`` em modo de avaliação.
+    tokenizer : Any
+        Tokenizador correspondente, com preenchimento à esquerda (necessário
+        para geração em lote).
+    device : str
+        Dispositivo do modelo (``"cpu"``, ``"cuda"``, ...).
+    model_name : str
+        Nome do modelo no Hugging Face Hub.
     """
 
-    def __call__(self, texts: list[str], /) -> Sequence[Mapping[str, Any]]:
-        """Classifica um lote de textos.
-
-        Parameters
-        ----------
-        texts : list[str]
-            Lote de textos de entrada, sempre repassado posicionalmente
-            (parâmetro somente-posicional: ``transformers.pipeline`` nomeia
-            o parâmetro equivalente ``inputs``, não ``texts``).
-
-        Returns
-        -------
-        Sequence[Mapping[str, Any]]
-            Um dicionário ``{"label": ..., "score": ...}`` por texto, na
-            mesma ordem de entrada.
-        """
-        ...
+    model: Any
+    tokenizer: Any
+    device: str
+    model_name: str
 
 
-def _resolve_pipeline_device(device: str | None, torch_module: Any) -> str:
-    """Resolve o dispositivo do pipeline, escolhendo GPU automaticamente quando disponível.
-
-    Parameters
-    ----------
-    device : str | None
-        Dispositivo solicitado (``"cpu"``, ``"cuda"``, ``"cuda:0"``, ...).
-        ``None`` ou ``"auto"`` delega a escolha a
-        ``torch.cuda.is_available()``.
-    torch_module : Any
-        Módulo ``torch`` já importado (evita reimportar).
-
-    Returns
-    -------
-    str
-        Dispositivo resolvido, repassado a ``transformers.pipeline``.
+def _resolve_device(device: str | None, torch_module: Any) -> str:
+    """Resolve o dispositivo: ``None``/``"auto"`` escolhe CUDA quando disponível.
 
     Examples
     --------
-    >>> class _FakeTorchCuda:
+    >>> class _Cuda:
     ...     @staticmethod
     ...     def is_available():
     ...         return False
-    >>> class _FakeTorch:
-    ...     cuda = _FakeTorchCuda()
-    >>> _resolve_pipeline_device(None, _FakeTorch())
+    >>> class _Torch:
+    ...     cuda = _Cuda()
+    >>> _resolve_device("auto", _Torch())
     'cpu'
-    >>> _resolve_pipeline_device("cuda:1", _FakeTorch())
+    >>> _resolve_device("cuda:1", _Torch())
     'cuda:1'
     """
     if device is None or device == "auto":
@@ -118,243 +83,348 @@ def _resolve_pipeline_device(device: str | None, torch_module: Any) -> str:
     return device
 
 
-def load_huggingface_sentiment_pipeline(
-    model_name: str = DEFAULT_HUGGINGFACE_MODEL,
-    *,
-    device: str | None = None,
-    batch_size: int = 32,
-    max_length: int = 128,
-) -> SentimentPipeline:
-    """Carrega o pipeline de classificação de sentimento do Hugging Face Hub.
-
-    Parameters
-    ----------
-    model_name : str, optional
-        Nome do modelo no Hugging Face Hub, by default
-        :data:`DEFAULT_HUGGINGFACE_MODEL` (``configs/labeling.yaml ->
-        huggingface.model``).
-    device : str | None, optional
-        Dispositivo PyTorch (``"cpu"``, ``"cuda"``, ``"cuda:0"``, ...). Se
-        ``None`` ou ``"auto"``, usa ``"cuda"`` quando disponível e ``"cpu"``
-        caso contrário, by default None.
-    batch_size : int, optional
-        Tamanho do lote usado internamente pelo pipeline a cada chamada,
-        by default 32.
-    max_length : int, optional
-        Comprimento máximo de subtokens por texto, truncando o excedente,
-        by default 128.
-
-    Returns
-    -------
-    SentimentPipeline
-        Pipeline pronto para uso em
-        :func:`label_corpus_with_huggingface_pipeline`.
+def _resolve_dtype(dtype: str, device: str, torch_module: Any) -> Any:
+    """Converte o nome do tipo numérico em ``torch.dtype``; ``"auto"`` depende do dispositivo.
 
     Raises
     ------
     ModelError
-        Se as bibliotecas ``transformers``/``torch`` não estiverem
-        instaladas.
+        Se ``dtype`` não for um de ``auto``, ``float16``, ``bfloat16`` ou ``float32``.
+    """
+    if dtype not in _DTYPE_CHOICES:
+        raise ModelError(f"dtype inválido '{dtype}'; valores aceitos: {list(_DTYPE_CHOICES)}")
+    if dtype != "auto":
+        return getattr(torch_module, dtype)
+    if not device.startswith("cuda"):
+        return torch_module.float32
+    return torch_module.bfloat16 if torch_module.cuda.is_bf16_supported() else torch_module.float16
+
+
+def load_huggingface_llm(
+    model_name: str = DEFAULT_HUGGINGFACE_MODEL,
+    *,
+    device: str | None = "auto",
+    dtype: str = "auto",
+    load_in_4bit: bool = False,
+    token: str | None = None,
+    revision: str = "main",
+) -> HuggingFaceLLM:
+    """Carrega um LLM causal do Hugging Face Hub para rotulagem.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Modelo no Hugging Face Hub, by default :data:`DEFAULT_HUGGINGFACE_MODEL`.
+    device : str | None, optional
+        ``"cpu"``, ``"cuda"``, ``"cuda:0"`` ou ``"auto"``/``None`` (CUDA se disponível),
+        by default "auto".
+    dtype : {"auto", "float16", "bfloat16", "float32"}, optional
+        Tipo numérico dos pesos, by default "auto".
+    load_in_4bit : bool, optional
+        Quantiza os pesos em 4 bits (exige ``bitsandbytes`` e GPU), útil para caber
+        modelos de 7-9B em GPUs de 8-12 GB, by default False.
+    token : str | None, optional
+        Token do Hub para modelos com licença restrita (``SENTIMENTO_HUGGINGFACE_TOKEN``,
+        ``.env``), by default None.
+    revision : str, optional
+        Branch, tag ou SHA do commit do modelo no Hub; fixe um SHA para garantir
+        reprodutibilidade (o ``main`` pode mudar), by default "main".
+
+    Returns
+    -------
+    HuggingFaceLLM
+        Modelo e tokenizador prontos para :func:`create_huggingface_batch_classifier`.
+
+    Raises
+    ------
+    ModelError
+        Se ``transformers``/``torch`` não estiverem instalados, ``dtype`` for inválido,
+        ``load_in_4bit`` for pedido sem ``bitsandbytes``/GPU ou o download falhar.
 
     Examples
     --------
-    >>> load_huggingface_sentiment_pipeline()  # doctest: +SKIP
+    >>> load_huggingface_llm("Qwen/Qwen2.5-0.5B-Instruct", device="cpu")  # doctest: +SKIP
     """
     try:
         import torch  # type: ignore[reportMissingImports]
         from transformers import (  # type: ignore[reportMissingImports]
-            pipeline as build_transformers_pipeline,
+            AutoModelForCausalLM,
+            AutoTokenizer,
         )
     except ImportError as exception:
         raise ModelError(
             "As bibliotecas 'transformers'/'torch' não estão instaladas. Instale com "
-            "`uv add transformers torch` para rotular sentimento via Hugging Face."
+            "`make install-labeling` para rotular via LLM do Hugging Face."
         ) from exception
 
-    resolved_device = _resolve_pipeline_device(device, torch)
-    hf_pipeline = build_transformers_pipeline(
-        task="text-classification",
-        model=model_name,
-        tokenizer=model_name,
-        device=resolved_device,
-        truncation=True,
-        max_length=max_length,
-        batch_size=batch_size,
-    )
+    resolved_device = _resolve_device(device, torch)
+    resolved_dtype = _resolve_dtype(dtype, resolved_device, torch)
+    load_kwargs: dict[str, Any] = {"dtype": resolved_dtype, "token": token}
+    if load_in_4bit:
+        if not resolved_device.startswith("cuda"):
+            raise ModelError("load_in_4bit exige GPU CUDA (device='cuda').")
+        try:
+            from transformers import BitsAndBytesConfig  # type: ignore[reportMissingImports]
+
+            load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_compute_dtype=resolved_dtype
+            )
+        except ImportError as exception:
+            raise ModelError(
+                "load_in_4bit exige 'bitsandbytes'. Instale com `uv add bitsandbytes`."
+            ) from exception
+
     logger.info(
-        "Pipeline de sentimento Hugging Face '%s' carregado no dispositivo '%s'.",
+        "Carregando o LLM '%s' (dispositivo=%s, dtype=%s, 4bit=%s)...",
         model_name,
         resolved_device,
+        resolved_dtype,
+        load_in_4bit,
     )
-    return hf_pipeline
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name, token=token, revision=revision, padding_side="left"
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, revision=revision, device_map={"": resolved_device}, **load_kwargs
+        )
+    except (OSError, ValueError, ImportError) as exception:
+        raise ModelError(
+            f"Não foi possível carregar o modelo '{model_name}': {exception}"
+        ) from exception
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model.eval()
+    return HuggingFaceLLM(
+        model=model, tokenizer=tokenizer, device=resolved_device, model_name=model_name
+    )
 
 
-def _map_prediction_to_label(
-    prediction: Mapping[str, Any], *, label_mapping: Mapping[str, str]
-) -> tuple[str, float]:
-    """Converte a predição bruta do pipeline em ``(sentiment_label, confidence_score)``.
+def unload_huggingface_llm(llm: HuggingFaceLLM) -> None:
+    """Descarrega o modelo e devolve a memória da GPU.
 
     Parameters
     ----------
-    prediction : Mapping[str, Any]
-        Item de saída do pipeline (``{"label": ..., "score": ...}``).
-    label_mapping : Mapping[str, str]
-        Mapeamento do rótulo bruto do modelo para as classes de sentimento
-        em pt-BR (``constants.labels.SENTIMENT_CLASSES``).
-
-    Returns
-    -------
-    tuple[str, float]
-        Par ``(sentiment_label, confidence_score)``, com a confiança
-        arredondada a 4 casas decimais.
-
-    Raises
-    ------
-    DataValidationError
-        Se o rótulo bruto não constar em ``label_mapping`` — garante que
-        ``sentiment_label`` nunca seja gravado vazio ou não classificado.
+    llm : HuggingFaceLLM
+        Modelo a descarregar; não deve ser usado depois desta chamada.
 
     Examples
     --------
-    >>> _map_prediction_to_label(
-    ...     {"label": "POS", "score": 0.987654}, label_mapping={"POS": "positivo"}
-    ... )
-    ('positivo', 0.9877)
-    >>> _map_prediction_to_label(
-    ...     {"label": "DESCONHECIDO", "score": 0.5}, label_mapping={"POS": "positivo"}
-    ... )
-    Traceback (most recent call last):
-        ...
-    exceptions.data.DataValidationError: ...
+    >>> unload_huggingface_llm(llm)  # doctest: +SKIP
     """
-    raw_label = str(prediction.get("label", ""))
-    if raw_label not in label_mapping:
-        raise DataValidationError(
-            schema_name="huggingface_label_mapping",
-            detail=(
-                f"rótulo bruto '{raw_label}' retornado pelo pipeline não consta em "
-                f"label_mapping {sorted(label_mapping)} (ver configs/labeling.yaml -> "
-                "huggingface.label_mapping)"
-            ),
+    llm.model = None
+    llm.tokenizer = None
+    release_gpu_memory()
+    logger.info("Modelo '%s' descarregado e memória da GPU liberada.", llm.model_name)
+
+
+def _format_prompt(llm: HuggingFaceLLM, prompt: str) -> str:
+    """Aplica o template de chat do modelo (quando existe) ao prompt do usuário."""
+    if getattr(llm.tokenizer, "chat_template", None):
+        return llm.tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True
         )
-    return label_mapping[raw_label], round(float(prediction["score"]), 4)
+    return prompt
 
 
-def label_corpus_with_huggingface_pipeline(
-    dataframe: pl.DataFrame,
-    pipeline: SentimentPipeline,
+def _generate_texts(
+    llm: HuggingFaceLLM,
+    prompts: Sequence[str],
     *,
-    id_column: str = "id",
-    text_column: str = "text_normalized",
-    label_mapping: Mapping[str, str] | None = None,
-    batch_size: int = 32,
-    show_progress: bool = True,
-) -> pl.DataFrame:
-    """Classifica o sentimento de todo o corpus em lote, via pipeline Hugging Face.
-
-    Substitui a rotulagem em cascata (``src/labeling/automatic.py`` +
-    ``src/labeling/consensus.py``) como única fonte de ``sentiment_label``/
-    ``confidence_score``: com um único modelo, não há concordância entre
-    rotuladores a agregar — a confiança gravada é a probabilidade que o
-    próprio modelo atribuiu ao rótulo previsto.
+    max_input_tokens: int,
+    max_new_tokens: int,
+    sampling_temperature: float | None,
+) -> list[str]:
+    """Gera a resposta de cada prompt em um único ``generate``, dividindo o lote em caso de OOM.
 
     Parameters
     ----------
-    dataframe : pl.DataFrame
-        Corpus de entrada, contendo ao menos ``id_column`` e
-        ``text_column``. Não vazio.
-    pipeline : SentimentPipeline
-        Pipeline de classificação, via
-        :func:`load_huggingface_sentiment_pipeline` (ou um dublê de teste
-        que implemente :class:`SentimentPipeline`).
-    id_column : str, optional
-        Nome da coluna identificadora de cada amostra, by default "id".
-    text_column : str, optional
-        Nome da coluna de texto classificada pelo pipeline, by default
-        "text_normalized" (produzida por
-        ``src/pipelines/preprocessing.py``).
-    label_mapping : Mapping[str, str] | None, optional
-        Mapeamento do rótulo bruto do modelo para as classes de sentimento
-        em pt-BR, by default None (usa :data:`DEFAULT_LABEL_MAPPING`).
-    batch_size : int, optional
-        Quantidade de textos classificados por chamada a ``pipeline``,
-        by default 32 (``configs/labeling.yaml -> huggingface.batch_size``).
-    show_progress : bool, optional
-        Se ``True``, exibe uma barra de progresso no console, by default
-        True.
+    llm : HuggingFaceLLM
+        Modelo carregado.
+    prompts : Sequence[str]
+        Prompts já formatados.
+    max_input_tokens : int
+        Máximo de tokens de entrada (o excedente é truncado à esquerda).
+    max_new_tokens : int
+        Máximo de tokens gerados por resposta.
+    sampling_temperature : float | None
+        ``None`` para geração gulosa; um valor > 0 ativa amostragem.
 
     Returns
     -------
-    pl.DataFrame
-        DataFrame largo com ``id_column``, ``sentiment_label`` e
-        ``confidence_score`` (em ``[0.0, 1.0]``, 4 casas decimais) — uma
-        linha por amostra de ``dataframe``, nenhum valor nulo.
+    list[str]
+        Respostas decodificadas (sem o prompt), na ordem de ``prompts``.
 
     Raises
     ------
-    EmptyDatasetError
-        Se ``dataframe`` estiver vazio.
-    DataValidationError
-        Se o pipeline devolver, para algum texto, um rótulo bruto fora de
-        ``label_mapping`` (ver :func:`_map_prediction_to_label`).
+    ModelError
+        Se um único prompt ainda estourar a memória da GPU.
+    """
+    import torch  # type: ignore[reportMissingImports]
+
+    try:
+        inputs = llm.tokenizer(
+            list(prompts),
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=max_input_tokens,
+        ).to(llm.model.device)
+        generation_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_new_tokens,
+            "pad_token_id": llm.tokenizer.pad_token_id,
+            "do_sample": sampling_temperature is not None,
+        }
+        if sampling_temperature is not None:
+            generation_kwargs["temperature"] = sampling_temperature
+        with torch.inference_mode():
+            outputs = llm.model.generate(**inputs, **generation_kwargs)
+        new_tokens = outputs[:, inputs["input_ids"].shape[1] :]
+        return list(llm.tokenizer.batch_decode(new_tokens, skip_special_tokens=True))
+    except torch.cuda.OutOfMemoryError as exception:
+        release_gpu_memory()
+        if len(prompts) == 1:
+            raise ModelError(
+                "Memória da GPU insuficiente até para um único tweet; use um modelo menor, "
+                "load_in_4bit ou reduza max_input_tokens."
+            ) from exception
+        middle = len(prompts) // 2
+        logger.warning(
+            "Memória da GPU insuficiente para lote de %d; dividindo em dois.", len(prompts)
+        )
+        common = {
+            "max_input_tokens": max_input_tokens,
+            "max_new_tokens": max_new_tokens,
+            "sampling_temperature": sampling_temperature,
+        }
+        return _generate_texts(llm, prompts[:middle], **common) + _generate_texts(
+            llm, prompts[middle:], **common
+        )
+
+
+def create_huggingface_batch_classifier(
+    llm: HuggingFaceLLM,
+    prompt_template: str,
+    *,
+    max_new_tokens: int = 64,
+    max_input_tokens: int = 1536,
+    max_retries: int = 3,
+    retry_temperature: float = 0.3,
+    allowed_labels: Sequence[str] = SENTIMENT_CLASSES,
+) -> BatchClassifier:
+    """Cria o classificador de lotes da base ``tweets_data_huggingface``.
+
+    Parameters
+    ----------
+    llm : HuggingFaceLLM
+        Modelo carregado por :func:`load_huggingface_llm`.
+    prompt_template : str
+        Template do prompt (marcador ``{{TEXTO}}``).
+    max_new_tokens : int, optional
+        Máximo de tokens gerados por tweet (o JSON de resposta tem ~40 tokens), by default 64.
+    max_input_tokens : int, optional
+        Máximo de tokens de entrada (prompt + tweet), by default 1536.
+    max_retries : int, optional
+        Tentativas por tweet: a 1ª é gulosa; as demais amostram com
+        ``retry_temperature``, by default 3.
+    retry_temperature : float, optional
+        Temperatura das tentativas de reparo, by default 0.3.
+    allowed_labels : Sequence[str], optional
+        Classes aceitas, by default :data:`constants.labels.SENTIMENT_CLASSES`.
+
+    Returns
+    -------
+    BatchClassifier
+        Função ``textos -> [(rótulo, confiança) | None]`` para
+        :func:`labeling.incremental.run_incremental_labeling`; libera o cache da GPU a cada lote.
 
     Examples
     --------
-    >>> def _fake_pipeline(texts):
-    ...     return [{"label": "POS", "score": 0.9} for _ in texts]
-    >>> df = pl.DataFrame({"id": ["1"], "text_normalized": ["adorei o produto"]})
-    >>> resultado = label_corpus_with_huggingface_pipeline(df, _fake_pipeline)
-    >>> resultado["sentiment_label"].to_list()
-    ['positivo']
-    >>> resultado["confidence_score"].to_list()
-    [0.9]
+    >>> classifier = create_huggingface_batch_classifier(llm, prompt_template)  # doctest: +SKIP
     """
-    validate_not_empty_collection(dataframe, collection_name="dataframe")
-    resolved_label_mapping = label_mapping or DEFAULT_LABEL_MAPPING
 
-    row_ids = dataframe[id_column].to_list()
-    texts = dataframe[text_column].to_list()
-    batches = [texts[start : start + batch_size] for start in range(0, len(texts), batch_size)]
+    def classify_batch(texts: Sequence[str]) -> list[LabelPrediction | None]:
+        prompts = [_format_prompt(llm, build_labeling_prompt(prompt_template, t)) for t in texts]
+        results: list[LabelPrediction | None] = [None] * len(prompts)
+        pending = list(range(len(prompts)))
+        for attempt in range(max_retries):
+            if not pending:
+                break
+            generated = _generate_texts(
+                llm,
+                [prompts[index] for index in pending],
+                max_input_tokens=max_input_tokens,
+                max_new_tokens=max_new_tokens,
+                sampling_temperature=None if attempt == 0 else retry_temperature,
+            )
+            still_pending: list[int] = []
+            for index, raw_response in zip(pending, generated, strict=True):
+                parsed = parse_llm_label_response(raw_response, allowed_labels=allowed_labels)
+                if parsed is None:
+                    still_pending.append(index)
+                else:
+                    results[index] = parsed
+            pending = still_pending
+            release_gpu_memory()
+        if pending:
+            logger.warning("%d tweet(s) do lote sem resposta interpretável.", len(pending))
+        return results
 
-    sentiment_labels: list[str] = []
-    confidence_scores: list[float] = []
+    return classify_batch
 
-    progress_columns = (
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
+
+@contextmanager
+def open_huggingface_classifier(
+    prompt_template: str,
+    *,
+    model_name: str = DEFAULT_HUGGINGFACE_MODEL,
+    device: str | None = "auto",
+    dtype: str = "auto",
+    load_in_4bit: bool = False,
+    token: str | None = None,
+    revision: str = "main",
+    max_new_tokens: int = 64,
+    max_input_tokens: int = 1536,
+    max_retries: int = 3,
+    retry_temperature: float = 0.3,
+) -> Iterator[BatchClassifier]:
+    """Carrega o LLM, entrega o classificador e, ao sair, descarrega o modelo (limpa a GPU).
+
+    Parameters
+    ----------
+    prompt_template : str
+        Template do prompt (marcador ``{{TEXTO}}``).
+    model_name, device, dtype, load_in_4bit, token, revision
+        Ver :func:`load_huggingface_llm`.
+    max_new_tokens, max_input_tokens, max_retries, retry_temperature
+        Ver :func:`create_huggingface_batch_classifier`.
+
+    Yields
+    ------
+    BatchClassifier
+        Classificador de lotes; válido apenas dentro do bloco ``with``.
+
+    Examples
+    --------
+    >>> with open_huggingface_classifier("...{{TEXTO}}...") as classify:  # doctest: +SKIP
+    ...     classify(["adorei"])
+    """
+    llm = load_huggingface_llm(
+        model_name,
+        device=device,
+        dtype=dtype,
+        load_in_4bit=load_in_4bit,
+        token=token,
+        revision=revision,
     )
-    progress = Progress(*progress_columns) if show_progress else None
-    with progress if progress is not None else nullcontext():
-        task_id = (
-            progress.add_task("Rotulando sentimento via Hugging Face", total=len(batches))
-            if progress is not None
-            else None
+    try:
+        yield create_huggingface_batch_classifier(
+            llm,
+            prompt_template,
+            max_new_tokens=max_new_tokens,
+            max_input_tokens=max_input_tokens,
+            max_retries=max_retries,
+            retry_temperature=retry_temperature,
         )
-        for batch in batches:
-            for prediction in pipeline(batch):
-                sentiment_label, confidence_score = _map_prediction_to_label(
-                    prediction, label_mapping=resolved_label_mapping
-                )
-                sentiment_labels.append(sentiment_label)
-                confidence_scores.append(confidence_score)
-            if progress is not None and task_id is not None:
-                progress.advance(task_id)
-
-    result = pl.DataFrame(
-        {
-            id_column: row_ids,
-            "sentiment_label": sentiment_labels,
-            "confidence_score": confidence_scores,
-        }
-    )
-    logger.info(
-        "Rotulagem via Hugging Face concluída: %d amostra(s) em %d lote(s).",
-        dataframe.height,
-        len(batches),
-    )
-    return result
+    finally:
+        unload_huggingface_llm(llm)

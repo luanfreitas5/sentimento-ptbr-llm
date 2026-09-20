@@ -14,17 +14,17 @@ ingestion
 preprocessing
     Normalização e limpeza do corpus bruto de tweets.
 labeling
-    Rotulagem semiautomática em cascata do corpus normalizado.
+    Rotulagem de todos os tweets por dois LLMs independentes (Hugging Face e
+    OpenAI), gerando as bases ``tweets_data_huggingface``/``tweets_data_openai``.
 features
     Split estratificado e extração de features do corpus rotulado.
 training_classical
     Treino dos classificadores clássicos de sentimento.
 training_deep_learning
     Treino dos classificadores de deep learning de sentimento.
-llm_evaluation
-    Classificação e avaliação via LLM local (Ollama/Hugging Face).
 comparative_evaluation
-    Avaliação comparativa entre múltiplos classificadores de sentimento.
+    Avaliação comparativa (concordância, confiança, divergências e
+    hipóteses do HypotheSAEs) entre as duas bases rotuladas.
 diagnostics_analysis
     Estágio opt-in ``diagnostics``: camada de diagnóstico HypotheSAEs
     (hipóteses, validação no holdout e comparação de prompts v1 vs v2).
@@ -40,7 +40,6 @@ from pipelines.diagnostics_analysis import run_diagnostics_stage
 from pipelines.features import FeatureArtifacts, run_features_stage
 from pipelines.ingestion import run_ingestion_stage
 from pipelines.labeling import run_labeling_stage
-from pipelines.llm_evaluation import run_llm_evaluation_stage
 from pipelines.preprocessing import run_preprocessing_stage
 from pipelines.training_classical import (
     DEFAULT_CLASSICAL_MODEL_NAMES,
@@ -64,7 +63,6 @@ __all__: list[str] = [
     "run_full_workflow",
     "run_ingestion_stage",
     "run_labeling_stage",
-    "run_llm_evaluation_stage",
     "run_pipeline_stage",
     "run_preprocessing_stage",
     "run_training_classical_stage",

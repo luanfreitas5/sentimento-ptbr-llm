@@ -25,7 +25,8 @@ O projeto instala apenas as dependências de runtime "leves" por padrão. Extras
 
 | Extra | Instala | Quando precisa |
 |---|---|---|
-| `llm` | PyTorch, Transformers, Accelerate, Ollama, LangChain | Estágios `llm_evaluation` e análise HypotheSAEs |
+| `labeling` | PyTorch, Transformers, Accelerate, cliente OpenAI | Estágio `labeling` (LLM do Hugging Face e API OpenAI) |
+| `hypothesaes` | PyTorch, Transformers, Ollama, sentence-transformers, OpenAI | Análise HypotheSAEs e hipóteses da `comparative_evaluation` |
 | `collect` | twscrape | Estágio `ingestion` (coleta de tweets) |
 | `nlp` | spaCy + modelo `pt_core_news_sm`, nltk + corpus `stopwords` | Lematização e stopwords em pt-BR no pré-processamento (com fallback por regex/lista curada se ausentes) |
 | `viz` | wordcloud, networkx, umap-learn | Figuras opcionais (nuvem de palavras, rede de similaridade, projeção UMAP) |
@@ -35,7 +36,8 @@ O projeto instala apenas as dependências de runtime "leves" por padrão. Extras
 ```bash
 make install-collect
 make install-nlp        # já baixa o modelo pt-BR do spaCy e o corpus de stopwords do nltk
-make install-llm
+make install-labeling
+make install-hypothesaes
 uv sync --extra viz
 uv sync --extra dvc
 uv sync --extra app

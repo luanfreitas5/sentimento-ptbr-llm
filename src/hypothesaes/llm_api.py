@@ -5,8 +5,8 @@ Camada fina sobre duas APIs de completions, escolhida via o parâmetro
 active_provider``):
 
 - ``"openai"``: Responses API da OpenAI ou qualquer servidor compatível
-  (ex.: vLLM local, o endpoint UnB usado pela re-rotulagem via LLM da etapa
-  ``labeling`` — ``src/labeling/llm_relabeling.py``), autenticado via
+  (ex.: vLLM local, o endpoint UnB usado pela rotulagem via API da etapa
+  ``labeling`` — ``src/labeling/openai_labeler.py``), autenticado via
   ``OPENAI_BASE_URL``/``OPENAI_KEY`` (``.env``).
 - ``"ollama"``: servidor Ollama local (``configs/llm.yaml ->
   backends.ollama.base_url``, tipicamente ``http://localhost:11434``), via
@@ -313,7 +313,7 @@ def _import_ollama() -> Any:
         raise ModelError(
             "A biblioteca 'ollama' não está instalada. Instale com `uv add ollama` "
             "(ou `uv sync --extra hypothesaes`) para usar o backend Ollama local no "
-            "HypotheSAEs/re-rotulagem."
+            "HypotheSAEs."
         ) from exception
     return ollama
 
@@ -585,7 +585,7 @@ def generate_completion(
     """Gera uma completion via LLM, despachando para o provedor configurado.
 
     Ponto de entrada único usado por ``interpret_neurons``, ``annotate`` e
-    ``labeling.llm_relabeling``: ``provider="openai"`` (padrão) chama
+    ``labeling.openai_labeler``: ``provider="openai"`` (padrão) chama
     :func:`_generate_completion_openai` (Responses API da OpenAI ou
     endpoint compatível, ex.: UnB); ``provider="ollama"`` chama
     :func:`generate_completion_ollama` (servidor Ollama local). A escolha

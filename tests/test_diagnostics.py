@@ -2241,7 +2241,7 @@ class TestAdaptLabeledCorpus:
                 "text_normalized": ["[MENCAO] oi", "tchau"],
                 "confidence_score": [0.9, 0.3],
                 "sentiment_label_huggingface": ["positivo", "negativo"],
-                "sentiment_label_llm_relabel": [None, "neutro"],
+                "sentiment_label_openai": [None, "neutro"],
             }
         )
         adapted = adapt_labeled_corpus(raw)
@@ -2250,7 +2250,7 @@ class TestAdaptLabeledCorpus:
             "text_normalized",
             "agreement_score",
             "lab_huggingface",
-            "lab_llm_relabel",
+            "lab_openai",
         ]
         assert adapted["id"].to_list() == ["1", "2"]
 
@@ -2262,7 +2262,7 @@ class TestAdaptLabeledCorpus:
                 "text_normalized": ["a"],
                 "confidence_score": [0.9],
                 "sentiment_label_huggingface": ["positivo"],
-                "sentiment_label_llm_relabel": ["positivo"],
+                "sentiment_label_openai": ["positivo"],
                 "gold": ["positivo"],
             }
         )

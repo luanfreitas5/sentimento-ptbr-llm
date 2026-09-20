@@ -35,11 +35,11 @@ logger = logging.getLogger(__name__)
 TargetName = Literal["disagreement", "uncertainty", "pseudo_label", "gold_error"]
 TARGET_NAMES: tuple[str, ...] = ("disagreement", "uncertainty", "pseudo_label", "gold_error")
 
-# Mapeia as colunas atuais de ``corpus_rotulado.parquet`` para o contrato: até existir a
-# cascata multi-LLM, o pipeline HF e a re-rotulagem por LLM fazem o papel de "modelos".
+# Mapeia as colunas de ``corpus_rotulado.parquet`` para o contrato: o LLM do Hugging Face e a
+# API OpenAI (etapa ``labeling``) fazem o papel de "modelos".
 DEFAULT_MODEL_COLUMNS: Mapping[str, str] = {
     "sentiment_label_huggingface": f"{MODEL_LABEL_PREFIX}huggingface",
-    "sentiment_label_llm_relabel": f"{MODEL_LABEL_PREFIX}llm_relabel",
+    "sentiment_label_openai": f"{MODEL_LABEL_PREFIX}openai",
 }
 DEFAULT_AGREEMENT_COLUMN = "confidence_score"
 DEFAULT_TEXT_COLUMN = "text_normalized"
@@ -93,11 +93,11 @@ def adapt_labeled_corpus(
     ...         "text_normalized": ["ótimo"],
     ...         "confidence_score": [0.9],
     ...         "sentiment_label_huggingface": ["positivo"],
-    ...         "sentiment_label_llm_relabel": [None],
+    ...         "sentiment_label_openai": ["neutro"],
     ...     }
     ... )
     >>> adapt_labeled_corpus(df).columns
-    ['id', 'text_normalized', 'agreement_score', 'lab_huggingface', 'lab_llm_relabel']
+    ['id', 'text_normalized', 'agreement_score', 'lab_huggingface', 'lab_openai']
     """
     source_columns = [text_column, agreement_column, *model_columns, "id"]
     if gold_column is not None:

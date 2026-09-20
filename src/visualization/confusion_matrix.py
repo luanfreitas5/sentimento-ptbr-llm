@@ -26,6 +26,8 @@ def plot_confusion_matrix_heatmap(
     labels: Sequence[str] = SENTIMENT_CLASSES,
     normalize: bool = False,
     title: str = "Matriz de Confusão",
+    x_label: str = "Classe predita",
+    y_label: str = "Classe verdadeira",
 ) -> Figure:
     """Plota a matriz de confusão como um mapa de calor anotado.
 
@@ -42,6 +44,11 @@ def plot_confusion_matrix_heatmap(
         recall por classe), by default False.
     title : str, optional
         Título do gráfico, by default "Matriz de Confusão".
+    x_label : str, optional
+        Rótulo do eixo das colunas, by default "Classe predita".
+    y_label : str, optional
+        Rótulo do eixo das linhas, by default "Classe verdadeira" (use nomes dos
+        modelos ao comparar dois rotuladores em vez de predição vs. verdade).
 
     Returns
     -------
@@ -89,7 +96,7 @@ def plot_confusion_matrix_heatmap(
         ax=axis,
     )
     axis.set_title(title)
-    axis.set_xlabel("Classe predita")
-    axis.set_ylabel("Classe verdadeira")
+    axis.set_xlabel(x_label)
+    axis.set_ylabel(y_label)
     figure.tight_layout()
     return figure

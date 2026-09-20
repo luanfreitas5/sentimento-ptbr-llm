@@ -3,7 +3,7 @@
 Funções de apoio usadas por praticamente todos os outros módulos de
 ``hypothesaes`` (``annotate``, ``interpret_neurons``, ``evaluation``): carga
 e cache de templates de prompt (``prompts/*.txt``, na raiz do repositório —
-compartilhado com ``src/labeling/llm_relabeling.py``, ver CLAUDE.md "os
+compartilhado com ``src/labeling/openai_labeler.py``, ver CLAUDE.md "os
 códigos devem ler e carregar prompts de arquivos txt em prompts/"),
 truncamento de texto por palavras/caracteres/tokens antes de enviá-lo a um
 LLM, filtragem de textos inválidos e leitura/escrita simples de JSON.

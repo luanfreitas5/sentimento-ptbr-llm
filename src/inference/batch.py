@@ -4,9 +4,7 @@ Implementa a Fase 12: percorre um conjunto de amostras em blocos
 (``batch_size``), delegando a predição de cada bloco a
 :class:`inference.predictor.Predictor`, com uma barra de progresso
 ``rich`` (ver ``CLAUDE.md``, "Progress Bars"). Voltado a modelos cuja
-inferência é rápida o bastante para não precisar de paralelismo (ver
-``src/inference/llm_batch.py`` para inferência concorrente de LLMs, cuja
-geração é ligada a I/O).
+inferência é rápida o bastante para não precisar de paralelismo.
 """
 
 import logging

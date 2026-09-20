@@ -10,9 +10,3 @@
 # src/data/downloader.py) e os termos de busca separados por espaço.
 scrape_func: ""
 queries: ""
-
-# Estágio `comparative_evaluation` (src/main.py::_build_comparative_evaluation_stage_kwargs):
-# caminho pontilhado "modulo:funcao" de uma função que retorna
-# (model_predictions, y_true), implementada pelo usuário a partir dos
-# modelos treinados/registrados no MLflow.
-predictions_func: ""

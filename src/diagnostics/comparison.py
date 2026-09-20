@@ -61,7 +61,7 @@ from evaluation.significance import run_mcnemar_test, run_wilcoxon_signed_rank_t
 from exceptions.data import DataValidationError
 from io_utils.csv import write_csv
 from io_utils.parquet import write_parquet
-from labeling.llm_relabeling import parse_relabel_response
+from labeling.llm_response import parse_llm_label_response
 from metrics.classification import calculate_matthews_correlation_coefficient
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ async def classify_texts_async(
     )
     labels: list[str | None] = []
     for completion in completions:
-        parsed = parse_relabel_response(completion) if completion else None
+        parsed = parse_llm_label_response(completion) if completion else None
         labels.append(parsed[0] if parsed else None)
     return labels
 

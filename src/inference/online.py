@@ -4,8 +4,8 @@ Implementa a Fase 12: uma casca fina sobre
 :class:`inference.predictor.Predictor` especializada em uma única amostra
 por chamada, adequada a um endpoint de API (FastAPI) ou a um dashboard
 interativo (Streamlit) que classifique um texto de cada vez — diferente de
-``src/inference/batch.py``/``src/inference/llm_batch.py``, que assumem um
-conjunto de amostras conhecido de antemão.
+``src/inference/batch.py``, que assume um conjunto de amostras conhecido de
+antemão.
 """
 
 import logging

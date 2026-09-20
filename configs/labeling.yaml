@@ -1,23 +1,51 @@
-# Parâmetros do pipeline de rotulagem de sentimento via Hugging Face.
-# Implementa a Seção 4.3 do documento mestre (rotulagem semiautomática + diagnóstico
+# Parâmetros do pipeline de rotulagem de sentimento por LLMs (Hugging Face e OpenAI).
+# Implementa a Seção 4.3 do documento mestre (rotulagem por LLMs + diagnóstico
 # via HypotheSAEs e erro de reconstrução do autoencoder).
 
-# Modelo classificador de sentimento do Hugging Face Hub, usado via
-# transformers.pipeline("sentiment-analysis") para rotular todo o corpus em
-# lote (src/labeling/huggingface.py). sentiment_label/confidence_score são
-# sempre preenchidos: um rótulo bruto do modelo fora de label_mapping é
-# tratado como falha, nunca gravado vazio.
+# Rotulagem de TODOS os tweets por duas fontes independentes (src/pipelines/labeling.py),
+# gerando as bases `tweets_data_huggingface` e `tweets_data_openai` (mesmos tweets,
+# relacionados pelo `id`), comparadas depois pela etapa `comparative_evaluation`.
+# Ambas usam o mesmo prompt versionado em prompts/ (marcador {{TEXTO}}) e recebem o
+# texto já sanitizado (`text_normalized`: sem @menções/URLs — LGPD).
+
+# Fonte cujo rótulo vira `sentiment_label` em corpus_rotulado.parquet, consumido pelas
+# etapas seguintes (features, treino, hypothesaes_analysis). A outra base é preservada
+# nas colunas `sentiment_label_<fonte>`/`confidence_score_<fonte>`.
+downstream_source: "huggingface" # "huggingface" | "openai"
+
+# Prompt compartilhado pelas duas fontes (nome em prompts/, sem a extensão .txt).
+prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
+
+# LLM local do Hugging Face Hub (src/labeling/huggingface.py), via transformers.
+# ATENÇÃO à VRAM: um modelo de 8B em bfloat16 exige ~16 GB; com load_in_4bit (exige
+# bitsandbytes) ~6 GB. Em GPUs pequenas, troque `model` por um modelo menor (ex.:
+# "Qwen/Qwen2.5-1.5B-Instruct"). Modelos com licença restrita (Llama, Gemma) exigem
+# SENTIMENTO_HUGGINGFACE_TOKEN no .env. A memória da GPU é liberada a cada lote.
 huggingface:
-  model: "pysentimiento/bertweet-pt-sentiment"
+  model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+  revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
   device: "auto" # "auto" | "cpu" | "cuda" | "cuda:0" ...
-  batch_size: 32
-  max_length: 128
-  # Rótulo bruto do modelo -> classe de sentimento em pt-BR
-  # (constants/labels.py -> SENTIMENT_CLASSES).
-  label_mapping:
-    POS: "positivo"
-    NEG: "negativo"
-    NEU: "neutro"
+  dtype: "auto" # "auto" | "float16" | "bfloat16" | "float32"
+  load_in_4bit: false
+  batch_size: 8 # tweets por lote (e por gravação no checkpoint)
+  max_new_tokens: 64 # o JSON de resposta tem ~40 tokens
+  max_input_tokens: 1536 # prompt (~650 tokens) + tweet
+  temperature: 0.0 # 1ª tentativa gulosa (determinística)
+  max_retries: 3 # as novas tentativas amostram com retry_temperature
+  retry_temperature: 0.3
+
+# LLM via API OpenAI-compatível (src/labeling/openai_labeler.py), autenticada por
+# OPENAI_BASE_URL/OPENAI_KEY no .env (ver .env.example; o endpoint da UnB é o padrão do
+# projeto). Proteção contra HTTP 429: pausa `request_interval_seconds` antes de cada
+# chamada (time.sleep) e backoff exponencial entre tentativas.
+openai:
+  model: "UnB-Llama-3.3-70B-Instruct"
+  temperature: 0.0
+  batch_size: 50 # tweets por lote (e por gravação no checkpoint)
+  n_workers: 4 # taxa efetiva ~ n_workers / request_interval_seconds req/s
+  request_interval_seconds: 1.0
+  request_timeout_seconds: 60
+  max_retries: 3
 
 confidence:
   low_confidence_threshold: 0.5 # abaixo disso, candidato à validação humana
@@ -48,26 +76,3 @@ diagnostics:
   autoencoder_reconstruction_error:
     enabled: true
     anomaly_percentile: 95
-
-# Re-rotulagem via LLM das amostras com confidence_score (concordância da
-# cascata) abaixo de score_threshold. Roda após a cascata/consenso e antes
-# da incorporação de rótulos humanos (que sempre prevalece sobre o LLM).
-# Provedor escolhido em configs/llm.yaml -> active_provider ("openai" ou
-# "ollama"): "openai" usa o endpoint OpenAI-compatível via
-# OPENAI_BASE_URL/OPENAI_KEY (.env — ver .env.example), lidas por
-# src/hypothesaes/llm_api.py; "ollama" usa o servidor local em
-# configs/llm.yaml -> backends.ollama.base_url.
-llm_relabeling:
-  enabled: true
-  score_threshold: 0.5
-  # Nome do template em prompts/ (sem a extensão .txt).
-  prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
-  # Nome do modelo por provedor; apenas o do provedor ativo é usado.
-  model_openai: "UnB-Llama-3.3-70B-Instruct"
-  model_ollama: "llama3.2:1b"
-  temperature: 0.0
-  max_retries: 3
-  n_workers: 8
-  # Pausa (segundos) antes de cada chamada/tentativa ao LLM, para reduzir a
-  # taxa de requisições e evitar bloqueios por limite de taxa (HTTP 429).
-  request_interval_seconds: 1.0

@@ -51,7 +51,7 @@ jobs:
       - name: Instalar extras opcionais dos testes (PyTorch CPU + clientes LLM)
         run: |
           uv pip install torch --index-url https://download.pytorch.org/whl/cpu
-          uv pip install "openai>=3.8.0" "tiktoken>=0.14.0" "ollama>=0.3" "langchain-core>=0.3"
+          uv pip install "openai>=3.8.0" "tiktoken>=0.14.0" "ollama>=0.3"
 
       # No macOS o XGBoost usa o libomp do Homebrew e o PyTorch traz o seu
       # próprio: dois runtimes OpenMP no mesmo processo causam segfault (exit

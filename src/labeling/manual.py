@@ -154,11 +154,9 @@ def apply_human_validation_labels(
     """Sobrescreve o rótulo de consenso pelo rótulo humano, quando disponível.
 
     O rótulo humano é sempre gravado em ``manual_label_column`` (nulo para
-    amostras não revisadas) — nunca sobrescrevendo
-    ``sentiment_label_huggingface``/``confidence_score_huggingface`` (ver
-    ``src/labeling/consensus.py``'s ``merge_consensus_into_corpus``) nem
-    ``{label_column}_llm_relabel``/``{confidence_column}_llm_relabel`` (ver
-    ``src/labeling/llm_relabeling.py``). ``label_column`` continua sendo
+    amostras não revisadas) — nunca sobrescrevendo as colunas
+    ``sentiment_label_<fonte>``/``confidence_score_<fonte>`` de cada base
+    (ver ``src/pipelines/labeling.py``). ``label_column`` continua sendo
     atualizada como a coluna de trabalho (rótulo final usado pelas etapas
     seguintes), agora priorizando sempre o rótulo humano quando disponível.
 

@@ -8,13 +8,14 @@ export PYTHONHASHSEED := 42
 
 .DEFAULT_GOAL := help
 .PHONY: help init venv install install-all \
-	install-labeling install-llm install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data ollama \
+	install-labeling install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data ollama \
 	update lock export \
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
 	clean-processed clean-reports clean-outputs clean-notebooks \
-	pipeline-ingestion pipeline-preprocessing pipeline-labeling pipeline-features \
-	pipeline-training-classical pipeline-training-deep-learning pipeline-llm-evaluation \
+	pipeline-ingestion pipeline-preprocessing pipeline-labeling pipeline-labeling-huggingface \
+	pipeline-labeling-openai pipeline-features \
+	pipeline-training-classical pipeline-training-deep-learning \
 	pipeline-comparative-evaluation pipeline-all \
 	pipeline-diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
 	mlflow app \
@@ -38,11 +39,8 @@ install:  ## Instala dependências (runtime + dev)
 install-all:  ## Instala tudo (todos os extras + dev)
 	uv sync --all-extras --dev
 
-install-labeling:  ## Instala os extras da etapa de rotulagem (PyTorch + Transformers + Accelerate)
+install-labeling:  ## Instala os extras da rotulagem (PyTorch + Transformers + Accelerate + cliente OpenAI)
 	uv sync --extra labeling --dev
-
-install-llm:  ## Instala os extras de LLM (PyTorch + Transformers + Accelerate + Ollama)
-	uv sync --extra llm --dev
 
 install-collect:  ## Instala os extras de coleta (twscrape)
 	uv sync --extra collect --dev
@@ -58,7 +56,7 @@ spacy-model:  ## Baixa o modelo do spaCy para português (habilita a lematizaç�
 nltk-data:  ## Baixa o corpus de stopwords do nltk (enriquece a lista curada em pt-BR)
 	uv run python -m nltk.downloader stopwords
 
-ollama:  ## Baixa o modelo llama3.2:1b para uso local via Ollama (requer: make install-llm)
+ollama:  ## Baixa o modelo llama3.2:1b para uso local via Ollama (requer: make install-hypothesaes)
 	uv run ollama pull llama3.2:1b
 
 install-viz:  ## Instala os extras de visualização (wordcloud, networkx, umap-learn)
@@ -198,8 +196,14 @@ pipeline-ingestion:  ## Executa a coleta de dados (requer SCRAPE_FUNC=modulo:fun
 pipeline-preprocessing:  ## Executa a etapa de pré-processamento do corpus bruto
 	$(RUN) --stage preprocessing
 
-pipeline-labeling:  ## Executa a etapa de rotulagem via pipeline Hugging Face (requer: make install-labeling)
-	$(RUN) --stage labeling
+pipeline-labeling:  ## Rotula TODOS os tweets com as duas fontes: bases tweets_data_huggingface e tweets_data_openai (requer: make install-labeling)
+	$(RUN) --stage labeling --label-source all
+
+pipeline-labeling-huggingface:  ## Rotula com o LLM local do Hugging Face (base tweets_data_huggingface; retoma do checkpoint)
+	$(RUN) --stage labeling --label-source huggingface
+
+pipeline-labeling-openai:  ## Rotula via API OpenAI (base tweets_data_openai; requer OPENAI_KEY no .env; retoma do checkpoint)
+	$(RUN) --stage labeling --label-source openai
 
 pipeline-features:  ## Executa o split treino/validação/teste e a extração de features
 	$(RUN) --stage features
@@ -210,11 +214,8 @@ pipeline-training-classical:  ## Treina os classificadores clássicos de sentime
 pipeline-training-deep-learning:  ## Treina os classificadores de deep learning/Transformers
 	$(RUN) --stage training_deep_learning
 
-pipeline-llm-evaluation:  ## Classifica e avalia o conjunto de teste via LLM local
-	$(RUN) --stage llm_evaluation
-
-pipeline-comparative-evaluation:  ## Avalia e compara os modelos (requer PREDICTIONS_FUNC=modulo:funcao)
-	$(RUN) --stage comparative_evaluation --predictions-func $(PREDICTIONS_FUNC)
+pipeline-comparative-evaluation:  ## Compara as bases Hugging Face x OpenAI e gera tabelas, gráficos e hipóteses (EXTRA_ARGS=--skip-hypotheses dispensa o HypotheSAEs)
+	$(RUN) --stage comparative_evaluation $(EXTRA_ARGS)
 
 pipeline-all:  ## Executa o workflow completo, na ordem configurada em configs/config.yaml
 	$(RUN) --stage all

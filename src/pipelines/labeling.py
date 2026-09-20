@@ -1,50 +1,277 @@
-"""Rotulagem de sentimento do corpus normalizado via pipeline Hugging Face.
+"""Rotulagem de sentimento do corpus normalizado em duas bases independentes.
 
 Implementa o estágio ``labeling`` de ``configs/config.yaml -> stages``:
-classifica o corpus normalizado em lote com um único modelo do Hugging Face
-Hub (``src/labeling/huggingface.py``), sinaliza e amostra candidatos de
-baixa confiança à validação humana (``src/labeling/manual.py``), incorpora
-rótulos humanos e/ou valida contra um gold set de referência
-(``src/labeling/validation.py``) quando informados, re-rotula via LLM as
-amostras de baixa confiança remanescentes
-(``src/labeling/llm_relabeling.py``), e grava o corpus rotulado final
-(``paths.labeled_corpus_file``).
+classifica **todos** os tweets do corpus normalizado com dois LLMs
+independentes — um do Hugging Face (``src/labeling/huggingface.py``) e outro
+via API OpenAI-compatível (``src/labeling/openai_labeler.py``) — e grava uma
+base por fonte, com os mesmos tweets e o mesmo ``id``, prontas para a
+comparação da etapa ``comparative_evaluation``:
 
-O corpus rotulado final preserva, em colunas próprias, o rótulo e a
-confiança de cada fonte da cascata — nenhuma etapa sobrescreve a saída de
-outra: ``sentiment_label_huggingface``/``confidence_score_huggingface``
-(modelo Hugging Face, ver ``src/labeling/consensus.py``),
-``sentiment_label_llm_relabel``/``confidence_score_llm_relabel``
-(re-rotulagem via LLM, nulas fora das amostras candidatas) e
-``sentiment_label_manual``/``confidence_score_manual`` (validação humana,
-nulas fora da amostra revisada). ``sentiment_label``/``confidence_score``
-continuam sendo a coluna de trabalho — o rótulo final consumido pelas
-etapas seguintes (``features``, ``hypothesaes_analysis``) —, atualizada em
-cascata (Hugging Face -> LLM -> manual, sempre a fonte mais confiável
-disponível por amostra).
+* ``tweets_data_huggingface`` (``paths.huggingface_labeled_file``);
+* ``tweets_data_openai`` (``paths.openai_labeled_file``).
+
+Cada base contém ``id``, ``text`` (texto original), ``text_normalized``
+(texto após o pré-processamento), ``sentiment_label`` (classe atribuída pelo
+modelo) e ``confidence_score`` (confiança da classificação), validadas por
+:class:`schemas.labeling.LabeledSourceSchema`; modelo, prompt e hash dos
+dados ficam num arquivo ``.meta.json`` ao lado da base.
+
+A rotulagem é incremental e retomável (``src/labeling/incremental.py``):
+tweets já rotulados são lidos do checkpoint, e uma falha deixa o progresso
+salvo. Depois de rotular, o estágio grava o corpus consumido pelas etapas
+seguintes (``features``, ``hypothesaes_analysis``;
+``paths.labeled_corpus_file``): ``sentiment_label``/``confidence_score`` vêm
+da fonte ``downstream_source``, e as colunas
+``sentiment_label_<fonte>``/``confidence_score_<fonte>`` preservam o rótulo
+de cada base disponível.
 """
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import polars as pl
 
 from config.paths import ProjectPaths
 from data.loader import read_dataset_file
-from data.writer import write_labeled_corpus
-from hypothesaes.llm_api import DEFAULT_OLLAMA_BASE_URL, LLMProvider
+from data.writer import write_dataset, write_labeled_corpus
+from exceptions.configuration import InvalidConfigurationError
 from io_utils.csv import write_csv
+from io_utils.json import write_json
+from labeling.checkpoint import build_checkpoint_path
 from labeling.confidence import flag_low_confidence_predictions
-from labeling.consensus import merge_consensus_into_corpus
-from labeling.huggingface import SentimentPipeline, label_corpus_with_huggingface_pipeline
-from labeling.llm_relabeling import relabel_low_confidence_samples
+from labeling.incremental import BatchClassifier, run_incremental_labeling
 from labeling.manual import apply_human_validation_labels, select_samples_for_human_validation
 from labeling.validation import evaluate_against_gold_set
+from schemas.labeling import validate_labeled_source
+from utils.hashing import calculate_file_hash, calculate_text_hash
 
 logger = logging.getLogger(__name__)
 
+LABEL_SOURCE_NAMES: tuple[str, ...] = ("huggingface", "openai")
+
 _HUMAN_VALIDATION_SAMPLE_FILE_NAME = "human_validation_sample.csv"
+
+
+@dataclass(frozen=True)
+class LabelingSource:
+    """Uma fonte de rotulagem (LLM) e tudo que é preciso para reproduzir sua base.
+
+    Parameters
+    ----------
+    name : str
+        ``huggingface`` ou ``openai`` (um de :data:`LABEL_SOURCE_NAMES`).
+    model_name : str
+        Modelo usado, registrado nos metadados da base.
+    prompt_name : str
+        Nome do template em ``prompts/`` (sem ``.txt``).
+    prompt_template : str
+        Conteúdo do template; entra no hash do checkpoint e nos metadados.
+    temperature : float
+        Temperatura de geração (0.0 = determinístico).
+    batch_size : int
+        Tweets por lote (e por gravação no checkpoint).
+    open_classifier : Callable[[], AbstractContextManager[BatchClassifier]]
+        Abre o classificador dentro de um ``with`` (o do Hugging Face carrega o
+        modelo na entrada e libera a GPU na saída).
+    """
+
+    name: str
+    model_name: str
+    prompt_name: str
+    prompt_template: str
+    temperature: float
+    batch_size: int
+    open_classifier: Callable[[], AbstractContextManager[BatchClassifier]]
+
+
+def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
+    """Resolve o arquivo da base ``tweets_data_<fonte>``.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    source_name : str
+        ``huggingface`` ou ``openai``.
+
+    Returns
+    -------
+    Path
+        ``paths.huggingface_labeled_file`` ou ``paths.openai_labeled_file``.
+
+    Raises
+    ------
+    InvalidConfigurationError
+        Se ``source_name`` não for uma fonte conhecida.
+
+    Examples
+    --------
+    >>> resolve_labeled_source_path(paths, "openai").name  # doctest: +SKIP
+    'tweets_data_openai.parquet'
+    """
+    if source_name == "huggingface":
+        return paths.huggingface_labeled_file
+    if source_name == "openai":
+        return paths.openai_labeled_file
+    raise InvalidConfigurationError(
+        f"fonte de rotulagem desconhecida: '{source_name}'. Válidas: {list(LABEL_SOURCE_NAMES)}"
+    )
+
+
+def _build_metadata_path(labeled_source_path: Path) -> Path:
+    """Caminho do arquivo de metadados ao lado da base (``<base>.meta.json``)."""
+    return labeled_source_path.with_suffix(".meta.json")
+
+
+def _write_source_metadata(
+    source: LabelingSource, output_path: Path, *, n_tweets: int, normalized_corpus_hash: str
+) -> None:
+    """Grava modelo, prompt e hash dos dados de entrada ao lado da base rotulada."""
+    write_json(
+        {
+            "source": source.name,
+            "model": source.model_name,
+            "prompt_name": source.prompt_name,
+            "prompt_sha256": calculate_text_hash(source.prompt_template),
+            "temperature": source.temperature,
+            "n_tweets": n_tweets,
+            "normalized_corpus_sha256": normalized_corpus_hash,
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        },
+        _build_metadata_path(output_path),
+    )
+
+
+def label_source(
+    paths: ProjectPaths,
+    source: LabelingSource,
+    normalized_corpus: pl.DataFrame,
+    *,
+    text_column: str = "text_normalized",
+    show_progress: bool = True,
+) -> Path:
+    """Rotula todo o corpus com uma fonte e grava a base ``tweets_data_<fonte>``.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    source : LabelingSource
+        Fonte a executar.
+    normalized_corpus : pl.DataFrame
+        Corpus normalizado (``id``, ``text``, ``text_normalized`` ...).
+    text_column : str, optional
+        Coluna enviada ao LLM (sanitizada: sem menções/URLs), by default "text_normalized".
+    show_progress : bool, optional
+        Exibe barra de progresso, by default True.
+
+    Returns
+    -------
+    Path
+        Caminho da base gravada.
+
+    Raises
+    ------
+    IncompleteLabelingError
+        Se restarem tweets sem rótulo válido (o checkpoint preserva o progresso).
+    DataValidationError
+        Se a base violar o contrato de dados.
+
+    Examples
+    --------
+    >>> label_source(paths, source, normalized_corpus)  # doctest: +SKIP
+    """
+    output_path = resolve_labeled_source_path(paths, source.name)
+    checkpoint_path = build_checkpoint_path(
+        paths.labeling_checkpoints_dir,
+        source.name,
+        model_name=source.model_name,
+        prompt_template=source.prompt_template,
+        temperature=source.temperature,
+    )
+    with source.open_classifier() as classify_batch:
+        results = run_incremental_labeling(
+            normalized_corpus,
+            classify_batch,
+            source_name=source.name,
+            checkpoint_path=checkpoint_path,
+            batch_size=source.batch_size,
+            text_column=text_column,
+            show_progress=show_progress,
+        )
+
+    labeled_source = validate_labeled_source(
+        normalized_corpus.select(
+            pl.col("id").cast(pl.String), "text", pl.col(text_column).alias("text_normalized")
+        ).join(results, on="id", how="left")
+    )
+    write_dataset(labeled_source, output_path)
+    _write_source_metadata(
+        source,
+        output_path,
+        n_tweets=labeled_source.height,
+        normalized_corpus_hash=calculate_file_hash(paths.normalized_corpus_file),
+    )
+    logger.info("Base '%s' gravada em: %s", source.name, output_path)
+    return output_path
+
+
+def build_labeled_corpus(
+    normalized_corpus: pl.DataFrame, paths: ProjectPaths, downstream_source: str
+) -> pl.DataFrame | None:
+    """Monta o corpus rotulado das etapas seguintes a partir das bases disponíveis.
+
+    ``sentiment_label``/``confidence_score`` vêm da base ``downstream_source``; as
+    colunas ``sentiment_label_<fonte>``/``confidence_score_<fonte>`` preservam o
+    rótulo de cada base já gravada.
+
+    Parameters
+    ----------
+    normalized_corpus : pl.DataFrame
+        Corpus normalizado original.
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    downstream_source : str
+        Fonte cujo rótulo vira ``sentiment_label`` (um de :data:`LABEL_SOURCE_NAMES`).
+
+    Returns
+    -------
+    pl.DataFrame | None
+        Corpus rotulado, ou ``None`` se a base de ``downstream_source`` ainda não existir.
+
+    Raises
+    ------
+    InvalidConfigurationError
+        Se ``downstream_source`` não for uma fonte conhecida.
+
+    Examples
+    --------
+    >>> build_labeled_corpus(normalized_corpus, paths, "huggingface")  # doctest: +SKIP
+    """
+    resolve_labeled_source_path(paths, downstream_source)  # valida o nome
+    labeled_corpus = normalized_corpus.with_columns(pl.col("id").cast(pl.String))
+    downstream_path = resolve_labeled_source_path(paths, downstream_source)
+    if not downstream_path.is_file():
+        return None
+
+    for source_name in LABEL_SOURCE_NAMES:
+        source_path = resolve_labeled_source_path(paths, source_name)
+        if not source_path.is_file():
+            continue
+        source_labels = read_dataset_file(source_path).select(
+            "id",
+            pl.col("sentiment_label").alias(f"sentiment_label_{source_name}"),
+            pl.col("confidence_score").alias(f"confidence_score_{source_name}"),
+        )
+        labeled_corpus = labeled_corpus.join(source_labels, on="id", how="left")
+    return labeled_corpus.with_columns(
+        pl.col(f"sentiment_label_{downstream_source}").alias("sentiment_label"),
+        pl.col(f"confidence_score_{downstream_source}").alias("confidence_score"),
+    )
 
 
 def _select_and_write_human_validation_sample(
@@ -59,17 +286,13 @@ def _select_and_write_human_validation_sample(
     Parameters
     ----------
     labeled_corpus : pl.DataFrame
-        Corpus já rotulado, contendo ``confidence_score`` (saída de
-        :func:`labeling.huggingface.label_corpus_with_huggingface_pipeline`,
-        mesclada ao corpus original).
+        Corpus rotulado, contendo ``confidence_score``.
     paths : ProjectPaths
         Caminhos resolvidos do projeto (``configs/paths.yaml``).
     sample_size : int
-        Repassado a
-        :func:`labeling.manual.select_samples_for_human_validation`.
+        Repassado a :func:`labeling.manual.select_samples_for_human_validation`.
     low_confidence_threshold : float
-        Repassado a
-        :func:`labeling.confidence.flag_low_confidence_predictions`.
+        Repassado a :func:`labeling.confidence.flag_low_confidence_predictions`.
     """
     flagged = flag_low_confidence_predictions(
         labeled_corpus, low_confidence_threshold=low_confidence_threshold
@@ -94,7 +317,7 @@ def _validate_against_gold_set_if_provided(
     Parameters
     ----------
     labeled_corpus : pl.DataFrame
-        Corpus rotulado (após consenso e eventual validação humana).
+        Corpus rotulado (após eventual validação humana).
     gold_set : pl.DataFrame | None
         Gold set de referência; ``None`` desativa a validação.
     minimum_kappa : float
@@ -116,147 +339,85 @@ def _validate_against_gold_set_if_provided(
 
 def run_labeling_stage(
     paths: ProjectPaths,
-    pipeline: SentimentPipeline,
+    sources: Sequence[LabelingSource],
     *,
+    downstream_source: str = "huggingface",
     text_column: str = "text_normalized",
-    label_mapping: Mapping[str, str] | None = None,
-    huggingface_batch_size: int = 32,
     select_for_human_validation: bool = True,
     human_validation_sample_size: int = 500,
     low_confidence_threshold: float = 0.5,
     human_validation_labels: pl.DataFrame | None = None,
     gold_set: pl.DataFrame | None = None,
     minimum_kappa: float = 0.6,
-    llm_relabeling_enabled: bool = False,
-    llm_relabeling_score_threshold: float = 0.5,
-    llm_relabeling_prompt_name: str | None = None,
-    llm_relabeling_model: str | None = None,
-    llm_relabeling_temperature: float = 0.0,
-    llm_relabeling_max_retries: int = 3,
-    llm_relabeling_n_workers: int = 8,
-    llm_relabeling_provider: LLMProvider = "openai",
-    llm_relabeling_ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL,
-    llm_relabeling_request_interval_seconds: float = 0.0,
     show_progress: bool = True,
-) -> Path:
-    """Executa a etapa de rotulagem via pipeline Hugging Face sobre o corpus normalizado.
+) -> dict[str, Path]:
+    """Executa a etapa de rotulagem: uma base por fonte + o corpus das etapas seguintes.
 
     Parameters
     ----------
     paths : ProjectPaths
         Caminhos resolvidos do projeto (``configs/paths.yaml``).
-    pipeline : SentimentPipeline
-        Pipeline de classificação de sentimento (ver
-        ``configs/labeling.yaml -> huggingface``), via
-        :func:`labeling.huggingface.load_huggingface_sentiment_pipeline`,
-        repassado a
-        :func:`labeling.huggingface.label_corpus_with_huggingface_pipeline`.
+    sources : Sequence[LabelingSource]
+        Fontes a rotular nesta execução (uma ou as duas de :data:`LABEL_SOURCE_NAMES`).
+    downstream_source : str, optional
+        Fonte cujo rótulo alimenta ``features``/``hypothesaes_analysis``
+        (``configs/labeling.yaml -> downstream_source``), by default "huggingface".
     text_column : str, optional
-        Coluna de texto classificada pelo pipeline, by default
-        "text_normalized" (produzida por
-        ``src/pipelines/preprocessing.py``).
-    label_mapping : Mapping[str, str] | None, optional
-        Mapeamento do rótulo bruto do modelo para as classes de sentimento
-        em pt-BR, by default None (usa
-        :data:`labeling.huggingface.DEFAULT_LABEL_MAPPING`).
-    huggingface_batch_size : int, optional
-        Repassado como ``batch_size`` a
-        :func:`labeling.huggingface.label_corpus_with_huggingface_pipeline`,
-        by default 32.
+        Coluna do texto enviado ao LLM, by default "text_normalized".
     select_for_human_validation : bool, optional
-        Se ``True``, seleciona e grava uma amostra de candidatos à
-        validação humana em ``paths.reports_tables_dir``, by default True.
+        Se ``True``, grava uma amostra de candidatos à validação humana em
+        ``paths.reports_tables_dir``, by default True.
     human_validation_sample_size : int, optional
-        Repassado a
-        :func:`labeling.manual.select_samples_for_human_validation`, by
-        default 500.
+        Repassado a :func:`labeling.manual.select_samples_for_human_validation`, by default 500.
     low_confidence_threshold : float, optional
-        Repassado a
-        :func:`labeling.confidence.flag_low_confidence_predictions`, by
-        default 0.5 (``configs/labeling.yaml ->
-        confidence.low_confidence_threshold``).
+        Repassado a :func:`labeling.confidence.flag_low_confidence_predictions`, by default 0.5.
     human_validation_labels : pl.DataFrame | None, optional
-        Rótulos já revisados por humanos, incorporados via
-        :func:`labeling.manual.apply_human_validation_labels`, by default
-        None (nenhuma incorporação).
+        Rótulos revisados por humanos, incorporados ao corpus das etapas seguintes,
+        by default None.
     gold_set : pl.DataFrame | None, optional
-        Gold set de referência (TweetSentBR/RePro) para validação via
-        :func:`labeling.validation.evaluate_against_gold_set`, by default
-        None (nenhuma validação).
+        Gold set de referência para validação por Kappa, by default None.
     minimum_kappa : float, optional
-        Repassado a :func:`labeling.validation.evaluate_against_gold_set`,
-        by default 0.6.
-    llm_relabeling_enabled : bool, optional
-        Se ``True``, re-rotula via LLM as amostras com ``confidence_score``
-        abaixo de ``llm_relabeling_score_threshold`` (ver
-        :func:`labeling.llm_relabeling.relabel_low_confidence_samples`),
-        antes da incorporação de ``human_validation_labels`` — que, quando
-        informado, sempre prevalece sobre o rótulo do LLM, by default
-        False (``configs/labeling.yaml -> llm_relabeling.enabled``).
-    llm_relabeling_score_threshold : float, optional
-        Repassado como ``score_threshold``, by default 0.5.
-    llm_relabeling_prompt_name : str | None, optional
-        Nome do template de prompt em ``prompts/`` (sem ``.txt``),
-        repassado como ``prompt_name``; obrigatório quando
-        ``llm_relabeling_enabled=True``, by default None.
-    llm_relabeling_model : str | None, optional
-        Repassado como ``model``, by default None (resolvido conforme
-        ``llm_relabeling_provider`` — ver
-        :func:`labeling.llm_relabeling.relabel_low_confidence_samples`).
-    llm_relabeling_temperature : float, optional
-        Repassado como ``temperature``, by default 0.0.
-    llm_relabeling_max_retries : int, optional
-        Repassado como ``max_retries``, by default 3.
-    llm_relabeling_n_workers : int, optional
-        Repassado como ``n_workers``, by default 8.
-    llm_relabeling_provider : {"openai", "ollama"}, optional
-        Repassado como ``provider`` (``configs/llm.yaml ->
-        active_provider``), by default "openai".
-    llm_relabeling_ollama_base_url : str, optional
-        Repassado como ``ollama_base_url``, usado apenas quando
-        ``llm_relabeling_provider="ollama"``, by default
-        :data:`hypothesaes.llm_api.DEFAULT_OLLAMA_BASE_URL`
-        (``configs/llm.yaml -> backends.ollama.base_url``).
-    llm_relabeling_request_interval_seconds : float, optional
-        Repassado como ``request_interval_seconds`` — pausa antes de cada
-        chamada/tentativa ao LLM, para reduzir a taxa de requisições e
-        evitar bloqueios por limite de taxa (HTTP 429), by default 0.0.
+        Repassado a :func:`labeling.validation.evaluate_against_gold_set`, by default 0.6.
     show_progress : bool, optional
-        Se ``True``, exibe uma barra de progresso no console, by default
-        True.
+        Exibe barra de progresso, by default True.
 
     Returns
     -------
-    Path
-        Caminho do corpus rotulado escrito (``paths.labeled_corpus_file``).
+    dict[str, Path]
+        Arquivos gravados: uma chave por fonte rotulada e, quando a base de
+        ``downstream_source`` existe, ``"labeled_corpus"``.
 
     Raises
     ------
     EmptyDatasetError
         Se o corpus normalizado estiver vazio.
+    IncompleteLabelingError
+        Se alguma fonte terminar com tweets sem rótulo (rode de novo para retomar).
     DataValidationError
-        Se o pipeline devolver um rótulo bruto fora de ``label_mapping``,
-        ou se o corpus rotulado final violar o contrato de dados.
-    ValueError
-        Se ``llm_relabeling_enabled=True`` e ``llm_relabeling_prompt_name``
-        não for informado.
+        Se alguma base ou o corpus final violar o contrato de dados.
+    InvalidConfigurationError
+        Se uma fonte (ou ``downstream_source``) for desconhecida.
 
     Examples
     --------
-    >>> from labeling.huggingface import load_huggingface_sentiment_pipeline
-    >>> run_labeling_stage(paths, load_huggingface_sentiment_pipeline())  # doctest: +SKIP
+    >>> run_labeling_stage(paths, [huggingface_source, openai_source])  # doctest: +SKIP
     """
     normalized_corpus = read_dataset_file(paths.normalized_corpus_file)
 
-    labeling_results = label_corpus_with_huggingface_pipeline(
-        normalized_corpus,
-        pipeline,
-        text_column=text_column,
-        label_mapping=label_mapping,
-        batch_size=huggingface_batch_size,
-        show_progress=show_progress,
-    )
-    labeled_corpus = merge_consensus_into_corpus(normalized_corpus, labeling_results)
+    written: dict[str, Path] = {}
+    for source in sources:
+        written[source.name] = label_source(
+            paths, source, normalized_corpus, text_column=text_column, show_progress=show_progress
+        )
+
+    labeled_corpus = build_labeled_corpus(normalized_corpus, paths, downstream_source)
+    if labeled_corpus is None:
+        logger.warning(
+            "Base '%s' ainda não existe: o corpus rotulado das etapas seguintes não foi gerado. "
+            "Rotule essa fonte para gerá-lo.",
+            downstream_source,
+        )
+        return written
 
     if select_for_human_validation:
         _select_and_write_human_validation_sample(
@@ -265,33 +426,15 @@ def run_labeling_stage(
             sample_size=human_validation_sample_size,
             low_confidence_threshold=low_confidence_threshold,
         )
-
-    if llm_relabeling_enabled:
-        if not llm_relabeling_prompt_name:
-            raise ValueError(
-                "llm_relabeling_prompt_name é obrigatório quando llm_relabeling_enabled=True "
-                "(ver configs/labeling.yaml -> llm_relabeling.prompt_name)"
-            )
-        labeled_corpus = relabel_low_confidence_samples(
-            labeled_corpus,
-            text_column=text_column,
-            score_threshold=llm_relabeling_score_threshold,
-            prompt_name=llm_relabeling_prompt_name,
-            model=llm_relabeling_model,
-            temperature=llm_relabeling_temperature,
-            max_retries=llm_relabeling_max_retries,
-            n_workers=llm_relabeling_n_workers,
-            provider=llm_relabeling_provider,
-            ollama_base_url=llm_relabeling_ollama_base_url,
-            request_interval_seconds=llm_relabeling_request_interval_seconds,
-            show_progress=show_progress,
-        )
-
     if human_validation_labels is not None:
         labeled_corpus = apply_human_validation_labels(labeled_corpus, human_validation_labels)
-
     _validate_against_gold_set_if_provided(labeled_corpus, gold_set, minimum_kappa=minimum_kappa)
 
     write_labeled_corpus(labeled_corpus, paths.labeled_corpus_file)
-    logger.info("Etapa de rotulagem concluída: %d amostra(s) rotulada(s).", labeled_corpus.height)
-    return paths.labeled_corpus_file
+    written["labeled_corpus"] = paths.labeled_corpus_file
+    logger.info(
+        "Etapa de rotulagem concluída: %d tweet(s); corpus das etapas seguintes usa '%s'.",
+        labeled_corpus.height,
+        downstream_source,
+    )
+    return written

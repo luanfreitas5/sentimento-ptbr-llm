@@ -7,7 +7,6 @@ import pytest
 
 from exceptions.data import EmptyDatasetError
 from inference.batch import run_batch_inference
-from inference.llm_batch import run_llm_batch_inference
 from inference.online import OnlinePredictor
 from inference.postprocessing import build_prediction_dataframe, standardize_prediction_output
 from inference.predictor import Predictor
@@ -30,22 +29,6 @@ class _FakeTextClassifier:
     def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
         """Retorna probabilidades fixas de 0.9/0.1, conforme a predição de :meth:`predict`."""
         return np.array([[0.1, 0.9] if "bom" in text else [0.9, 0.1] for text in X])
-
-
-class _FlakyTextClassifier(_FakeTextClassifier):
-    """Classificador de teste que falha propositalmente para o texto ``"erro"``."""
-
-    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
-        """Levanta ``ValueError`` se algum texto do lote for ``"erro"``; delega o restante."""
-        if "erro" in X:
-            raise ValueError("falha simulada de inferência")
-        return super().predict(X)
-
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
-        """Levanta ``ValueError`` se algum texto do lote for ``"erro"``; delega o restante."""
-        if "erro" in X:
-            raise ValueError("falha simulada de inferência")
-        return super().predict_proba(X)
 
 
 class TestStandardizePredictionOutput:
@@ -177,33 +160,3 @@ class TestRunBatchInference:
         predictor = Predictor(_FakeTextClassifier())
         with pytest.raises(EmptyDatasetError):
             run_batch_inference(predictor, [], show_progress=False)
-
-
-class TestRunLLMBatchInference:
-    """Testes da inferência em lote concorrente para LLMs."""
-
-    def test_preserves_original_order_regardless_of_completion_order(self) -> None:
-        """A ordem das linhas do resultado deve corresponder à ordem original de ``texts``."""
-        predictor = Predictor(_FakeTextClassifier(), allowed_labels=("positivo", "negativo"))
-        texts = ["bom", "ruim", "bom", "ruim"]
-
-        result = run_llm_batch_inference(predictor, texts, show_progress=False)
-
-        assert result["text"].to_list() == texts
-
-    def test_isolates_failures_without_raising(self) -> None:
-        """Uma falha em um único texto não deve interromper o processamento dos demais."""
-        predictor = Predictor(_FlakyTextClassifier(), allowed_labels=("positivo", "negativo"))
-
-        result = run_llm_batch_inference(
-            predictor, ["bom dia", "erro", "péssimo dia"], show_progress=False
-        )
-
-        assert result.height == 2
-        assert "erro" not in result["text"].to_list()
-
-    def test_raises_for_empty_texts(self) -> None:
-        """Um lote vazio deve levantar ``EmptyDatasetError``."""
-        predictor = Predictor(_FakeTextClassifier())
-        with pytest.raises(EmptyDatasetError):
-            run_llm_batch_inference(predictor, [], show_progress=False)

@@ -41,7 +41,6 @@ PROJECT_PACKAGE_NAMES: tuple[str, ...] = (
     "inference",
     "io_utils",
     "labeling",
-    "llm",
     "logging_utils",
     "metrics",
     "models",

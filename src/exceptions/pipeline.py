@@ -47,6 +47,30 @@ class SanityGateFailedError(PipelineError):
         )
 
 
+class IncompleteLabelingError(PipelineError):
+    """Levantada quando a rotulagem termina com tweets sem rótulo válido.
+
+    O ponto de retomada (checkpoint) preserva os tweets já rotulados: uma nova
+    execução reprocessa apenas os ``n_failed`` tweets pendentes.
+
+    Parameters
+    ----------
+    source_name : str
+        Fonte de rotulagem (``huggingface`` ou ``openai``).
+    n_failed : int
+        Quantidade de tweets sem rótulo válido após todas as tentativas.
+    checkpoint_path : str
+        Caminho do checkpoint que permite retomar a execução.
+    """
+
+    def __init__(self, source_name: str, n_failed: int, checkpoint_path: str) -> None:
+        super().__init__(
+            f"Rotulagem '{source_name}' incompleta: {n_failed} tweet(s) sem rótulo válido; "
+            "execute a etapa novamente para reprocessar apenas os pendentes.",
+            context={"source_name": source_name, "checkpoint_path": checkpoint_path},
+        )
+
+
 class UnknownPipelineStageError(PipelineError):
     """Levantada quando uma etapa de pipeline solicitada não existe.
 

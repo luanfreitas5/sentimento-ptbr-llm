@@ -46,3 +46,23 @@ ablation:
     - "sem_autoencoder"
     - "sem_preprocessamento_emojis"
     - "sem_chain_of_thought"
+
+# Etapa `comparative_evaluation` (src/pipelines/comparative_evaluation.py): compara as
+# bases `tweets_data_huggingface` e `tweets_data_openai` pelo `id` do tweet.
+llm_comparison:
+  output_subdir: "comparativo_hf_openai" # subpasta em reports/tables, reports/figures e reports/metrics
+  random_seed: 42
+  n_bootstrap: 1000 # IC bootstrap de concordância e kappa
+  confidence_level: 0.95
+  top_n_divergences: 50 # tweets com maior divergência exportados
+  high_confidence_threshold: 0.8 # "alta confiança" (conflito de confiança)
+  low_confidence_threshold: 0.5 # "baixa confiança" (conflito de confiança e ambiguidade)
+  n_length_bins: 5 # quantis do tamanho do texto (em palavras)
+  examples_per_transition: 3 # exemplos por par de classes divergentes
+  # Etapa opcional: HypotheSAEs sobre a divergência/incerteza entre os dois modelos
+  # (src/diagnostics/model_disagreement.py; usa configs/diagnostics.yaml). Exige as
+  # dependências pesadas (`make install-hypothesaes`) e o LLM configurado em diagnostics.yaml.
+  hypotheses:
+    enabled: true
+    targets: ["disagreement", "uncertainty"]
+    top_tweets_per_hypothesis: 10 # tweets mais ativados por hipótese, exportados como evidência

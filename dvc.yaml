@@ -35,16 +35,17 @@ stages:
       - data/interim/corpus_normalizado.parquet
 
   labeling:
-    cmd: uv run python src/main.py --stage labeling
+    cmd: uv run python src/main.py --stage labeling --label-source all
     deps:
       - src/pipelines/labeling.py
       - src/labeling
+      - prompts
       - data/interim/corpus_normalizado.parquet
-      - data/external/tweetsentbr.parquet
-      - data/external/repro.parquet
     params:
       - configs/labeling.yaml:
     outs:
+      - data/processed/tweets_data_huggingface.parquet
+      - data/processed/tweets_data_openai.parquet
       - data/processed/corpus_rotulado.parquet
 
   features:
@@ -96,25 +97,25 @@ stages:
       - models/checkpoints:
           persist: true
 
-  llm_evaluation:
-    cmd: uv run python src/main.py --stage llm_evaluation
-    deps:
-      - src/pipelines/llm_evaluation.py
-      - src/llm
-      - data/processed/teste.parquet
-    params:
-      - configs/llm.yaml:
-
   comparative_evaluation:
-    cmd: uv run python src/main.py --stage comparative_evaluation --predictions-func ${predictions_func}
+    cmd: uv run python src/main.py --stage comparative_evaluation
     deps:
       - src/pipelines/comparative_evaluation.py
-      - src/evaluation
-      - data/processed/teste.parquet
+      - src/evaluation/llm_comparison.py
+      - src/visualization/comparison.py
+      - src/diagnostics
+      - data/processed/tweets_data_huggingface.parquet
+      - data/processed/tweets_data_openai.parquet
     params:
       - configs/evaluation.yaml:
+          - llm_comparison
+      - configs/diagnostics.yaml:
     outs:
-      - reports/metrics/comparativo.csv:
+      - reports/metrics/comparativo_hf_openai.json:
+          cache: false
+      - reports/tables/comparativo_hf_openai:
+          cache: false
+      - reports/figures/comparativo_hf_openai:
           cache: false
 
   hypothesaes_analysis:

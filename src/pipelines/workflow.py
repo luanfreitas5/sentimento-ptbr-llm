@@ -20,7 +20,6 @@ from pipelines.features import run_features_stage
 from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
 from pipelines.ingestion import run_ingestion_stage
 from pipelines.labeling import run_labeling_stage
-from pipelines.llm_evaluation import run_llm_evaluation_stage
 from pipelines.preprocessing import run_preprocessing_stage
 from pipelines.training_classical import run_training_classical_stage
 from pipelines.training_deep_learning import run_training_deep_learning_stage
@@ -34,7 +33,6 @@ STAGE_REGISTRY: dict[str, Callable[..., Any]] = {
     "features": run_features_stage,
     "training_classical": run_training_classical_stage,
     "training_deep_learning": run_training_deep_learning_stage,
-    "llm_evaluation": run_llm_evaluation_stage,
     "comparative_evaluation": run_comparative_evaluation_stage,
     "hypothesaes_analysis": run_hypothesaes_analysis_stage,
     # Opt-in: fora de `configs/config.yaml -> stages`, logo `--stage all` não o executa.

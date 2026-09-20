@@ -7,6 +7,7 @@ para que os testes permaneçam rápidos e determinísticos (ver CLAUDE.md,
 """
 
 from collections.abc import Sequence
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -19,16 +20,20 @@ import pytest
 from config.paths import ProjectPaths
 from data.loader import read_dataset_file
 from data.writer import write_dataset, write_labeled_corpus
-from exceptions.data import DataValidationError, EmptyDatasetError
-from exceptions.pipeline import PipelineStageError, UnknownPipelineStageError
+from exceptions.configuration import InvalidConfigurationError
+from exceptions.data import DataNotFoundError, DataValidationError, EmptyDatasetError
+from exceptions.pipeline import (
+    IncompleteLabelingError,
+    PipelineStageError,
+    UnknownPipelineStageError,
+)
+from io_utils.json import read_json
 from pipelines import hypothesaes_analysis, training_deep_learning, workflow
-from pipelines import labeling as labeling_pipeline
 from pipelines.comparative_evaluation import run_comparative_evaluation_stage
 from pipelines.features import run_features_stage
 from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
 from pipelines.ingestion import run_ingestion_stage
-from pipelines.labeling import run_labeling_stage
-from pipelines.llm_evaluation import run_llm_evaluation_stage
+from pipelines.labeling import LabelingSource, run_labeling_stage
 from pipelines.preprocessing import run_preprocessing_stage
 from pipelines.training_classical import run_training_classical_stage
 from pipelines.training_deep_learning import run_training_deep_learning_stage
@@ -49,6 +54,9 @@ def pipeline_paths(tmp_path: Path) -> ProjectPaths:
         repro_file=tmp_path / "data" / "external" / "repro.parquet",
         normalized_corpus_file=tmp_path / "data" / "interim" / "normalizado.parquet",
         labeled_corpus_file=tmp_path / "data" / "processed" / "rotulado.parquet",
+        huggingface_labeled_file=tmp_path / "data" / "processed" / "tweets_hf.parquet",
+        openai_labeled_file=tmp_path / "data" / "processed" / "tweets_openai.parquet",
+        labeling_checkpoints_dir=tmp_path / "data" / "interim" / "checkpoints",
         training_corpus_file=tmp_path / "data" / "processed" / "treino.parquet",
         validation_corpus_file=tmp_path / "data" / "processed" / "validacao.parquet",
         test_corpus_file=tmp_path / "data" / "processed" / "teste.parquet",
@@ -174,116 +182,255 @@ class TestRunPreprocessingStage:
         assert normalized_corpus.height == 1
 
 
-class _FakeSentimentPipeline:
-    """Dublê de teste do pipeline Hugging Face: POS para textos com "adorei", NEG caso contrário.
+def _keyword_classifier(texts: Sequence[str]) -> list[tuple[str, float] | None]:
+    """Dublê de classificador em lote: positivo (0.9) se houver "adorei"; negativo (0.8) senão."""
+    return [("positivo", 0.9) if "adorei" in text else ("negativo", 0.8) for text in texts]
 
-    Simula ``transformers.pipeline("sentiment-analysis")`` sem depender de
-    ``transformers``/``torch`` instalados nem de rede (ver
-    ``src/labeling/huggingface.py``'s ``SentimentPipeline``).
-    """
 
-    def __call__(self, texts: Sequence[str]) -> list[dict[str, Any]]:
-        """Classifica um lote de textos pela presença da palavra "adorei"."""
-        return [
-            {"label": "POS", "score": 0.9} if "adorei" in text else {"label": "NEG", "score": 0.8}
-            for text in texts
-        ]
+def _build_source(
+    name: str = "huggingface", classifier: Any = _keyword_classifier, batch_size: int = 8
+) -> LabelingSource:
+    """Monta uma fonte de rotulagem com um classificador injetado (sem modelo nem rede)."""
+    return LabelingSource(
+        name=name,
+        model_name=f"modelo-{name}",
+        prompt_name="prompt_de_teste",
+        prompt_template='Tweet: "{{TEXTO}}"',
+        temperature=0.0,
+        batch_size=batch_size,
+        open_classifier=lambda: nullcontext(classifier),
+    )
+
+
+def _write_normalized_corpus(paths: ProjectPaths) -> pl.DataFrame:
+    """Grava um corpus normalizado sintético de dois tweets."""
+    normalized_corpus = pl.DataFrame(
+        {
+            "id": ["1", "2"],
+            "text": ["adorei o produto @fulano", "produto pessimo"],
+            "text_normalized": ["adorei o produto [MENCAO]", "produto pessimo"],
+        }
+    )
+    write_dataset(normalized_corpus, paths.normalized_corpus_file)
+    return normalized_corpus
 
 
 class TestRunLabelingStage:
     """Testes de :func:`pipelines.labeling.run_labeling_stage`."""
 
-    def test_writes_labeled_corpus_via_huggingface_pipeline_without_human_validation(
+    def test_writes_one_independent_base_per_source_with_standard_columns(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Deve rotular o corpus via pipeline Hugging Face e não gerar amostra de validação humana.
+        """Cada fonte gera sua própria base, com as mesmas colunas padronizadas e os mesmos ids."""
+        _write_normalized_corpus(pipeline_paths)
 
-        Com confiança acima do limiar padrão (0.5) para ambas as amostras,
-        nenhuma deve ser sinalizada para validação humana.
-        """
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["adorei o produto", "produto pessimo"],
-                "text_normalized": ["adorei o produto", "produto pessimo"],
-            }
+        written = run_labeling_stage(
+            pipeline_paths,
+            [_build_source("huggingface"), _build_source("openai")],
+            select_for_human_validation=False,
+            show_progress=False,
         )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
 
-        labeled_path = run_labeling_stage(pipeline_paths, _FakeSentimentPipeline())
+        hf_base = read_dataset_file(written["huggingface"])
+        oa_base = read_dataset_file(written["openai"])
+        assert written["huggingface"] == pipeline_paths.huggingface_labeled_file
+        assert written["openai"] == pipeline_paths.openai_labeled_file
+        for base in (hf_base, oa_base):
+            assert base.columns == [
+                "id",
+                "text",
+                "text_normalized",
+                "sentiment_label",
+                "confidence_score",
+            ]
+        assert hf_base["id"].to_list() == oa_base["id"].to_list() == ["1", "2"]
+        assert hf_base["sentiment_label"].to_list() == ["positivo", "negativo"]
+        assert hf_base["confidence_score"].to_list() == [0.9, 0.8]
 
-        assert labeled_path == pipeline_paths.labeled_corpus_file
-        labeled_corpus = read_dataset_file(labeled_path)
-        assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
-        assert labeled_corpus.sort("id")["confidence_score"].to_list() == [0.9, 0.8]
-        assert not (pipeline_paths.reports_tables_dir / "human_validation_sample.csv").is_file()
+    def test_sends_sanitized_text_to_the_model_but_keeps_original_text_in_the_base(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """O LLM recebe ``text_normalized`` (LGPD); a base guarda o ``text`` original."""
+        _write_normalized_corpus(pipeline_paths)
+        received: list[str] = []
+
+        def _recording_classifier(texts: Sequence[str]) -> list[tuple[str, float] | None]:
+            received.extend(texts)
+            return _keyword_classifier(texts)
+
+        run_labeling_stage(
+            pipeline_paths,
+            [_build_source(classifier=_recording_classifier)],
+            select_for_human_validation=False,
+            show_progress=False,
+        )
+
+        assert received == ["adorei o produto [MENCAO]", "produto pessimo"]
+        base = read_dataset_file(pipeline_paths.huggingface_labeled_file)
+        assert base["text"].to_list()[0] == "adorei o produto @fulano"
+
+    def test_records_model_and_prompt_in_metadata_file(self, pipeline_paths: ProjectPaths) -> None:
+        """Modelo, prompt e hash dos dados ficam num ``.meta.json`` ao lado da base."""
+        _write_normalized_corpus(pipeline_paths)
+
+        run_labeling_stage(
+            pipeline_paths,
+            [_build_source("openai")],
+            select_for_human_validation=False,
+            show_progress=False,
+        )
+
+        metadata = read_json(pipeline_paths.openai_labeled_file.with_suffix(".meta.json"))
+        assert metadata["model"] == "modelo-openai"
+        assert metadata["prompt_name"] == "prompt_de_teste"
+        assert metadata["n_tweets"] == 2
+        assert len(metadata["normalized_corpus_sha256"]) == 64
+
+    def test_builds_downstream_corpus_from_the_configured_source(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """``sentiment_label`` vem da fonte de ``downstream_source``; as duas ficam preservadas."""
+        _write_normalized_corpus(pipeline_paths)
+
+        def _always_neutral(texts: Sequence[str]) -> list[tuple[str, float] | None]:
+            return [("neutro", 0.6) for _ in texts]
+
+        written = run_labeling_stage(
+            pipeline_paths,
+            [_build_source("huggingface"), _build_source("openai", classifier=_always_neutral)],
+            downstream_source="openai",
+            select_for_human_validation=False,
+            show_progress=False,
+        )
+
+        labeled_corpus = read_dataset_file(written["labeled_corpus"]).sort("id")
+        assert labeled_corpus["sentiment_label"].to_list() == ["neutro", "neutro"]
+        assert labeled_corpus["sentiment_label_huggingface"].to_list() == ["positivo", "negativo"]
+        assert labeled_corpus["sentiment_label_openai"].to_list() == ["neutro", "neutro"]
+
+    def test_skips_downstream_corpus_while_its_source_is_missing(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Sem a base da fonte ``downstream_source``, o corpus das etapas seguintes não é gerado."""
+        _write_normalized_corpus(pipeline_paths)
+
+        written = run_labeling_stage(
+            pipeline_paths,
+            [_build_source("openai")],
+            downstream_source="huggingface",
+            show_progress=False,
+        )
+
+        assert set(written) == {"openai"}
+        assert not pipeline_paths.labeled_corpus_file.exists()
+
+    def test_resumes_from_checkpoint_without_relabeling_finished_tweets(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Após uma falha parcial, a nova execução só reprocessa os tweets pendentes."""
+        _write_normalized_corpus(pipeline_paths)
+
+        def _fails_on_second_tweet(texts: Sequence[str]) -> list[tuple[str, float] | None]:
+            return [None if "pessimo" in text else ("positivo", 0.9) for text in texts]
+
+        with pytest.raises(IncompleteLabelingError):
+            run_labeling_stage(
+                pipeline_paths,
+                [_build_source(classifier=_fails_on_second_tweet)],
+                select_for_human_validation=False,
+                show_progress=False,
+            )
+        assert not pipeline_paths.huggingface_labeled_file.exists()
+
+        received: list[str] = []
+
+        def _recording_classifier(texts: Sequence[str]) -> list[tuple[str, float] | None]:
+            received.extend(texts)
+            return [("negativo", 0.7) for _ in texts]
+
+        run_labeling_stage(
+            pipeline_paths,
+            [_build_source(classifier=_recording_classifier)],
+            select_for_human_validation=False,
+            show_progress=False,
+        )
+
+        assert received == ["produto pessimo"]
+        base = read_dataset_file(pipeline_paths.huggingface_labeled_file)
+        assert base["sentiment_label"].to_list() == ["positivo", "negativo"]
+
+    def test_raises_data_validation_error_for_label_outside_the_classes(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Um rótulo fora das classes do projeto nunca chega a ser gravado na base."""
+        _write_normalized_corpus(pipeline_paths)
+
+        def _invalid_label(texts: Sequence[str]) -> list[tuple[str, float] | None]:
+            return [("muito_positivo", 0.9) for _ in texts]
+
+        with pytest.raises(DataValidationError):
+            run_labeling_stage(
+                pipeline_paths,
+                [_build_source(classifier=_invalid_label)],
+                show_progress=False,
+            )
+        assert not pipeline_paths.huggingface_labeled_file.exists()
+
+    def test_raises_for_unknown_downstream_source(self, pipeline_paths: ProjectPaths) -> None:
+        """Uma fonte de ``downstream_source`` desconhecida deve falhar com erro de configuração."""
+        _write_normalized_corpus(pipeline_paths)
+
+        with pytest.raises(InvalidConfigurationError):
+            run_labeling_stage(
+                pipeline_paths,
+                [_build_source()],
+                downstream_source="gemini",
+                show_progress=False,
+            )
 
     def test_applies_human_validation_labels_and_gold_set_without_raising(
         self, pipeline_paths: ProjectPaths
     ) -> None:
         """Deve sobrescrever o rótulo por validação humana e apenas alertar
         em desacordo com o gold set."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["adorei o produto", "produto pessimo"],
-                "text_normalized": ["adorei o produto", "produto pessimo"],
-            }
-        )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+        _write_normalized_corpus(pipeline_paths)
         human_validation_labels = pl.DataFrame({"id": ["1"], "sentiment_label": ["neutro"]})
         gold_set = pl.DataFrame({"id": ["1", "2"], "sentiment_label": ["positivo", "negativo"]})
 
-        labeled_path = run_labeling_stage(
+        written = run_labeling_stage(
             pipeline_paths,
-            _FakeSentimentPipeline(),
+            [_build_source()],
             select_for_human_validation=False,
             human_validation_labels=human_validation_labels,
             gold_set=gold_set,
+            show_progress=False,
         )
 
-        labeled_corpus = read_dataset_file(labeled_path)
+        labeled_corpus = read_dataset_file(written["labeled_corpus"])
         assert labeled_corpus.filter(pl.col("id") == "1")["sentiment_label"].to_list() == ["neutro"]
         assert labeled_corpus.filter(pl.col("id") == "2")["sentiment_label"].to_list() == [
             "negativo"
         ]
 
-    def test_accepts_show_progress(self, pipeline_paths: ProjectPaths) -> None:
-        """Deve aceitar e repassar show_progress sem alterar o resultado."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["adorei o produto", "produto pessimo"],
-                "text_normalized": ["adorei o produto", "produto pessimo"],
-            }
-        )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+    def test_does_not_flag_confident_samples_for_human_validation(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Com confiança acima do limiar padrão (0.5) não há amostra de validação humana."""
+        _write_normalized_corpus(pipeline_paths)
 
-        labeled_path = run_labeling_stage(
-            pipeline_paths,
-            _FakeSentimentPipeline(),
-            show_progress=False,
-        )
+        run_labeling_stage(pipeline_paths, [_build_source()], show_progress=False)
 
-        labeled_corpus = read_dataset_file(labeled_path)
-        assert labeled_corpus.sort("id")["sentiment_label"].to_list() == ["positivo", "negativo"]
+        assert not (pipeline_paths.reports_tables_dir / "human_validation_sample.csv").is_file()
 
     def test_flags_low_confidence_sample_for_human_validation(
         self, pipeline_paths: ProjectPaths
     ) -> None:
         """Uma amostra com confiança abaixo do limiar deve gerar a amostra de validação humana."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["produto pessimo"],
-                "text_normalized": ["produto pessimo"],
-            }
-        )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+        _write_normalized_corpus(pipeline_paths)
 
         run_labeling_stage(
             pipeline_paths,
-            _FakeSentimentPipeline(),
+            [_build_source()],
             low_confidence_threshold=0.85,
             human_validation_sample_size=1,
             show_progress=False,
@@ -291,113 +438,15 @@ class TestRunLabelingStage:
 
         assert (pipeline_paths.reports_tables_dir / "human_validation_sample.csv").is_file()
 
-    def test_relabels_low_confidence_samples_via_llm_when_enabled(
-        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Com ``llm_relabeling_enabled=True``, deve repassar o corpus rotulado à re-rotulagem
-        via LLM."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1", "2"],
-                "text": ["adorei o produto", "produto pessimo"],
-                "text_normalized": ["adorei o produto", "produto pessimo"],
-            }
-        )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
+    def test_raises_for_empty_normalized_corpus(self, pipeline_paths: ProjectPaths) -> None:
+        """Um corpus normalizado vazio deve levantar ``EmptyDatasetError``."""
+        pipeline_paths.normalized_corpus_file.parent.mkdir(parents=True, exist_ok=True)
+        pl.DataFrame({"id": [], "text": [], "text_normalized": []}).cast(
+            {"id": pl.String, "text": pl.String, "text_normalized": pl.String}
+        ).write_parquet(pipeline_paths.normalized_corpus_file)
 
-        def _fake_relabel(labeled_corpus: pl.DataFrame, **kwargs: Any) -> pl.DataFrame:
-            return labeled_corpus.with_columns(pl.lit("neutro").alias("sentiment_label"))
-
-        monkeypatch.setattr(labeling_pipeline, "relabel_low_confidence_samples", _fake_relabel)
-
-        labeled_path = run_labeling_stage(
-            pipeline_paths,
-            _FakeSentimentPipeline(),
-            llm_relabeling_enabled=True,
-            llm_relabeling_prompt_name="algum_prompt",
-            show_progress=False,
-        )
-
-        labeled_corpus = read_dataset_file(labeled_path)
-        assert labeled_corpus["sentiment_label"].to_list() == ["neutro", "neutro"]
-
-    def test_does_not_relabel_via_llm_when_disabled(
-        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Com ``llm_relabeling_enabled=False`` (padrão), a re-rotulagem via LLM não é chamada."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["adorei o produto"],
-                "text_normalized": ["adorei o produto"],
-            }
-        )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
-
-        def _fail_if_called(labeled_corpus: pl.DataFrame, **kwargs: Any) -> pl.DataFrame:
-            raise AssertionError("relabel_low_confidence_samples não deveria ser chamada")
-
-        monkeypatch.setattr(labeling_pipeline, "relabel_low_confidence_samples", _fail_if_called)
-
-        run_labeling_stage(
-            pipeline_paths,
-            _FakeSentimentPipeline(),
-            show_progress=False,
-        )
-
-    def test_raises_when_llm_relabeling_enabled_without_prompt_name(
-        self, pipeline_paths: ProjectPaths
-    ) -> None:
-        """Ativar a re-rotulagem via LLM sem informar ``llm_relabeling_prompt_name`` deve levantar
-        ``ValueError``."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["adorei o produto"],
-                "text_normalized": ["adorei o produto"],
-            }
-        )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
-
-        with pytest.raises(ValueError, match="llm_relabeling_prompt_name"):
-            run_labeling_stage(
-                pipeline_paths,
-                _FakeSentimentPipeline(),
-                llm_relabeling_enabled=True,
-                show_progress=False,
-            )
-
-    def test_human_validation_takes_precedence_over_llm_relabeling(
-        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """O rótulo humano deve prevalecer mesmo quando a re-rotulagem via LLM altera o rótulo."""
-        normalized_corpus = pl.DataFrame(
-            {
-                "id": ["1"],
-                "text": ["adorei o produto"],
-                "text_normalized": ["adorei o produto"],
-            }
-        )
-        write_dataset(normalized_corpus, pipeline_paths.normalized_corpus_file)
-        human_validation_labels = pl.DataFrame({"id": ["1"], "sentiment_label": ["negativo"]})
-
-        def _fake_relabel(labeled_corpus: pl.DataFrame, **kwargs: Any) -> pl.DataFrame:
-            return labeled_corpus.with_columns(pl.lit("neutro").alias("sentiment_label"))
-
-        monkeypatch.setattr(labeling_pipeline, "relabel_low_confidence_samples", _fake_relabel)
-
-        labeled_path = run_labeling_stage(
-            pipeline_paths,
-            _FakeSentimentPipeline(),
-            select_for_human_validation=False,
-            human_validation_labels=human_validation_labels,
-            llm_relabeling_enabled=True,
-            llm_relabeling_prompt_name="algum_prompt",
-            show_progress=False,
-        )
-
-        labeled_corpus = read_dataset_file(labeled_path)
-        assert labeled_corpus["sentiment_label"].to_list() == ["negativo"]
+        with pytest.raises(EmptyDatasetError):
+            run_labeling_stage(pipeline_paths, [_build_source()], show_progress=False)
 
 
 class TestRunFeaturesStage:
@@ -520,135 +569,161 @@ class TestRunTrainingDeepLearningStage:
         assert saved_paths[0].is_file()
 
 
-class _FakeSentimentClassifier:
-    """Dublê de classificador de sentimento, sem dependência de LLM/Ollama."""
-
-    classes_: tuple[str, ...] = ("negativo", "neutro", "positivo")
-
-    def fit(self, X: Any, y: Any) -> "_FakeSentimentClassifier":  # noqa: N803
-        """Não faz nada: dublê pré-configurado por palavras-chave, sem estado treinável."""
-        return self
-
-    def predict(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
-        """Classifica pela presença de palavras-chave simples."""
-        return np.array([self._label(text) for text in X])
-
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:  # noqa: N803
-        """Atribui alta probabilidade à classe predita, distribuindo o restante."""
-        return np.array([self._probabilities(text) for text in X])
-
-    def _label(self, text: str) -> str:
-        """Determina o rótulo a partir de palavras-chave presentes no texto."""
-        if "bom" in text:
-            return "positivo"
-        if "ruim" in text:
-            return "negativo"
-        return "neutro"
-
-    def _probabilities(self, text: str) -> list[float]:
-        """Monta a distribuição de probabilidade correspondente ao rótulo predito."""
-        probabilities = [0.1, 0.1, 0.1]
-        probabilities[self.classes_.index(self._label(text))] = 0.8
-        return probabilities
+_LABEL_CYCLE_HF = ["positivo", "negativo", "neutro", "positivo", "negativo", "neutro"]
+_LABEL_CYCLE_OPENAI = ["positivo", "negativo", "positivo", "positivo", "neutro", "neutro"]
 
 
-class TestRunLlmEvaluationStage:
-    """Testes de :func:`pipelines.llm_evaluation.run_llm_evaluation_stage`."""
-
-    def test_classifies_and_evaluates_with_fake_classifier(self) -> None:
-        """Deve classificar e avaliar o conjunto de teste usando um classificador injetado."""
-        test_dataframe = pl.DataFrame(
-            {
-                "id": ["1", "2", "3"],
-                "text": ["produto muito bom", "isso é ruim", "texto qualquer"],
-                "sentiment_label": ["positivo", "negativo", "neutro"],
-            }
+def _write_comparison_bases(paths: ProjectPaths, n_tweets: int = 60) -> None:
+    """Grava as duas bases rotuladas sintéticas (mesmos tweets; 4 de cada 6 concordam)."""
+    ids = [str(index) for index in range(n_tweets)]
+    texts = [" ".join(["palavra"] * (1 + index % 9)) for index in range(n_tweets)]
+    for path, cycle, confidence_shift in (
+        (paths.huggingface_labeled_file, _LABEL_CYCLE_HF, 0.0),
+        (paths.openai_labeled_file, _LABEL_CYCLE_OPENAI, -0.1),
+    ):
+        write_dataset(
+            pl.DataFrame(
+                {
+                    "id": ids,
+                    "text": texts,
+                    "text_normalized": texts,
+                    "sentiment_label": [cycle[index % 6] for index in range(n_tweets)],
+                    "confidence_score": [
+                        round(min(1.0, max(0.0, 0.55 + 0.07 * (index % 6) + confidence_shift)), 4)
+                        for index in range(n_tweets)
+                    ],
+                }
+            ),
+            path,
         )
-
-        predictions, evaluation_result = run_llm_evaluation_stage(
-            test_dataframe, classifier=_FakeSentimentClassifier(), max_workers=1
-        )
-
-        assert predictions.height == 3
-        assert predictions.sort("id")["sentiment_label"].to_list() == [
-            "positivo",
-            "negativo",
-            "neutro",
-        ]
-        assert evaluation_result.point_metrics["f1_macro"] == pytest.approx(1.0)
 
 
 class TestRunComparativeEvaluationStage:
     """Testes de :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`."""
 
-    def test_builds_merged_report_and_pairwise_tests_for_two_models(self, tmp_path: Path) -> None:
-        """Deve mesclar os relatórios e comparar dois modelos via teste de McNemar."""
-        y_true = ["positivo", "negativo", "positivo", "negativo", "neutro", "neutro"]
-        model_predictions = {
-            "model_a": ["positivo", "negativo", "positivo", "negativo", "neutro", "positivo"],
-            "model_b": ["positivo", "positivo", "positivo", "negativo", "neutro", "neutro"],
-        }
-        output_path = tmp_path / "comparativo.csv"
-
-        result = run_comparative_evaluation_stage(
-            model_predictions, y_true, output_path=output_path
-        )
-
-        assert output_path.is_file()
-        assert set(result.pairwise_significance_tests) == {"model_a_vs_model_b"}
-        assert result.friedman_test is None
-        assert result.nemenyi_test is None
-        assert result.slice_reports == {}
-        assert set(result.merged_report["model_name"].unique().to_list()) == {
-            "model_a",
-            "model_b",
-        }
-
-    def test_includes_friedman_and_nemenyi_for_three_or_more_models_with_fold_scores(
-        self, tmp_path: Path
+    def test_runs_full_analysis_and_writes_tables_figures_and_metrics(
+        self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Deve incluir Friedman e Nemenyi quando há scores por dobra de três ou mais modelos."""
-        y_true = ["positivo", "negativo", "positivo", "negativo", "neutro", "neutro"]
-        model_predictions = {
-            "model_a": ["positivo", "negativo", "positivo", "negativo", "neutro", "positivo"],
-            "model_b": ["positivo", "positivo", "positivo", "negativo", "neutro", "neutro"],
-            "model_c": ["negativo", "negativo", "positivo", "positivo", "neutro", "neutro"],
-        }
-        cross_validation_fold_scores = {
-            "model_a": [0.80, 0.82, 0.79],
-            "model_b": [0.75, 0.78, 0.74],
-            "model_c": [0.70, 0.71, 0.69],
-        }
+        """Uma única chamada carrega, valida, compara e grava tabelas, gráficos e métricas."""
+        _write_comparison_bases(pipeline_paths)
 
         result = run_comparative_evaluation_stage(
-            model_predictions,
-            y_true,
-            cross_validation_fold_scores=cross_validation_fold_scores,
-            output_path=tmp_path / "comparativo_multimodelo.csv",
+            pipeline_paths, n_bootstrap=30, n_length_bins=3, run_hypotheses=False
         )
 
-        assert result.friedman_test is not None
-        assert result.nemenyi_test is not None
-        assert len(result.pairwise_significance_tests) == 3
-
-    def test_includes_slice_reports_when_slice_labels_informed(self, tmp_path: Path) -> None:
-        """Deve avaliar por fatia dos dados quando ``slice_labels`` for informado."""
-        y_true = ["positivo", "negativo", "positivo", "negativo", "neutro", "neutro"]
-        model_predictions = {
-            "model_a": ["positivo", "negativo", "positivo", "negativo", "neutro", "positivo"],
-            "model_b": ["positivo", "positivo", "positivo", "negativo", "neutro", "neutro"],
+        expected_tables = {
+            "distribuicao_classes",
+            "matriz_concordancia",
+            "confianca_por_modelo",
+            "maiores_divergencias",
+            "conflitos_de_confianca",
+            "concordancia_por_tamanho",
+            "casos_ambiguos",
+            "resumo_ambiguidade",
+            "transicoes_divergencia",
+            "exemplos_transicoes",
         }
-        slice_labels = ["twitter", "twitter", "reddit", "reddit", "twitter", "reddit"]
+        assert set(result.tables) == expected_tables
+        assert all(path.is_file() for path in result.tables.values())
+        assert result.metrics_path.is_file()
+        assert (
+            pipeline_paths.reports_tables_dir / "comparativo_hf_openai" / "resumo_comparativo.md"
+        ).is_file()
+        figure_names = {path.name for path in result.figures}
+        assert {"distribuicao_classes.png", "matriz_concordancia.svg"} <= figure_names
+        assert all(path.is_file() for path in result.figures)
+
+    def test_agreement_metrics_match_the_synthetic_bases(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Em 4 de cada 6 tweets os modelos concordam: concordância = 2/3 e divergência = 1/3."""
+        _write_comparison_bases(pipeline_paths)
 
         result = run_comparative_evaluation_stage(
-            model_predictions,
-            y_true,
-            slice_labels=slice_labels,
-            output_path=tmp_path / "comparativo_fatias.csv",
+            pipeline_paths, n_bootstrap=30, run_hypotheses=False
         )
 
-        assert set(result.slice_reports) == {"model_a", "model_b"}
-        assert sorted(result.slice_reports["model_a"]["slice"].to_list()) == ["reddit", "twitter"]
+        agreement = result.summary["agreement"]
+        assert agreement["n_tweets"] == 60
+        assert agreement["agreement_rate"] == pytest.approx(2 / 3)
+        assert agreement["divergence_rate"] == pytest.approx(1 / 3)
+        lower, upper = agreement["agreement_rate_ci"]
+        assert lower <= agreement["agreement_rate"] <= upper
+        assert result.summary["hypotheses"] is None
+
+    def test_pairs_tweets_by_id_regardless_of_row_order(self, pipeline_paths: ProjectPaths) -> None:
+        """A comparação usa o ``id`` como chave: embaralhar a base OpenAI não muda o resultado."""
+        _write_comparison_bases(pipeline_paths)
+        baseline = run_comparative_evaluation_stage(
+            pipeline_paths, n_bootstrap=30, run_hypotheses=False
+        ).summary["agreement"]["n_agree"]
+        shuffled = read_dataset_file(pipeline_paths.openai_labeled_file).reverse()
+        write_dataset(shuffled, pipeline_paths.openai_labeled_file)
+
+        result = run_comparative_evaluation_stage(
+            pipeline_paths, n_bootstrap=30, run_hypotheses=False
+        )
+
+        assert result.summary["agreement"]["n_agree"] == baseline
+
+    def test_raises_with_guidance_when_a_base_is_missing(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Sem uma das bases, falha com ``DataNotFoundError`` indicando o comando de rotulagem."""
+        _write_comparison_bases(pipeline_paths)
+        pipeline_paths.openai_labeled_file.unlink()
+
+        with pytest.raises(DataNotFoundError, match="pipeline-labeling-openai"):
+            run_comparative_evaluation_stage(pipeline_paths, run_hypotheses=False)
+
+    def test_raises_when_bases_do_not_contain_the_same_tweets(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Bases com conjuntos de ``id`` diferentes não são comparáveis: erro explícito."""
+        _write_comparison_bases(pipeline_paths)
+        truncated = read_dataset_file(pipeline_paths.openai_labeled_file).head(50)
+        write_dataset(truncated, pipeline_paths.openai_labeled_file)
+
+        with pytest.raises(DataValidationError, match="mesmos tweets"):
+            run_comparative_evaluation_stage(pipeline_paths, run_hypotheses=False)
+
+    def test_runs_hypothesaes_last_and_records_its_outcome(
+        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Com ``run_hypotheses=True``, o HypotheSAEs roda depois das tabelas e vai ao resumo."""
+        from diagnostics import model_disagreement
+
+        _write_comparison_bases(pipeline_paths)
+        captured: dict[str, Any] = {}
+
+        def _fake_run_hypotheses(frame: pl.DataFrame, paths: ProjectPaths, **kwargs: Any) -> list:
+            captured["n_tweets"] = frame.height
+            captured["tables_already_written"] = (
+                kwargs["output_dir"] / "casos_ambiguos.csv"
+            ).is_file()
+            captured["targets"] = kwargs["targets"]
+            return [
+                model_disagreement.HypothesisTargetOutcome(
+                    "disagreement", "gate_reprovado", "sem sinal", 0, None, None
+                )
+            ]
+
+        monkeypatch.setattr(model_disagreement, "run_disagreement_hypotheses", _fake_run_hypotheses)
+
+        result = run_comparative_evaluation_stage(
+            pipeline_paths,
+            n_bootstrap=30,
+            run_hypotheses=True,
+            hypotheses_targets=("disagreement",),
+        )
+
+        assert captured == {
+            "n_tweets": 60,
+            "tables_already_written": True,
+            "targets": ("disagreement",),
+        }
+        assert result.summary["hypotheses"][0]["status"] == "gate_reprovado"
+        assert "gate_reprovado" in read_json(result.metrics_path)["hypotheses"][0]["status"]
 
 
 def _fake_extract_local_embeddings(texts: list[str], **kwargs: Any) -> dict[str, np.ndarray]:

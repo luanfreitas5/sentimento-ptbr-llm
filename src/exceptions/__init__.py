@@ -33,6 +33,7 @@ from exceptions.model import (
     UnsupportedModelError,
 )
 from exceptions.pipeline import (
+    IncompleteLabelingError,
     PipelineError,
     PipelineStageError,
     SanityGateFailedError,
@@ -46,6 +47,7 @@ __all__: list[str] = [
     "DataNotFoundError",
     "DataValidationError",
     "EmptyDatasetError",
+    "IncompleteLabelingError",
     "InvalidConfigurationError",
     "MissingEnvironmentVariableError",
     "ModelError",

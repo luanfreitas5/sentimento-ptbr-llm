@@ -20,9 +20,17 @@ data_files:
   repro: "data/external/repro.parquet"
   corpus_normalizado: "data/interim/corpus_normalizado.parquet"
   corpus_rotulado: "data/processed/corpus_rotulado.parquet"
+  # Bases independentes de rotulagem (uma por fonte), mesmos tweets nas duas:
+  # comparadas pela etapa `comparative_evaluation` via `id`.
+  tweets_data_huggingface: "data/processed/tweets_data_huggingface.parquet"
+  tweets_data_openai: "data/processed/tweets_data_openai.parquet"
   corpus_treino: "data/processed/treino.parquet"
   corpus_validacao: "data/processed/validacao.parquet"
   corpus_teste: "data/processed/teste.parquet"
+
+labeling:
+  # Checkpoints de retomada da rotulagem por LLM (fora do Git: data/* é ignorado).
+  checkpoints: "data/interim/labeling_checkpoints"
 
 models:
   checkpoints: "models/checkpoints"
