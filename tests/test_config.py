@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from src import __version__  # pylint: disable=protected-access
 
 from config.environment import (
     configure_environment_variables,
@@ -19,7 +20,7 @@ from config.version import get_project_name, get_project_version, read_latest_ch
 from exceptions.configuration import InvalidConfigurationError, MissingEnvironmentVariableError
 from io_utils.yaml import write_yaml
 
-VERSION = "0.3.0"  # Atualize este valor conforme a versão real do projeto
+VERSION = __version__  # pylint: disable=protected-access
 
 
 class TestPaths:

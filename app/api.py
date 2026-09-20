@@ -29,6 +29,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from src import __version__  # pylint: disable=protected-access
+
 # `app/` não fica dentro de `src/` (raiz de importação do projeto — ver
 # CLAUDE.md, "Import style"), então o diretório precisa ser inserido em
 # `sys.path` manualmente antes de qualquer import próprio (ver
@@ -289,7 +291,7 @@ app = FastAPI(
     description=(
         "Inferência de sentimento (positivo/negativo/neutro) sobre texto livre em português."
     ),
-    version="0.1.0",
+    version=__version__,  # pylint: disable=protected-access,
     lifespan=_lifespan,
 )
 
