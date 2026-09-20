@@ -1,24 +1,26 @@
-"""Rotulagem de sentimento via LLM do Hugging Face (base ``tweets_data_huggingface``).
+"""Rotulagem de sentimento via modelo do Hugging Face (base ``tweets_data_huggingface``).
 
-Implementa a seção ``huggingface`` de ``configs/labeling.yaml``: um LLM
-instruct do Hugging Face Hub (ex.: ``meta-llama/Meta-Llama-3.1-8B-Instruct``)
-é carregado localmente via ``transformers`` e classifica cada tweet com o
-mesmo prompt versionado em ``prompts/`` usado pela base OpenAI, o que torna
-as duas bases comparáveis. A saída é o JSON do prompt
-(``{"label": ..., "probs": {...}}``); a confiança é a probabilidade que o
-próprio modelo atribui ao rótulo (confiança verbalizada, não uma
-probabilidade calibrada de token).
+Implementa a seção ``huggingface`` de ``configs/labeling.yaml``: um classificador
+de sequência do Hugging Face Hub (ex.: ``pysentimento/bertweet-pt-sentiment``,
+BERTweet-pt ajustado para sentimento em tweets) é carregado localmente via
+``transformers`` e classifica cada tweet em ``negativo``/``neutro``/``positivo``.
+
+Diferente da base OpenAI (LLM gerativo guiado por prompt), este modelo é um
+*encoder* já ajustado para a tarefa: não há prompt nem geração de texto. A
+confiança é a probabilidade ``softmax`` que o próprio modelo atribui à classe
+escolhida (probabilidade de fato, não confiança verbalizada).
 
 Decisões de execução:
 
-* geração gulosa (``do_sample=False``) na primeira tentativa, o que a torna
-  determinística; tweets cuja resposta não pôde ser interpretada são
-  regerados com amostragem (``retry_temperature``, semente global fixada);
+* inferência determinística (``model.eval()`` + ``torch.inference_mode``), sem
+  amostragem: o mesmo tweet sempre recebe o mesmo rótulo;
+* o mapeamento entre os índices do modelo e as classes do projeto é lido de
+  ``model.config.id2label`` (``NEG``/``NEU``/``POS``) e validado ao carregar;
 * a memória da GPU é liberada a cada lote (``gc.collect`` +
   ``torch.cuda.empty_cache``), em caso de *out of memory* (o lote é dividido
   ao meio) e ao descarregar o modelo (:func:`open_huggingface_classifier`);
 * ``transformers``/``torch`` são dependências pesadas: o import ocorre de
-  forma tardia, dentro de :func:`load_huggingface_llm`.
+  forma tardia, dentro de :func:`load_huggingface_model`.
 """
 
 import logging
@@ -27,39 +29,54 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from constants.labels import SENTIMENT_CLASSES
+from constants.labels import NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL
 from exceptions.model import ModelError
 from labeling.incremental import BatchClassifier, LabelPrediction
-from labeling.llm_response import build_labeling_prompt, parse_llm_label_response
 from utils.memory import release_gpu_memory
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_HUGGINGFACE_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+DEFAULT_HUGGINGFACE_MODEL = "pysentimento/bertweet-pt-sentiment"
 _DTYPE_CHOICES: tuple[str, ...] = ("auto", "float16", "bfloat16", "float32")
+
+# Nomes de classe usados pelos modelos de sentimento do Hub -> classe do projeto.
+_MODEL_LABEL_TO_PROJECT_LABEL: dict[str, str] = {
+    "neg": NEGATIVE_LABEL,
+    "negative": NEGATIVE_LABEL,
+    "negativo": NEGATIVE_LABEL,
+    "neu": NEUTRAL_LABEL,
+    "neutral": NEUTRAL_LABEL,
+    "neutro": NEUTRAL_LABEL,
+    "pos": POSITIVE_LABEL,
+    "positive": POSITIVE_LABEL,
+    "positivo": POSITIVE_LABEL,
+}
 
 
 @dataclass
-class HuggingFaceLLM:
-    """LLM do Hugging Face já carregado, pronto para gerar texto.
+class HuggingFaceModel:
+    """Classificador de sequência do Hugging Face já carregado, pronto para inferência.
 
     Attributes
     ----------
     model : Any
-        ``transformers.AutoModelForCausalLM`` em modo de avaliação.
+        ``transformers.AutoModelForSequenceClassification`` em modo de avaliação.
     tokenizer : Any
-        Tokenizador correspondente, com preenchimento à esquerda (necessário
-        para geração em lote).
+        Tokenizador correspondente.
     device : str
         Dispositivo do modelo (``"cpu"``, ``"cuda"``, ...).
     model_name : str
         Nome do modelo no Hugging Face Hub.
+    class_labels : list[str]
+        Classe do projeto (``negativo``/``neutro``/``positivo``) de cada saída
+        (logit) do modelo, na ordem dos índices do modelo.
     """
 
     model: Any
     tokenizer: Any
     device: str
     model_name: str
+    class_labels: list[str]
 
 
 def _resolve_device(device: str | None, torch_module: Any) -> str:
@@ -100,16 +117,58 @@ def _resolve_dtype(dtype: str, device: str, torch_module: Any) -> Any:
     return torch_module.bfloat16 if torch_module.cuda.is_bf16_supported() else torch_module.float16
 
 
-def load_huggingface_llm(
+def _map_model_labels(id2label: dict[int, str], model_name: str) -> list[str]:
+    """Traduz ``model.config.id2label`` para as classes do projeto, na ordem dos índices.
+
+    Parameters
+    ----------
+    id2label : dict[int, str]
+        Mapa índice -> nome de classe do modelo (ex.: ``{0: "NEG", 1: "NEU", 2: "POS"}``).
+    model_name : str
+        Nome do modelo, usado apenas na mensagem de erro.
+
+    Returns
+    -------
+    list[str]
+        Classe do projeto para cada índice de saída do modelo.
+
+    Raises
+    ------
+    ModelError
+        Se algum nome de classe não for reconhecido ou as três classes do projeto
+        não estiverem todas presentes.
+
+    Examples
+    --------
+    >>> _map_model_labels({0: "NEG", 1: "NEU", 2: "POS"}, "m")
+    ['negativo', 'neutro', 'positivo']
+    """
+    class_labels: list[str] = []
+    for index in sorted(id2label):
+        project_label = _MODEL_LABEL_TO_PROJECT_LABEL.get(str(id2label[index]).strip().lower())
+        if project_label is None:
+            raise ModelError(
+                f"O modelo '{model_name}' tem a classe '{id2label[index]}', que não corresponde "
+                f"a negativo/neutro/positivo; id2label={id2label}"
+            )
+        class_labels.append(project_label)
+    if sorted(class_labels) != sorted([NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL]):
+        raise ModelError(
+            f"O modelo '{model_name}' deve ter exatamente as classes negativo/neutro/positivo; "
+            f"recebido: {class_labels}"
+        )
+    return class_labels
+
+
+def load_huggingface_model(
     model_name: str = DEFAULT_HUGGINGFACE_MODEL,
     *,
     device: str | None = "auto",
     dtype: str = "auto",
-    load_in_4bit: bool = False,
     token: str | None = None,
     revision: str = "main",
-) -> HuggingFaceLLM:
-    """Carrega um LLM causal do Hugging Face Hub para rotulagem.
+) -> HuggingFaceModel:
+    """Carrega um classificador de sentimento do Hugging Face Hub para rotulagem.
 
     Parameters
     ----------
@@ -120,254 +179,171 @@ def load_huggingface_llm(
         by default "auto".
     dtype : {"auto", "float16", "bfloat16", "float32"}, optional
         Tipo numérico dos pesos, by default "auto".
-    load_in_4bit : bool, optional
-        Quantiza os pesos em 4 bits (exige ``bitsandbytes`` e GPU), útil para caber
-        modelos de 7-9B em GPUs de 8-12 GB, by default False.
     token : str | None, optional
-        Token do Hub para modelos com licença restrita (``SENTIMENTO_HUGGINGFACE_TOKEN``,
-        ``.env``), by default None.
+        Token do Hub para modelos com acesso restrito (``SENTIMENTO_HUGGINGFACE_TOKEN``,
+        ``.env``); o modelo padrão é público, by default None.
     revision : str, optional
         Branch, tag ou SHA do commit do modelo no Hub; fixe um SHA para garantir
         reprodutibilidade (o ``main`` pode mudar), by default "main".
 
     Returns
     -------
-    HuggingFaceLLM
+    HuggingFaceModel
         Modelo e tokenizador prontos para :func:`create_huggingface_batch_classifier`.
 
     Raises
     ------
     ModelError
         Se ``transformers``/``torch`` não estiverem instalados, ``dtype`` for inválido,
-        ``load_in_4bit`` for pedido sem ``bitsandbytes``/GPU ou o download falhar.
+        o download falhar ou as classes do modelo não forem negativo/neutro/positivo.
 
     Examples
     --------
-    >>> load_huggingface_llm("Qwen/Qwen2.5-0.5B-Instruct", device="cpu")  # doctest: +SKIP
+    >>> load_huggingface_model(device="cpu")  # doctest: +SKIP
     """
     try:
         import torch  # type: ignore[reportMissingImports]
         from transformers import (  # type: ignore[reportMissingImports]
-            AutoModelForCausalLM,
+            AutoModelForSequenceClassification,
             AutoTokenizer,
         )
     except ImportError as exception:
         raise ModelError(
             "As bibliotecas 'transformers'/'torch' não estão instaladas. Instale com "
-            "`make install-labeling` para rotular via LLM do Hugging Face."
+            "`make install-labeling` para rotular via modelo do Hugging Face."
         ) from exception
 
     resolved_device = _resolve_device(device, torch)
     resolved_dtype = _resolve_dtype(dtype, resolved_device, torch)
-    load_kwargs: dict[str, Any] = {"dtype": resolved_dtype, "token": token}
-    if load_in_4bit:
-        if not resolved_device.startswith("cuda"):
-            raise ModelError("load_in_4bit exige GPU CUDA (device='cuda').")
-        try:
-            from transformers import BitsAndBytesConfig  # type: ignore[reportMissingImports]
-
-            load_kwargs["quantization_config"] = BitsAndBytesConfig(
-                load_in_4bit=True, bnb_4bit_compute_dtype=resolved_dtype
-            )
-        except ImportError as exception:
-            raise ModelError(
-                "load_in_4bit exige 'bitsandbytes'. Instale com `uv add bitsandbytes`."
-            ) from exception
-
     logger.info(
-        "Carregando o LLM '%s' (dispositivo=%s, dtype=%s, 4bit=%s)...",
+        "Carregando o modelo '%s' (dispositivo=%s, dtype=%s)...",
         model_name,
         resolved_device,
         resolved_dtype,
-        load_in_4bit,
     )
     try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name, token=token, revision=revision, padding_side="left"
-        )
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name, revision=revision, device_map={"": resolved_device}, **load_kwargs
+        tokenizer = AutoTokenizer.from_pretrained(model_name, token=token, revision=revision)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_name, revision=revision, token=token, dtype=resolved_dtype
         )
     except (OSError, ValueError, ImportError) as exception:
         raise ModelError(
             f"Não foi possível carregar o modelo '{model_name}': {exception}"
         ) from exception
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    class_labels = _map_model_labels(dict(model.config.id2label), model_name)
+    model.to(resolved_device)
     model.eval()
-    return HuggingFaceLLM(
-        model=model, tokenizer=tokenizer, device=resolved_device, model_name=model_name
+    return HuggingFaceModel(
+        model=model,
+        tokenizer=tokenizer,
+        device=resolved_device,
+        model_name=model_name,
+        class_labels=class_labels,
     )
 
 
-def unload_huggingface_llm(llm: HuggingFaceLLM) -> None:
+def unload_huggingface_model(hf_model: HuggingFaceModel) -> None:
     """Descarrega o modelo e devolve a memória da GPU.
 
     Parameters
     ----------
-    llm : HuggingFaceLLM
+    hf_model : HuggingFaceModel
         Modelo a descarregar; não deve ser usado depois desta chamada.
 
     Examples
     --------
-    >>> unload_huggingface_llm(llm)  # doctest: +SKIP
+    >>> unload_huggingface_model(hf_model)  # doctest: +SKIP
     """
-    llm.model = None
-    llm.tokenizer = None
+    hf_model.model = None
+    hf_model.tokenizer = None
     release_gpu_memory()
-    logger.info("Modelo '%s' descarregado e memória da GPU liberada.", llm.model_name)
+    logger.info("Modelo '%s' descarregado e memória da GPU liberada.", hf_model.model_name)
 
 
-def _format_prompt(llm: HuggingFaceLLM, prompt: str) -> str:
-    """Aplica o template de chat do modelo (quando existe) ao prompt do usuário."""
-    if getattr(llm.tokenizer, "chat_template", None):
-        return llm.tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True
-        )
-    return prompt
-
-
-def _generate_texts(
-    llm: HuggingFaceLLM,
-    prompts: Sequence[str],
-    *,
-    max_input_tokens: int,
-    max_new_tokens: int,
-    sampling_temperature: float | None,
-) -> list[str]:
-    """Gera a resposta de cada prompt em um único ``generate``, dividindo o lote em caso de OOM.
+def _predict_probabilities(
+    hf_model: HuggingFaceModel, texts: Sequence[str], *, max_input_tokens: int
+) -> list[list[float]]:
+    """Calcula as probabilidades ``softmax`` de cada texto, dividindo o lote em caso de OOM.
 
     Parameters
     ----------
-    llm : HuggingFaceLLM
+    hf_model : HuggingFaceModel
         Modelo carregado.
-    prompts : Sequence[str]
-        Prompts já formatados.
+    texts : Sequence[str]
+        Textos (já sanitizados) a classificar.
     max_input_tokens : int
-        Máximo de tokens de entrada (o excedente é truncado à esquerda).
-    max_new_tokens : int
-        Máximo de tokens gerados por resposta.
-    sampling_temperature : float | None
-        ``None`` para geração gulosa; um valor > 0 ativa amostragem.
+        Máximo de tokens de entrada (o excedente é truncado).
 
     Returns
     -------
-    list[str]
-        Respostas decodificadas (sem o prompt), na ordem de ``prompts``.
+    list[list[float]]
+        Para cada texto, a probabilidade de cada saída do modelo (ordem de
+        :attr:`HuggingFaceModel.class_labels`).
 
     Raises
     ------
     ModelError
-        Se um único prompt ainda estourar a memória da GPU.
+        Se um único texto ainda estourar a memória da GPU.
     """
     import torch  # type: ignore[reportMissingImports]
 
     try:
-        inputs = llm.tokenizer(
-            list(prompts),
+        inputs = hf_model.tokenizer(
+            list(texts),
             return_tensors="pt",
             padding=True,
             truncation=True,
             max_length=max_input_tokens,
-        ).to(llm.model.device)
-        generation_kwargs: dict[str, Any] = {
-            "max_new_tokens": max_new_tokens,
-            "pad_token_id": llm.tokenizer.pad_token_id,
-            "do_sample": sampling_temperature is not None,
-        }
-        if sampling_temperature is not None:
-            generation_kwargs["temperature"] = sampling_temperature
+        ).to(hf_model.model.device)
         with torch.inference_mode():
-            outputs = llm.model.generate(**inputs, **generation_kwargs)
-        new_tokens = outputs[:, inputs["input_ids"].shape[1] :]
-        return list(llm.tokenizer.batch_decode(new_tokens, skip_special_tokens=True))
+            logits = hf_model.model(**inputs).logits
+        return torch.softmax(logits.float(), dim=-1).cpu().tolist()
     except torch.cuda.OutOfMemoryError as exception:
         release_gpu_memory()
-        if len(prompts) == 1:
+        if len(texts) == 1:
             raise ModelError(
-                "Memória da GPU insuficiente até para um único tweet; use um modelo menor, "
-                "load_in_4bit ou reduza max_input_tokens."
+                "Memória da GPU insuficiente até para um único tweet; reduza max_input_tokens "
+                "ou use device='cpu'."
             ) from exception
-        middle = len(prompts) // 2
+        middle = len(texts) // 2
         logger.warning(
-            "Memória da GPU insuficiente para lote de %d; dividindo em dois.", len(prompts)
+            "Memória da GPU insuficiente para lote de %d; dividindo em dois.", len(texts)
         )
-        common = {
-            "max_input_tokens": max_input_tokens,
-            "max_new_tokens": max_new_tokens,
-            "sampling_temperature": sampling_temperature,
-        }
-        return _generate_texts(llm, prompts[:middle], **common) + _generate_texts(
-            llm, prompts[middle:], **common
-        )
+        return _predict_probabilities(
+            hf_model, texts[:middle], max_input_tokens=max_input_tokens
+        ) + _predict_probabilities(hf_model, texts[middle:], max_input_tokens=max_input_tokens)
 
 
 def create_huggingface_batch_classifier(
-    llm: HuggingFaceLLM,
-    prompt_template: str,
-    *,
-    max_new_tokens: int = 64,
-    max_input_tokens: int = 1536,
-    max_retries: int = 3,
-    retry_temperature: float = 0.3,
-    allowed_labels: Sequence[str] = SENTIMENT_CLASSES,
+    hf_model: HuggingFaceModel, *, max_input_tokens: int = 128
 ) -> BatchClassifier:
     """Cria o classificador de lotes da base ``tweets_data_huggingface``.
 
     Parameters
     ----------
-    llm : HuggingFaceLLM
-        Modelo carregado por :func:`load_huggingface_llm`.
-    prompt_template : str
-        Template do prompt (marcador ``{{TEXTO}}``).
-    max_new_tokens : int, optional
-        Máximo de tokens gerados por tweet (o JSON de resposta tem ~40 tokens), by default 64.
+    hf_model : HuggingFaceModel
+        Modelo carregado por :func:`load_huggingface_model`.
     max_input_tokens : int, optional
-        Máximo de tokens de entrada (prompt + tweet), by default 1536.
-    max_retries : int, optional
-        Tentativas por tweet: a 1ª é gulosa; as demais amostram com
-        ``retry_temperature``, by default 3.
-    retry_temperature : float, optional
-        Temperatura das tentativas de reparo, by default 0.3.
-    allowed_labels : Sequence[str], optional
-        Classes aceitas, by default :data:`constants.labels.SENTIMENT_CLASSES`.
+        Máximo de tokens de entrada; o BERTweet-pt aceita até 128, by default 128.
 
     Returns
     -------
     BatchClassifier
-        Função ``textos -> [(rótulo, confiança) | None]`` para
+        Função ``textos -> [(rótulo, probabilidade)]`` para
         :func:`labeling.incremental.run_incremental_labeling`; libera o cache da GPU a cada lote.
 
     Examples
     --------
-    >>> classifier = create_huggingface_batch_classifier(llm, prompt_template)  # doctest: +SKIP
+    >>> classifier = create_huggingface_batch_classifier(hf_model)  # doctest: +SKIP
     """
 
     def classify_batch(texts: Sequence[str]) -> list[LabelPrediction | None]:
-        prompts = [_format_prompt(llm, build_labeling_prompt(prompt_template, t)) for t in texts]
-        results: list[LabelPrediction | None] = [None] * len(prompts)
-        pending = list(range(len(prompts)))
-        for attempt in range(max_retries):
-            if not pending:
-                break
-            generated = _generate_texts(
-                llm,
-                [prompts[index] for index in pending],
-                max_input_tokens=max_input_tokens,
-                max_new_tokens=max_new_tokens,
-                sampling_temperature=None if attempt == 0 else retry_temperature,
-            )
-            still_pending: list[int] = []
-            for index, raw_response in zip(pending, generated, strict=True):
-                parsed = parse_llm_label_response(raw_response, allowed_labels=allowed_labels)
-                if parsed is None:
-                    still_pending.append(index)
-                else:
-                    results[index] = parsed
-            pending = still_pending
-            release_gpu_memory()
-        if pending:
-            logger.warning("%d tweet(s) do lote sem resposta interpretável.", len(pending))
+        probabilities = _predict_probabilities(hf_model, texts, max_input_tokens=max_input_tokens)
+        release_gpu_memory()
+        results: list[LabelPrediction | None] = []
+        for text_probabilities in probabilities:
+            best_index = max(range(len(text_probabilities)), key=text_probabilities.__getitem__)
+            results.append((hf_model.class_labels[best_index], text_probabilities[best_index]))
         return results
 
     return classify_batch
@@ -375,28 +351,21 @@ def create_huggingface_batch_classifier(
 
 @contextmanager
 def open_huggingface_classifier(
-    prompt_template: str,
     *,
     model_name: str = DEFAULT_HUGGINGFACE_MODEL,
     device: str | None = "auto",
     dtype: str = "auto",
-    load_in_4bit: bool = False,
     token: str | None = None,
     revision: str = "main",
-    max_new_tokens: int = 64,
-    max_input_tokens: int = 1536,
-    max_retries: int = 3,
-    retry_temperature: float = 0.3,
+    max_input_tokens: int = 128,
 ) -> Iterator[BatchClassifier]:
-    """Carrega o LLM, entrega o classificador e, ao sair, descarrega o modelo (limpa a GPU).
+    """Carrega o modelo, entrega o classificador e, ao sair, descarrega o modelo (limpa a GPU).
 
     Parameters
     ----------
-    prompt_template : str
-        Template do prompt (marcador ``{{TEXTO}}``).
-    model_name, device, dtype, load_in_4bit, token, revision
-        Ver :func:`load_huggingface_llm`.
-    max_new_tokens, max_input_tokens, max_retries, retry_temperature
+    model_name, device, dtype, token, revision
+        Ver :func:`load_huggingface_model`.
+    max_input_tokens
         Ver :func:`create_huggingface_batch_classifier`.
 
     Yields
@@ -406,25 +375,13 @@ def open_huggingface_classifier(
 
     Examples
     --------
-    >>> with open_huggingface_classifier("...{{TEXTO}}...") as classify:  # doctest: +SKIP
+    >>> with open_huggingface_classifier() as classify:  # doctest: +SKIP
     ...     classify(["adorei"])
     """
-    llm = load_huggingface_llm(
-        model_name,
-        device=device,
-        dtype=dtype,
-        load_in_4bit=load_in_4bit,
-        token=token,
-        revision=revision,
+    hf_model = load_huggingface_model(
+        model_name, device=device, dtype=dtype, token=token, revision=revision
     )
     try:
-        yield create_huggingface_batch_classifier(
-            llm,
-            prompt_template,
-            max_new_tokens=max_new_tokens,
-            max_input_tokens=max_input_tokens,
-            max_retries=max_retries,
-            retry_temperature=retry_temperature,
-        )
+        yield create_huggingface_batch_classifier(hf_model, max_input_tokens=max_input_tokens)
     finally:
-        unload_huggingface_llm(llm)
+        unload_huggingface_model(hf_model)

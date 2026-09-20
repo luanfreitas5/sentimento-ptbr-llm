@@ -19,7 +19,12 @@ from labeling.checkpoint import (
     build_checkpoint_path,
     read_labeling_checkpoint,
 )
-from labeling.huggingface import HuggingFaceLLM, _resolve_device, _resolve_dtype
+from labeling.huggingface import (
+    HuggingFaceModel,
+    _map_model_labels,
+    _resolve_device,
+    _resolve_dtype,
+)
 from labeling.incremental import run_incremental_labeling
 from labeling.llm_response import (
     _extract_confidence,
@@ -436,10 +441,15 @@ class TestOpenAILabeler:
         ]
 
 
-def _build_fake_llm() -> HuggingFaceLLM:
-    """LLM de mentira (sem modelo real) com um tokenizador sem template de chat."""
-    tokenizer = type("_Tokenizer", (), {"chat_template": None})()
-    return HuggingFaceLLM(model=object(), tokenizer=tokenizer, device="cpu", model_name="m")
+def _build_fake_model() -> HuggingFaceModel:
+    """Classificador de mentira (sem modelo real), com saídas na ordem NEG/NEU/POS."""
+    return HuggingFaceModel(
+        model=object(),
+        tokenizer=object(),
+        device="cpu",
+        model_name="m",
+        class_labels=["negativo", "neutro", "positivo"],
+    )
 
 
 class TestHuggingFaceLabeler:
@@ -482,55 +492,69 @@ class TestHuggingFaceLabeler:
         """Ao descarregar, o modelo é solto e a memória da GPU é liberada."""
         released: list[bool] = []
         monkeypatch.setattr(huggingface, "release_gpu_memory", lambda: released.append(True))
-        llm = _build_fake_llm()
+        hf_model = _build_fake_model()
 
-        huggingface.unload_huggingface_llm(llm)
+        huggingface.unload_huggingface_model(hf_model)
 
         assert released == [True]
-        assert llm.model is None
-        assert llm.tokenizer is None
+        assert hf_model.model is None
+        assert hf_model.tokenizer is None
 
-    def test_classifier_retries_only_unparsed_tweets_and_releases_gpu_each_round(
+    def test_map_model_labels_translates_pysentimento_classes(self) -> None:
+        """``NEG``/``NEU``/``POS`` viram as classes do projeto, na ordem dos índices."""
+        assert _map_model_labels({0: "NEG", 1: "NEU", 2: "POS"}, "m") == [
+            "negativo",
+            "neutro",
+            "positivo",
+        ]
+        assert _map_model_labels({0: "positive", 1: "negative", 2: "neutral"}, "m") == [
+            "positivo",
+            "negativo",
+            "neutro",
+        ]
+
+    def test_map_model_labels_rejects_unknown_class(self) -> None:
+        """Uma classe fora de negativo/neutro/positivo levanta ``ModelError``."""
+        with pytest.raises(ModelError, match="não corresponde"):
+            _map_model_labels({0: "NEG", 1: "NEU", 2: "RAIVA"}, "m")
+
+    def test_map_model_labels_rejects_missing_class(self) -> None:
+        """Um modelo binário (sem neutro) é recusado: o projeto exige as três classes."""
+        with pytest.raises(ModelError, match="exatamente"):
+            _map_model_labels({0: "NEG", 1: "POS"}, "m")
+
+    def test_classifier_picks_argmax_class_with_its_probability(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A 1ª tentativa é gulosa; só os tweets sem resposta válida são regerados."""
-        calls: list[tuple[int, float | None]] = []
+        """O rótulo é a classe de maior probabilidade e a confiança é essa probabilidade."""
         released: list[bool] = []
-        valid = '{"label":"positivo","probs":{"positivo":0.9}}'
+        probabilities = {"bom": [0.1, 0.2, 0.7], "ruim": [0.8, 0.15, 0.05]}
 
-        def _fake_generate(
-            llm: Any, prompts: Sequence[str], *, sampling_temperature: float | None, **kwargs: Any
-        ) -> list[str]:
-            calls.append((len(prompts), sampling_temperature))
-            if sampling_temperature is None:
-                return ["lixo" if "ruim" in prompt else valid for prompt in prompts]
-            return ['{"label":"negativo","confidence":0.6}' for _ in prompts]
+        def _fake_predict(
+            hf_model: Any, texts: Sequence[str], *, max_input_tokens: int
+        ) -> list[list[float]]:
+            assert max_input_tokens == 128
+            return [probabilities[text] for text in texts]
 
-        monkeypatch.setattr(huggingface, "_generate_texts", _fake_generate)
+        monkeypatch.setattr(huggingface, "_predict_probabilities", _fake_predict)
         monkeypatch.setattr(huggingface, "release_gpu_memory", lambda: released.append(True))
-        classify = huggingface.create_huggingface_batch_classifier(
-            _build_fake_llm(), "{{TEXTO}}", max_retries=3, retry_temperature=0.3
-        )
+        classify = huggingface.create_huggingface_batch_classifier(_build_fake_model())
 
-        results = classify(["bom", "ruim"])
+        assert classify(["bom", "ruim"]) == [("positivo", 0.7), ("negativo", 0.8)]
+        assert released == [True]
 
-        assert results == [("positivo", 0.9), ("negativo", 0.6)]
-        assert calls == [(2, None), (1, 0.3)]
-        assert len(released) == 2
-
-    def test_classifier_returns_none_when_retries_are_exhausted(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Sem resposta interpretável após todas as tentativas, o tweet fica como ``None``."""
+    def test_classifier_respects_model_output_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A ordem das saídas do modelo vem de ``class_labels``, não de uma ordem fixa."""
+        hf_model = _build_fake_model()
+        hf_model.class_labels = ["positivo", "negativo", "neutro"]
         monkeypatch.setattr(
-            huggingface, "_generate_texts", lambda llm, prompts, **kwargs: ["lixo"] * len(prompts)
+            huggingface, "_predict_probabilities", lambda *args, **kwargs: [[0.6, 0.3, 0.1]]
         )
         monkeypatch.setattr(huggingface, "release_gpu_memory", lambda: True)
-        classify = huggingface.create_huggingface_batch_classifier(
-            _build_fake_llm(), "{{TEXTO}}", max_retries=2
-        )
 
-        assert classify(["a", "b"]) == [None, None]
+        classify = huggingface.create_huggingface_batch_classifier(hf_model)
+
+        assert classify(["x"]) == [("positivo", 0.6)]
 
 
 class TestReleaseGpuMemory:

@@ -480,23 +480,19 @@ def _build_labeling_sources(
             LabelingSource(
                 name="huggingface",
                 model_name=f"{hf_config['model']}@{hf_config['revision']}",
-                prompt_name=prompt_name,
-                prompt_template=prompt_template,
-                temperature=hf_config["temperature"],
+                # classificador encoder ajustado: não usa prompt nem amostragem (determinístico)
+                prompt_name="nenhum",
+                prompt_template="",
+                temperature=0.0,
                 batch_size=hf_config["batch_size"],
                 open_classifier=partial(
                     open_huggingface_classifier,
-                    prompt_template,
                     model_name=hf_config["model"],
                     device=hf_config["device"],
                     dtype=hf_config["dtype"],
-                    load_in_4bit=hf_config["load_in_4bit"],
                     token=settings.huggingface_token,
                     revision=hf_config["revision"],
-                    max_new_tokens=hf_config["max_new_tokens"],
                     max_input_tokens=hf_config["max_input_tokens"],
-                    max_retries=hf_config["max_retries"],
-                    retry_temperature=hf_config["retry_temperature"],
                 ),
             )
         )

@@ -1,15 +1,15 @@
 """Rotulagem de sentimento de tweets em português brasileiro.
 
 Implementa a Fase 7 do plano de elaboração (``PLANO-ELABORACAO.md``) e a
-Seção 4.3 do documento mestre: classificação de todo o corpus por dois LLMs
-independentes (Hugging Face e API OpenAI), com checkpoint e retomada,
+Seção 4.3 do documento mestre: classificação de todo o corpus por duas fontes
+independentes (classificador do Hugging Face e LLM via API OpenAI), com checkpoint e retomada,
 sinalização de baixa confiança, amostragem e incorporação de validação
 humana e validação contra gold sets de referência (TweetSentBR/RePro).
 
 Modules
 -------
 huggingface
-    Rotulagem via LLM local do Hugging Face Hub (base
+    Rotulagem via classificador de sentimento local do Hugging Face Hub (base
     ``tweets_data_huggingface``, ver ``configs/labeling.yaml -> huggingface``).
 openai_labeler
     Rotulagem via API OpenAI-compatível, com pausa contra HTTP 429, timeout e
@@ -62,11 +62,11 @@ from labeling.confidence import (
 from labeling.consensus import aggregate_by_weighted_majority_vote, merge_consensus_into_corpus
 from labeling.huggingface import (
     DEFAULT_HUGGINGFACE_MODEL,
-    HuggingFaceLLM,
+    HuggingFaceModel,
     create_huggingface_batch_classifier,
-    load_huggingface_llm,
+    load_huggingface_model,
     open_huggingface_classifier,
-    unload_huggingface_llm,
+    unload_huggingface_model,
 )
 from labeling.incremental import BatchClassifier, run_incremental_labeling
 from labeling.llm_response import build_labeling_prompt, parse_llm_label_response
@@ -89,7 +89,7 @@ __all__: list[str] = [
     "POSITIVE_WORDS",
     "BatchClassifier",
     "GoldSetValidationResult",
-    "HuggingFaceLLM",
+    "HuggingFaceModel",
     "LexicalHeuristicLabeler",
     "SentimentLabeler",
     "aggregate_by_weighted_majority_vote",
@@ -108,12 +108,12 @@ __all__: list[str] = [
     "evaluate_against_gold_set",
     "flag_low_confidence_predictions",
     "flag_low_confidence_samples",
-    "load_huggingface_llm",
+    "load_huggingface_model",
     "merge_consensus_into_corpus",
     "open_huggingface_classifier",
     "parse_llm_label_response",
     "run_cascade_labeling",
     "run_incremental_labeling",
     "select_samples_for_human_validation",
-    "unload_huggingface_llm",
+    "unload_huggingface_model",
 ]

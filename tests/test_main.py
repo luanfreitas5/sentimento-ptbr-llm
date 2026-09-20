@@ -61,8 +61,8 @@ class TestBuildLabelingStageKwargs:
         )
         assert [source.name for source in kwargs["sources"]] == [source_name]
 
-    def test_sources_use_models_and_shared_prompt_from_config(self) -> None:
-        """Modelos e prompt vêm de ``configs/labeling.yaml``; o prompt é o mesmo nas duas fontes."""
+    def test_sources_use_models_and_prompt_from_config(self) -> None:
+        """Modelos e prompt vêm de ``configs/labeling.yaml``; só a fonte OpenAI usa o prompt."""
         sources = {
             source.name: source
             for source in _build_kwargs(_build_labeling_stage_kwargs, ["--stage", "labeling"])[
@@ -70,11 +70,9 @@ class TestBuildLabelingStageKwargs:
             ]
         }
 
-        assert sources["huggingface"].model_name.startswith(
-            "meta-llama/Meta-Llama-3.1-8B-Instruct@"
-        )
+        assert sources["huggingface"].model_name.startswith("pysentimento/bertweet-pt-sentiment@")
+        assert sources["huggingface"].prompt_template == ""
         assert sources["openai"].model_name == "UnB-Llama-3.3-70B-Instruct"
-        assert sources["huggingface"].prompt_template == sources["openai"].prompt_template
         assert "{{TEXTO}}" in sources["openai"].prompt_template
 
     def test_does_not_load_the_huggingface_model_while_building(self) -> None:

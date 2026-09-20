@@ -24,13 +24,14 @@ O acoplamento entre estágios é o sistema de arquivos (Parquet em `data/`, chec
 
 ## Rotulagem: duas bases independentes
 
-O estágio `labeling` classifica **todos** os tweets do corpus normalizado com dois LLMs, usando o
-mesmo prompt de `prompts/` (`configs/labeling.yaml -> prompt_name`) sobre o texto já sanitizado
-(`text_normalized`, sem menções/URLs):
+O estágio `labeling` classifica **todos** os tweets do corpus normalizado com duas fontes, sobre o
+texto já sanitizado (`text_normalized`, sem menções/URLs). A fonte OpenAI usa o prompt de
+`prompts/` (`configs/labeling.yaml -> prompt_name`); a fonte Hugging Face é um classificador
+ajustado e não recebe prompt:
 
 | Base | Fonte | Configuração |
 |---|---|---|
-| `tweets_data_huggingface` | LLM local via `transformers` (`src/labeling/huggingface.py`) | `configs/labeling.yaml -> huggingface` |
+| `tweets_data_huggingface` | classificador local via `transformers` (`src/labeling/huggingface.py`) | `configs/labeling.yaml -> huggingface` |
 | `tweets_data_openai` | API OpenAI-compatível (`src/labeling/openai_labeler.py`) | `configs/labeling.yaml -> openai`; `OPENAI_BASE_URL`/`OPENAI_KEY` no `.env` |
 
 Colunas (contrato `schemas.labeling.LabeledSourceSchema`): `id`, `text` (texto original),
@@ -46,8 +47,10 @@ entrada ficam em `<base>.meta.json`, ao lado da base.
   (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.
 - **HTTP 429:** `time.sleep(request_interval_seconds)` antes de cada chamada à API.
 - **GPU:** a memória é liberada a cada lote e o modelo é descarregado ao fim da fonte.
-- **VRAM:** o modelo padrão (Llama 3.1 8B) exige ~16 GB em bfloat16 (~6 GB com `load_in_4bit`).
-  Em GPUs pequenas, troque `huggingface.model` por um modelo menor. Fixe `huggingface.revision` num SHA.
+- **Modelo Hugging Face:** o padrão é `pysentimento/bertweet-pt-sentiment` (BERTweet-pt, ~135M de
+  parâmetros; classes NEG/NEU/POS mapeadas para negativo/neutro/positivo). É um classificador
+  ajustado, não um LLM gerativo: não usa prompt, é determinístico e a confiança é a probabilidade
+  softmax da classe. Roda em CPU ou GPU pequena. Fixe `huggingface.revision` num SHA.
 - **Corpus das etapas seguintes:** `configs/labeling.yaml -> downstream_source` escolhe qual base
   vira `sentiment_label` em `corpus_rotulado.parquet` (consumido por `features` e
   `hypothesaes_analysis`); as duas ficam em `sentiment_label_<fonte>`/`confidence_score_<fonte>`.

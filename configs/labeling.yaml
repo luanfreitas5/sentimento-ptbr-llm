@@ -13,26 +13,23 @@
 # nas colunas `sentiment_label_<fonte>`/`confidence_score_<fonte>`.
 downstream_source: "huggingface" # "huggingface" | "openai"
 
-# Prompt compartilhado pelas duas fontes (nome em prompts/, sem a extensão .txt).
+# Prompt da fonte `openai` (nome em prompts/, sem a extensão .txt); a fonte `huggingface`
+# usa um classificador ajustado e não recebe prompt.
 prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
 
-# LLM local do Hugging Face Hub (src/labeling/huggingface.py), via transformers.
-# ATENÇÃO à VRAM: um modelo de 8B em bfloat16 exige ~16 GB; com load_in_4bit (exige
-# bitsandbytes) ~6 GB. Em GPUs pequenas, troque `model` por um modelo menor (ex.:
-# "Qwen/Qwen2.5-1.5B-Instruct"). Modelos com licença restrita (Llama, Gemma) exigem
-# SENTIMENTO_HUGGINGFACE_TOKEN no .env. A memória da GPU é liberada a cada lote.
+# Classificador de sentimento do Hugging Face Hub (src/labeling/huggingface.py), via
+# transformers. BERTweet-pt ajustado (classes NEG/NEU/POS): é um encoder de ~135M de
+# parâmetros, roda em CPU ou em qualquer GPU, é determinístico e NÃO usa o `prompt_name`
+# (o prompt vale apenas para a fonte `openai`). A confiança é a probabilidade softmax da
+# classe escolhida. Para modelos de acesso restrito, defina SENTIMENTO_HUGGINGFACE_TOKEN
+# no .env. A memória da GPU é liberada a cada lote.
 huggingface:
-  model: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+  model: "pysentimento/bertweet-pt-sentiment"
   revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
   device: "auto" # "auto" | "cpu" | "cuda" | "cuda:0" ...
   dtype: "auto" # "auto" | "float16" | "bfloat16" | "float32"
-  load_in_4bit: false
-  batch_size: 8 # tweets por lote (e por gravação no checkpoint)
-  max_new_tokens: 64 # o JSON de resposta tem ~40 tokens
-  max_input_tokens: 1536 # prompt (~650 tokens) + tweet
-  temperature: 0.0 # 1ª tentativa gulosa (determinística)
-  max_retries: 3 # as novas tentativas amostram com retry_temperature
-  retry_temperature: 0.3
+  batch_size: 64 # tweets por lote (e por gravação no checkpoint)
+  max_input_tokens: 128 # limite do BERTweet-pt (o excedente é truncado)
 
 # LLM via API OpenAI-compatível (src/labeling/openai_labeler.py), autenticada por
 # OPENAI_BASE_URL/OPENAI_KEY no .env (ver .env.example; o endpoint da UnB é o padrão do
