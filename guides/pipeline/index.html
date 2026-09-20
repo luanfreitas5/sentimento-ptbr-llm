@@ -544,32 +544,49 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rotulagem-duas-bases-independentes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rotulagem: duas bases independentes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#avaliacao-comparativa-comparative_evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Avaliação comparativa (comparative_evaluation)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Avaliação comparativa (comparative_evaluation)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hypothesaes-sobre-a-divergencia" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HypotheSAEs sobre a divergência
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#estagios-que-exigem-argumentos-explicitos" class="md-nav__link">
     <span class="md-ellipsis">
       
         Estágios que exigem argumentos explícitos
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#versionamento-do-dag-com-dvc-opcional" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Versionamento do DAG com DVC (opcional)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#servicos-auxiliares" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Serviços auxiliares
       
     </span>
   </a>
@@ -713,32 +730,49 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rotulagem-duas-bases-independentes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rotulagem: duas bases independentes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#avaliacao-comparativa-comparative_evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Avaliação comparativa (comparative_evaluation)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Avaliação comparativa (comparative_evaluation)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hypothesaes-sobre-a-divergencia" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HypotheSAEs sobre a divergência
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#estagios-que-exigem-argumentos-explicitos" class="md-nav__link">
     <span class="md-ellipsis">
       
         Estágios que exigem argumentos explícitos
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#versionamento-do-dag-com-dvc-opcional" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Versionamento do DAG com DVC (opcional)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#servicos-auxiliares" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Serviços auxiliares
       
     </span>
   </a>
@@ -799,10 +833,17 @@
 </tr>
 <tr>
 <td><code>labeling</code></td>
-<td><code>pipeline-labeling</code></td>
+<td><code>pipeline-labeling</code> (<code>-huggingface</code> / <code>-openai</code>)</td>
 <td><code>src/pipelines/labeling.py</code></td>
-<td>corpus normalizado + gold sets (<code>data/external/</code>)</td>
-<td><code>data/processed/corpus_rotulado.parquet</code></td>
+<td>corpus normalizado</td>
+<td><code>data/processed/tweets_data_huggingface.parquet</code>, <code>tweets_data_openai.parquet</code> (+ <code>.meta.json</code>) e <code>corpus_rotulado.parquet</code></td>
+</tr>
+<tr>
+<td><code>comparative_evaluation</code></td>
+<td><code>pipeline-comparative-evaluation</code></td>
+<td><code>src/pipelines/comparative_evaluation.py</code></td>
+<td>as duas bases rotuladas</td>
+<td>tabelas em <code>reports/tables/comparativo_hf_openai/</code>, gráficos em <code>reports/figures/comparativo_hf_openai/</code>, resumo em <code>reports/metrics/comparativo_hf_openai.json</code></td>
 </tr>
 <tr>
 <td><code>features</code></td>
@@ -826,20 +867,6 @@
 <td>checkpoints (DL/Transformers/autoencoder)</td>
 </tr>
 <tr>
-<td><code>llm_evaluation</code></td>
-<td><code>pipeline-llm-evaluation</code></td>
-<td><code>src/pipelines/llm_evaluation.py</code></td>
-<td>conjunto de teste</td>
-<td>classificação + métricas via LLM local</td>
-</tr>
-<tr>
-<td><code>comparative_evaluation</code></td>
-<td><code>pipeline-comparative-evaluation</code></td>
-<td><code>src/pipelines/comparative_evaluation.py</code></td>
-<td>função de predições definida pelo usuário (<code>--predictions-func</code>)</td>
-<td><code>reports/metrics/comparativo.csv</code>, <code>reports/tables/</code>, <code>reports/statistics/</code></td>
-</tr>
-<tr>
 <td><code>hypothesaes_analysis</code></td>
 <td>—</td>
 <td><code>src/pipelines/hypothesaes_analysis.py</code></td>
@@ -848,28 +875,124 @@
 </tr>
 </tbody>
 </table>
+<h2 id="rotulagem-duas-bases-independentes">Rotulagem: duas bases independentes<a class="headerlink" href="#rotulagem-duas-bases-independentes" title="Permanent link">&para;</a></h2>
+<p>O estágio <code>labeling</code> classifica <strong>todos</strong> os tweets do corpus normalizado com dois LLMs, usando o
+mesmo prompt de <code>prompts/</code> (<code>configs/labeling.yaml -&gt; prompt_name</code>) sobre o texto já sanitizado
+(<code>text_normalized</code>, sem menções/URLs):</p>
+<table>
+<thead>
+<tr>
+<th>Base</th>
+<th>Fonte</th>
+<th>Configuração</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tweets_data_huggingface</code></td>
+<td>LLM local via <code>transformers</code> (<code>src/labeling/huggingface.py</code>)</td>
+<td><code>configs/labeling.yaml -&gt; huggingface</code></td>
+</tr>
+<tr>
+<td><code>tweets_data_openai</code></td>
+<td>API OpenAI-compatível (<code>src/labeling/openai_labeler.py</code>)</td>
+<td><code>configs/labeling.yaml -&gt; openai</code>; <code>OPENAI_BASE_URL</code>/<code>OPENAI_KEY</code> no <code>.env</code></td>
+</tr>
+</tbody>
+</table>
+<p>Colunas (contrato <code>schemas.labeling.LabeledSourceSchema</code>): <code>id</code>, <code>text</code> (texto original),
+<code>text_normalized</code> (após o pré-processamento), <code>sentiment_label</code> (classe atribuída) e
+<code>confidence_score</code> (confiança). O modelo, o prompt (hash), a temperatura e o hash do corpus de
+entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
+<ul>
+<li><strong>Retomada e deduplicação:</strong> cada lote é gravado em <code>data/interim/labeling_checkpoints/</code> (JSON
+  Lines). Ao reexecutar, tweets já rotulados não são reprocessados; o checkpoint é invalidado se
+  modelo, prompt ou temperatura mudarem.</li>
+<li><strong>Falhas:</strong> erros de API (timeout, HTTP 429) são retentados com backoff exponencial; se sobrar
+  tweet sem rótulo válido, a etapa levanta <code>IncompleteLabelingError</code> e a base <strong>não</strong> é gravada
+  (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.</li>
+<li><strong>HTTP 429:</strong> <code>time.sleep(request_interval_seconds)</code> antes de cada chamada à API.</li>
+<li><strong>GPU:</strong> a memória é liberada a cada lote e o modelo é descarregado ao fim da fonte.</li>
+<li><strong>VRAM:</strong> o modelo padrão (Llama 3.1 8B) exige ~16 GB em bfloat16 (~6 GB com <code>load_in_4bit</code>).
+  Em GPUs pequenas, troque <code>huggingface.model</code> por um modelo menor. Fixe <code>huggingface.revision</code> num SHA.</li>
+<li><strong>Corpus das etapas seguintes:</strong> <code>configs/labeling.yaml -&gt; downstream_source</code> escolhe qual base
+  vira <code>sentiment_label</code> em <code>corpus_rotulado.parquet</code> (consumido por <code>features</code> e
+  <code>hypothesaes_analysis</code>); as duas ficam em <code>sentiment_label_&lt;fonte&gt;</code>/<code>confidence_score_&lt;fonte&gt;</code>.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>pipeline-labeling-huggingface<span class="w">   </span><span class="c1"># GPU local</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>pipeline-labeling-openai<span class="w">        </span><span class="c1"># API</span>
+</span></code></pre></div>
+<h2 id="avaliacao-comparativa-comparative_evaluation">Avaliação comparativa (<code>comparative_evaluation</code>)<a class="headerlink" href="#avaliacao-comparativa-comparative_evaluation" title="Permanent link">&para;</a></h2>
+<p>Executa diretamente, sem argumentos manuais (<code>make pipeline-comparative-evaluation</code>): carrega e
+valida as duas bases, une-as pelo <code>id</code>, calcula as métricas, grava tabelas e gráficos, analisa as
+divergências e, por fim, aplica o HypotheSAEs. Limiares e opções em
+<code>configs/evaluation.yaml -&gt; llm_comparison</code>; <code>EXTRA_ARGS=--skip-hypotheses</code> dispensa o HypotheSAEs.</p>
+<p>Sem gold set, mede-se <strong>concordância entre os modelos</strong> (não acerto).</p>
+<table>
+<thead>
+<tr>
+<th>Análise</th>
+<th>Saída (em <code>reports/tables/comparativo_hf_openai/</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Distribuição das classes</td>
+<td><code>distribuicao_classes.csv</code></td>
+</tr>
+<tr>
+<td>Concordância/divergência (IC bootstrap), Kappa simples e ponderado, Stuart-Maxwell</td>
+<td><code>reports/metrics/comparativo_hf_openai.json</code>, <code>resumo_comparativo.md</code></td>
+</tr>
+<tr>
+<td>Matriz de concordância</td>
+<td><code>matriz_concordancia.csv</code></td>
+</tr>
+<tr>
+<td>Confiança (descritivas, Spearman, Wilcoxon pareado)</td>
+<td><code>confianca_por_modelo.csv</code></td>
+</tr>
+<tr>
+<td>Maiores divergências (polaridade oposta e ambos confiantes)</td>
+<td><code>maiores_divergencias.csv</code></td>
+</tr>
+<tr>
+<td>Um modelo confiante e o outro não</td>
+<td><code>conflitos_de_confianca.csv</code></td>
+</tr>
+<tr>
+<td>Tamanho do texto (IC de Wilson)</td>
+<td><code>concordancia_por_tamanho.csv</code></td>
+</tr>
+<tr>
+<td>Casos ambíguos</td>
+<td><code>casos_ambiguos.csv</code>, <code>resumo_ambiguidade.csv</code></td>
+</tr>
+<tr>
+<td>Diferenças de classificação</td>
+<td><code>transicoes_divergencia.csv</code>, <code>exemplos_transicoes.csv</code></td>
+</tr>
+</tbody>
+</table>
+<p>Gráficos (PNG 300 dpi + SVG) em <code>reports/figures/comparativo_hf_openai/</code>. As tabelas com texto usam
+apenas o texto normalizado.</p>
+<h3 id="hypothesaes-sobre-a-divergencia">HypotheSAEs sobre a divergência<a class="headerlink" href="#hypothesaes-sobre-a-divergencia" title="Permanent link">&para;</a></h3>
+<p><code>src/diagnostics/model_disagreement.py</code> aplica o HypotheSAEs a dois alvos: <code>disagreement</code>
+(<code>lab_huggingface != lab_openai</code>) e <code>uncertainty</code> (<code>1 - min(confiança_HF, confiança_OpenAI)</code>).
+Entrada: texto normalizado + alvo. Processamento: embeddings BERTimbau → SAE (treinado uma vez) →
+gate de sanidade → neurônios → hipóteses interpretadas por LLM (<code>configs/diagnostics.yaml</code>).
+Se o gate reprovar um alvo, isso é registrado como resultado (<code>gate_reprovado</code>) — os embeddings
+não preveem o alvo acima do acaso —, sem interromper o restante. Saídas: hipóteses
+(<code>reports/interpretability/diagnostics/</code>) e, por hipótese, os tweets mais ativados
+(<code>hipoteses_&lt;alvo&gt;_evidencias.csv</code>, com rótulos e confianças dos dois modelos). As hipóteses descrevem
+o comportamento dos modelos e devem ser validadas antes de serem tratadas como explicações.</p>
 <h2 id="estagios-que-exigem-argumentos-explicitos">Estágios que exigem argumentos explícitos<a class="headerlink" href="#estagios-que-exigem-argumentos-explicitos" title="Permanent link">&para;</a></h2>
-<p>Dois estágios não têm uma implementação fixa por design — o projeto não assume uma fonte de scraping nem um formato de predições:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># ingestion: --scrape-func aponta para uma função "modulo:funcao" implementada</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># por você (ver src/data/downloader.py para o contrato esperado).</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>make<span class="w"> </span>pipeline-ingestion<span class="w"> </span><span class="nv">SCRAPE_FUNC</span><span class="o">=</span>meu_modulo:minha_funcao_de_coleta<span class="w"> </span><span class="nv">QUERIES</span><span class="o">=</span><span class="s2">"termo1 termo2"</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># comparative_evaluation: --predictions-func deve retornar (model_predictions, y_true)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># a partir dos modelos já treinados/registrados no MLflow.</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>make<span class="w"> </span>pipeline-comparative-evaluation<span class="w"> </span><span class="nv">PREDICTIONS_FUNC</span><span class="o">=</span>meu_modulo:minha_funcao_de_predicoes
+<p>Apenas <code>ingestion</code> não tem implementação fixa por design — o projeto não assume uma fonte de scraping:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># ingestion: --scrape-func aponta para uma função "modulo:funcao" implementada</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># por você (ver src/data/downloader.py para o contrato esperado).</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>make<span class="w"> </span>pipeline-ingestion<span class="w"> </span><span class="nv">SCRAPE_FUNC</span><span class="o">=</span>meu_modulo:minha_funcao_de_coleta<span class="w"> </span><span class="nv">QUERIES</span><span class="o">=</span><span class="s2">"termo1 termo2"</span>
 </span></code></pre></div>
-<p>Ambos os caminhos são resolvidos dinamicamente por <code>src/main.py::_import_callable_from_dotted_path</code>.</p>
-<h2 id="versionamento-do-dag-com-dvc-opcional">Versionamento do DAG com DVC (opcional)<a class="headerlink" href="#versionamento-do-dag-com-dvc-opcional" title="Permanent link">&para;</a></h2>
-<p><code>dvc.yaml</code> espelha os mesmos estágios para quem instalou o extra <code>dvc</code> (<code>uv sync --extra dvc</code>):</p>
-<div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>dvc<span class="w"> </span>repro<span class="w">                    </span><span class="c1"># roda todo o DAG, pulando estágios sem mudança em deps/params</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>dvc<span class="w"> </span>repro<span class="w"> </span>training_classical<span class="w"> </span><span class="c1"># roda só esse estágio (e dependências desatualizadas)</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>dvc<span class="w"> </span>dag<span class="w">                      </span><span class="c1"># visualiza o grafo de dependências</span>
-</span></code></pre></div>
-<p>Parâmetros de linha de comando (<code>--scrape-func</code>, <code>--queries</code>, <code>--predictions-func</code>) ficam em <code>params.yaml</code>, na raiz do repositório — edite antes de rodar <code>dvc repro</code>.</p>
-<h2 id="servicos-auxiliares">Serviços auxiliares<a class="headerlink" href="#servicos-auxiliares" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>mlflow<span class="w">   </span><span class="c1"># UI do MLflow (mlruns/) — inspeciona métricas/params/artefatos por execução</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>app<span class="w">      </span><span class="c1"># dashboard Streamlit (app/dashboard.py), se o extra `app` estiver instalado</span>
-</span></code></pre></div>
+<p>O caminho é resolvido dinamicamente por <code>src/main.py::_import_callable_from_dotted_path</code>.</p>
 
 
 

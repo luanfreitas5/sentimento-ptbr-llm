@@ -899,15 +899,16 @@ prompt v2 exigem revisão humana.</p>
 </div>
 <h2 id="contrato-de-entrada-e-adaptador">Contrato de entrada e adaptador<a class="headerlink" href="#contrato-de-entrada-e-adaptador" title="Permanent link">&para;</a></h2>
 <p>O contrato (<code>schemas.diagnostics</code>) é: <code>id</code>, <code>text_normalized</code>, <code>agreement_score</code> (0–1), uma ou
-mais colunas <code>lab_&lt;modelo&gt;</code> e, opcionalmente, <code>gold_label</code>. Enquanto a cascata multi-LLM não
-existe, <code>diagnostics.targets.adapt_labeled_corpus</code> mapeia o corpus atual
-(<code>sentiment_label_huggingface</code> → <code>lab_huggingface</code>, <code>sentiment_label_llm_relabel</code> →
-<code>lab_llm_relabel</code>, <code>confidence_score</code> → <code>agreement_score</code>). Só as colunas do contrato passam:
-<code>user_id</code> e o texto bruto são descartados (LGPD).</p>
+mais colunas <code>lab_&lt;modelo&gt;</code> e, opcionalmente, <code>gold_label</code>. <code>diagnostics.targets.adapt_labeled_corpus</code>
+mapeia o corpus rotulado (<code>sentiment_label_huggingface</code> → <code>lab_huggingface</code>,
+<code>sentiment_label_openai</code> → <code>lab_openai</code>, <code>confidence_score</code> → <code>agreement_score</code>). Só as colunas do
+contrato passam: <code>user_id</code> e o texto bruto são descartados (LGPD). A etapa <code>comparative_evaluation</code>
+monta o mesmo contrato direto das duas bases (<code>agreement_score</code> = menor confiança) — ver
+<a href="../pipeline/">o guia do pipeline</a>.</p>
 <div class="admonition note">
-<p class="admonition-title">Viés de seleção no alvo <code>disagreement</code></p>
-<p><code>sentiment_label_llm_relabel</code> só existe para os candidatos de baixa confiança. O alvo só usa
-tweets rotulados por <strong>todos</strong> os modelos, logo é um subconjunto enviesado do corpus.</p>
+<p class="admonition-title">Alvo <code>disagreement</code></p>
+<p>O alvo só usa tweets rotulados por <strong>todos</strong> os modelos; como as duas bases cobrem todos os
+tweets, não há viés de seleção.</p>
 </div>
 <h2 id="fluxo">Fluxo<a class="headerlink" href="#fluxo" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>corpus rotulado ──► adapt_labeled_corpus ──► partições disjuntas (treino/validação/teste)
