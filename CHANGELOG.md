@@ -1,3 +1,30 @@
+## v0.4.0 (2026-09-20)
+
+### Feat
+
+- **deps**: Adiciona o ecossistema Jupyter e atualiza as dependências
+- **diagnostics**: adicionar pipeline de análise diagnóstica HypotheSAEs
+- **diagnostics**: adiciona alvos de diagnóstico e gate de sanidade do HypotheSAEs
+- **labeling**: adiciona rastreabilidade completa da origem ao pipeline de rotulagem
+- **llm**: Adiciona suporte a múltiplos provedores de LLM
+- **llm-relabeling**: Adiciona limitação de taxa para chamadas à API LLM
+- **labeling**: adicionar re-rotulagem LLM para amostras de baixa confiança
+- **hypotheses**: suporte a métricas de pontuação dinâmicas
+- **hypothesaes**: adicionar filtragem de qualidade para interpretações de neurônios
+- **preprocessing**: Adição de módulo de lematização e integração com stopwords do NLTK
+
+### Fix
+
+- **prompt**: atualização do formato do modelo de Tweet
+- **ci**: evitar conflito de runtime OpenMP em testes no macOS
+
+### Refactor
+
+- **labeling**: substituir o modelo LLM generativo por um classificador de sentimentos otimizado
+- **pipeline**: Reestruturação da infraestrutura LLM e do pipeline de rotulagem
+- **labeling**: mudança para o pipeline de transformadores do Hugging Face
+- **diagnostics**: modernizar a sintaxe e extrair funções auxiliares
+
 ## v0.3.0 (2026-09-07)
 
 ### Feat
