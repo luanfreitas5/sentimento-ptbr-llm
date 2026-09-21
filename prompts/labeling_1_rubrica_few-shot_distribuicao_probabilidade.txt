@@ -28,4 +28,4 @@ Tweet: "queria muito ter gostado, mas o preço ficou inviável pra mim"
 Responda APENAS com um objeto JSON válido no formato acima. Sem markdown, sem explicação.
 As três probabilidades devem somar 1.0.
 
-Tweet: "{{TEXTO}}"
+Tweet: "{{TEXTO}}
