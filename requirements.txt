@@ -168,7 +168,7 @@ fastapi==0.141.1
     # via mlflow-skinny
 fastjsonschema==2.22.2
     # via nbformat
-filelock==3.32.7
+filelock==4.0.1
     # via
     #   cachecontrol
     #   python-discovery
