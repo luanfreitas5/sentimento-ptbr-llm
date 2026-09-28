@@ -912,7 +912,13 @@ entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
 <li><strong>Falhas:</strong> erros de API (timeout, HTTP 429) são retentados com backoff exponencial; se sobrar
   tweet sem rótulo válido, a etapa levanta <code>IncompleteLabelingError</code> e a base <strong>não</strong> é gravada
   (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.</li>
-<li><strong>HTTP 429:</strong> <code>time.sleep(request_interval_seconds)</code> antes de cada chamada à API.</li>
+<li><strong>HTTP 429:</strong> limitador de taxa compartilhado (<code>openai.requests_per_minute</code>): ao receber 429, todas
+  as threads pausam pelo <code>Retry-After</code> do servidor e o ritmo cai até voltar ao normal após uma
+  sequência de sucessos (<code>src/labeling/rate_limiter.py</code>).</li>
+<li><strong>Sentimento indefinido:</strong> texto vazio ou resposta do LLM fora do formato (sem JSON, rótulo
+  desconhecido) resulta em <code>sentiment_label = "indefinido"</code> com <code>confidence_score = 0.0</code>, gravado no
+  checkpoint. Esses tweets ficam fora do corpus rotulado das etapas seguintes e da comparação entre
+  os modelos, com aviso no log.</li>
 <li><strong>GPU:</strong> a memória é liberada a cada lote e o modelo é descarregado ao fim da fonte.</li>
 <li><strong>Modelo Hugging Face:</strong> o padrão é <code>pysentimiento/bertweet-pt-sentiment</code> (BERTweet-pt, ~135M de
   parâmetros; classes NEG/NEU/POS mapeadas para negativo/neutro/positivo). É um classificador
