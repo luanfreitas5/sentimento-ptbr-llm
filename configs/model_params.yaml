@@ -72,11 +72,10 @@ autoencoder:
 
 deep_learning:
   recurrent:
-    architecture: "bilstm"
     embedding_dim: 300
     hidden_dim: 128
     num_layers: 2
-    bidirectional: true
+    bidirectional: true # true = BiLSTM, false = LSTM unidirecional
     dropout: 0.3
     batch_size: 32
     epochs: 30
