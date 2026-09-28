@@ -70,7 +70,7 @@ class TestBuildLabelingStageKwargs:
             ]
         }
 
-        assert sources["huggingface"].model_name.startswith("pysentimento/bertweet-pt-sentiment@")
+        assert sources["huggingface"].model_name.startswith("pysentimiento/bertweet-pt-sentiment@")
         assert sources["huggingface"].prompt_template == ""
         assert sources["openai"].model_name == "UnB-Llama-3.3-70B-Instruct"
         assert "{{TEXTO}}" in sources["openai"].prompt_template

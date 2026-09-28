@@ -47,7 +47,7 @@ entrada ficam em `<base>.meta.json`, ao lado da base.
   (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.
 - **HTTP 429:** `time.sleep(request_interval_seconds)` antes de cada chamada à API.
 - **GPU:** a memória é liberada a cada lote e o modelo é descarregado ao fim da fonte.
-- **Modelo Hugging Face:** o padrão é `pysentimento/bertweet-pt-sentiment` (BERTweet-pt, ~135M de
+- **Modelo Hugging Face:** o padrão é `pysentimiento/bertweet-pt-sentiment` (BERTweet-pt, ~135M de
   parâmetros; classes NEG/NEU/POS mapeadas para negativo/neutro/positivo). É um classificador
   ajustado, não um LLM gerativo: não usa prompt, é determinístico e a confiança é a probabilidade
   softmax da classe. Roda em CPU ou GPU pequena. Fixe `huggingface.revision` num SHA.

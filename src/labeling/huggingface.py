@@ -1,7 +1,7 @@
 """Rotulagem de sentimento via modelo do Hugging Face (base ``tweets_data_huggingface``).
 
 Implementa a seção ``huggingface`` de ``configs/labeling.yaml``: um classificador
-de sequência do Hugging Face Hub (ex.: ``pysentimento/bertweet-pt-sentiment``,
+de sequência do Hugging Face Hub (ex.: ``pysentimiento/bertweet-pt-sentiment``,
 BERTweet-pt ajustado para sentimento em tweets) é carregado localmente via
 ``transformers`` e classifica cada tweet em ``negativo``/``neutro``/``positivo``.
 
@@ -36,7 +36,7 @@ from utils.memory import release_gpu_memory
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_HUGGINGFACE_MODEL = "pysentimento/bertweet-pt-sentiment"
+DEFAULT_HUGGINGFACE_MODEL = "pysentimiento/bertweet-pt-sentiment"
 _DTYPE_CHOICES: tuple[str, ...] = ("auto", "float16", "bfloat16", "float32")
 
 # Nomes de classe usados pelos modelos de sentimento do Hub -> classe do projeto.
