@@ -24,7 +24,7 @@ prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
 # classe escolhida. Para modelos de acesso restrito, defina SENTIMENTO_HUGGINGFACE_TOKEN
 # no .env. A memória da GPU é liberada a cada lote.
 huggingface:
-  model: "pysentimento/bertweet-pt-sentiment"
+  model: "pysentimiento/bertweet-pt-sentiment" # Hugging Face Hub (https://huggingface.co/pysentimiento/bertweet-pt-sentiment)
   revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
   device: "auto" # "auto" | "cpu" | "cuda" | "cuda:0" ...
   dtype: "auto" # "auto" | "float16" | "bfloat16" | "float32"
@@ -36,7 +36,7 @@ huggingface:
 # projeto). Proteção contra HTTP 429: pausa `request_interval_seconds` antes de cada
 # chamada (time.sleep) e backoff exponencial entre tentativas.
 openai:
-  model: "UnB-Llama-3.3-70B-Instruct"
+  model: "UnB-Llama-3.3-70B-Instruct" # OpenAI-compatível (ver .env.example)
   temperature: 0.0
   batch_size: 50 # tweets por lote (e por gravação no checkpoint)
   n_workers: 4 # taxa efetiva ~ n_workers / request_interval_seconds req/s
