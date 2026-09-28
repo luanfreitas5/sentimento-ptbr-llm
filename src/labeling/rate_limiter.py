@@ -174,4 +174,4 @@ def calculate_backoff_seconds(attempt: int) -> float:
     >>> 2.0 <= calculate_backoff_seconds(1) <= 3.0
     True
     """
-    return min(2.0**attempt, _MAX_BACKOFF_SECONDS) + random.uniform(0.0, 1.0)
+    return min(2.0**attempt, _MAX_BACKOFF_SECONDS) + random.uniform(0.0, 1.0)  # nosec B311 - jitter de backoff, não criptográfico

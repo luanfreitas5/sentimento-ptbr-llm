@@ -332,6 +332,13 @@ class TestRunIncrementalLabeling:
             )
 
 
+class _FakeResponse:
+    """Dublê de resposta HTTP com apenas os cabeçalhos."""
+
+    def __init__(self, headers: dict[str, str]) -> None:
+        self.headers = headers
+
+
 class _FakeRateLimitError(Exception):
     """Dublê de ``openai.RateLimitError`` (HTTP 429), com cabeçalho ``Retry-After``."""
 
@@ -339,8 +346,9 @@ class _FakeRateLimitError(Exception):
 
     def __init__(self, retry_after: str | None = None) -> None:
         super().__init__("429 simulado")
-        headers = {} if retry_after is None else {"retry-after": retry_after}
-        self.response = type("Response", (), {"headers": headers})()
+        self.response = _FakeResponse(
+            headers={} if retry_after is None else {"retry-after": retry_after}
+        )
 
 
 class _StubRateLimiter:

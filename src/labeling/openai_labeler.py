@@ -50,6 +50,87 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_TOKENS = 100
 
 
+def _handle_rate_limit_error(
+    exception: Exception,
+    rate_limit_attempt: int,
+    max_rate_limit_retries: int,
+    rate_limiter: RateLimiter,
+) -> bool:
+    """Trata um HTTP 429: pausa global no limitador ou desiste.
+
+    Parameters
+    ----------
+    exception : Exception
+        Erro 429 levantado pela API.
+    rate_limit_attempt : int
+        Número da retentativa atual após 429 (base 1).
+    max_rate_limit_retries : int
+        Orçamento de retentativas após 429.
+    rate_limiter : RateLimiter
+        Limitador compartilhado que recebe a pausa global.
+
+    Returns
+    -------
+    bool
+        ``True`` se deve retentar; ``False`` se o orçamento esgotou.
+    """
+    if rate_limit_attempt > max_rate_limit_retries:
+        logger.error(
+            "Limite de requisições (429) persistiu após %d retentativas: %s",
+            max_rate_limit_retries,
+            exception,
+        )
+        return False
+    retry_after = get_retry_after_seconds(exception)
+    wait_seconds = (
+        retry_after if retry_after is not None else calculate_backoff_seconds(rate_limit_attempt)
+    )
+    logger.warning(
+        "Limite de requisições (429) atingido (retentativa %d/%d). "
+        "Pausando todas as requisições por %.1fs.",
+        rate_limit_attempt,
+        max_rate_limit_retries,
+        min(wait_seconds, MAX_COOLDOWN_SECONDS),
+    )
+    rate_limiter.report_rate_limited(wait_seconds)
+    return True
+
+
+def _calculate_api_error_wait(exception: Exception, attempt: int, max_retries: int) -> float | None:
+    """Calcula a espera após erro de API (exceto 429) ou sinaliza desistência.
+
+    Parameters
+    ----------
+    exception : Exception
+        Erro levantado pela API.
+    attempt : int
+        Número da tentativa que falhou (base 1).
+    max_retries : int
+        Máximo de tentativas por tweet.
+
+    Returns
+    -------
+    float | None
+        Segundos de backoff antes da próxima tentativa; ``None`` se esgotou.
+    """
+    if attempt >= max_retries:
+        logger.error(
+            "Não foi possível classificar o tweet após %d tentativas: %s",
+            max_retries,
+            exception,
+        )
+        return None
+    wait_seconds = calculate_backoff_seconds(attempt)
+    logger.warning(
+        "Falha na chamada à API (tentativa %d/%d): %s. Aguardando %.1fs.",
+        attempt,
+        max_retries,
+        exception,
+        wait_seconds,
+    )
+    return wait_seconds
+
+
 def _classify_single_text(
     text: str,
     prompt_template: str,
@@ -126,45 +207,16 @@ def _classify_single_text(
         except Exception as exception:
             if is_rate_limit_error(exception):
                 rate_limit_attempt += 1
-                if rate_limit_attempt > max_rate_limit_retries:
-                    logger.error(  # noqa: TRY400
-                        "Limite de requisições (429) persistiu após %d retentativas: %s",
-                        max_rate_limit_retries,
-                        exception,
-                    )
+                if not _handle_rate_limit_error(
+                    exception, rate_limit_attempt, max_rate_limit_retries, rate_limiter
+                ):
                     return None
-                retry_after = get_retry_after_seconds(exception)
-                wait_seconds = (
-                    retry_after
-                    if retry_after is not None
-                    else calculate_backoff_seconds(rate_limit_attempt)
-                )
-                logger.warning(
-                    "Limite de requisições (429) atingido (retentativa %d/%d). "
-                    "Pausando todas as requisições por %.1fs.",
-                    rate_limit_attempt,
-                    max_rate_limit_retries,
-                    min(wait_seconds, MAX_COOLDOWN_SECONDS),
-                )
-                rate_limiter.report_rate_limited(wait_seconds)
                 continue
 
             attempt += 1
-            if attempt >= max_retries:
-                logger.error(  # noqa: TRY400
-                    "Não foi possível classificar o tweet após %d tentativas: %s",
-                    max_retries,
-                    exception,
-                )
+            wait_seconds = _calculate_api_error_wait(exception, attempt, max_retries)
+            if wait_seconds is None:
                 return None
-            wait_seconds = calculate_backoff_seconds(attempt)
-            logger.warning(
-                "Falha na chamada à API (tentativa %d/%d): %s. Aguardando %.1fs.",
-                attempt,
-                max_retries,
-                exception,
-                wait_seconds,
-            )
             time.sleep(wait_seconds)
             continue
 
