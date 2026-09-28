@@ -122,6 +122,107 @@ class CNNSentimentClassifier:
         encoded_labels = np.array([label_to_index[label] for label in y], dtype=np.int64)
         return encoded_sequences, encoded_labels, len(self.vocabulary_), len(self.classes_)
 
+    def _build_module(self, vocabulary_size: int, num_classes: int) -> Any:
+        """Constrói o módulo PyTorch (embedding + convoluções 1D + cabeça linear).
+
+        A classe do módulo é local (``torch`` é import tardio), portanto não é
+        serializável por ``pickle``; :meth:`__getstate__`/:meth:`__setstate__`
+        persistem apenas o ``state_dict`` e reconstroem o módulo ao carregar.
+
+        Parameters
+        ----------
+        vocabulary_size : int
+            Tamanho do vocabulário (linhas da camada de embedding).
+        num_classes : int
+            Número de classes de sentimento.
+
+        Returns
+        -------
+        Any
+            Instância de ``nn.Module`` com pesos inicializados aleatoriamente.
+        """
+        import torch  # type: ignore[reportMissingImports]
+        from torch import nn  # type: ignore[reportMissingImports]
+
+        embedding_dim = self.embedding_dim
+        num_filters = self.num_filters
+        filter_sizes = self.filter_sizes
+        dropout = self.dropout
+
+        class _TextCNNModule(nn.Module):
+            """Embedding treinável + convoluções 1D paralelas + max-pooling + cabeça linear."""
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.embedding = nn.Embedding(vocabulary_size, embedding_dim, padding_idx=0)
+                self.convolutions = nn.ModuleList(
+                    [
+                        nn.Conv1d(embedding_dim, num_filters, kernel_size=filter_size)
+                        for filter_size in filter_sizes
+                    ]
+                )
+                self.dropout_layer = nn.Dropout(dropout)
+                self.classifier_head = nn.Linear(num_filters * len(filter_sizes), num_classes)
+
+            def forward(self, token_ids: "torch.Tensor") -> "torch.Tensor":
+                """Classifica um lote de sequências de índices de token.
+
+                Parameters
+                ----------
+                token_ids : torch.Tensor
+                    Lote ``(batch, max_sequence_length)`` de índices de token.
+
+                Returns
+                -------
+                torch.Tensor
+                    Logits ``(batch, num_classes)``.
+                """
+                embedded = self.embedding(token_ids).transpose(1, 2)
+                pooled_features = [
+                    torch.relu(convolution(embedded)).max(dim=2).values
+                    for convolution in self.convolutions
+                ]
+                concatenated = torch.cat(pooled_features, dim=1)
+                return self.classifier_head(self.dropout_layer(concatenated))
+
+        return _TextCNNModule()
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Serializa a instância trocando o módulo PyTorch pelo seu ``state_dict``.
+
+        Returns
+        -------
+        dict[str, Any]
+            Estado serializável, com ``_module`` substituído por
+            ``_module_state_dict`` (tensores em CPU).
+        """
+        state = self.__dict__.copy()
+        module = state.pop("_module", None)
+        state["_module_state_dict"] = (
+            None
+            if module is None
+            else {key: value.cpu() for key, value in module.state_dict().items()}
+        )
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restaura a instância, reconstruindo o módulo a partir do ``state_dict``.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            Estado produzido por :meth:`__getstate__`.
+        """
+        state = dict(state)
+        state_dict = state.pop("_module_state_dict", None)
+        self.__dict__.update(state)
+        self._module = None
+        if state_dict is not None and self.vocabulary_ is not None and self.classes_ is not None:
+            module = self._build_module(len(self.vocabulary_), len(self.classes_))
+            module.load_state_dict(state_dict)
+            module.eval()
+            self._module = module
+
     def _split_train_validation(
         self,
         torch: Any,
@@ -275,48 +376,7 @@ class CNNSentimentClassifier:
         encoded_sequences, encoded_labels, vocabulary_size, num_classes = (
             self._encode_training_data(X, y)
         )
-        embedding_dim = self.embedding_dim
-        num_filters = self.num_filters
-        filter_sizes = self.filter_sizes
-        dropout = self.dropout
-
-        class _TextCNNModule(nn.Module):
-            """Embedding treinável + convoluções 1D paralelas + max-pooling + cabeça linear."""
-
-            def __init__(self) -> None:
-                super().__init__()
-                self.embedding = nn.Embedding(vocabulary_size, embedding_dim, padding_idx=0)
-                self.convolutions = nn.ModuleList(
-                    [
-                        nn.Conv1d(embedding_dim, num_filters, kernel_size=filter_size)
-                        for filter_size in filter_sizes
-                    ]
-                )
-                self.dropout_layer = nn.Dropout(dropout)
-                self.classifier_head = nn.Linear(num_filters * len(filter_sizes), num_classes)
-
-            def forward(self, token_ids: "torch.Tensor") -> "torch.Tensor":
-                """Classifica um lote de sequências de índices de token.
-
-                Parameters
-                ----------
-                token_ids : torch.Tensor
-                    Lote ``(batch, max_sequence_length)`` de índices de token.
-
-                Returns
-                -------
-                torch.Tensor
-                    Logits ``(batch, num_classes)``.
-                """
-                embedded = self.embedding(token_ids).transpose(1, 2)
-                pooled_features = [
-                    torch.relu(convolution(embedded)).max(dim=2).values
-                    for convolution in self.convolutions
-                ]
-                concatenated = torch.cat(pooled_features, dim=1)
-                return self.classifier_head(self.dropout_layer(concatenated))
-
-        module = _TextCNNModule()
+        module = self._build_module(vocabulary_size, num_classes)
         optimizer = torch.optim.Adam(module.parameters(), lr=self.learning_rate)
         loss_function = nn.CrossEntropyLoss()
 
