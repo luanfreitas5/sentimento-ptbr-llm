@@ -8,12 +8,14 @@ from typing import Any
 import polars as pl
 import pytest
 
+from evaluation.llm_comparison import build_comparison_frame
 from exceptions.base import ProjectError
 from exceptions.configuration import MissingEnvironmentVariableError
 from exceptions.data import DataValidationError, EmptyDatasetError
 from exceptions.model import ModelError
 from exceptions.pipeline import IncompleteLabelingError
 from labeling import huggingface, openai_labeler
+from labeling import rate_limiter as rate_limiter_module
 from labeling.checkpoint import (
     append_labeling_checkpoint,
     build_checkpoint_path,
@@ -32,6 +34,12 @@ from labeling.llm_response import (
     parse_llm_label_response,
 )
 from labeling.openai_labeler import _classify_single_text, create_openai_batch_classifier
+from labeling.rate_limiter import (
+    MAX_COOLDOWN_SECONDS,
+    RateLimiter,
+    get_retry_after_seconds,
+    is_rate_limit_error,
+)
 from schemas.labeling import validate_labeled_source
 from utils.memory import release_gpu_memory
 
@@ -324,95 +332,206 @@ class TestRunIncrementalLabeling:
             )
 
 
+class _FakeRateLimitError(Exception):
+    """Dublê de ``openai.RateLimitError`` (HTTP 429), com cabeçalho ``Retry-After``."""
+
+    status_code = 429
+
+    def __init__(self, retry_after: str | None = None) -> None:
+        super().__init__("429 simulado")
+        headers = {} if retry_after is None else {"retry-after": retry_after}
+        self.response = type("Response", (), {"headers": headers})()
+
+
+class _StubRateLimiter:
+    """Limitador de mentira: não espera e registra as pausas globais pedidas por 429."""
+
+    def __init__(self) -> None:
+        self.cooldowns: list[float] = []
+
+    def acquire(self) -> None:
+        """Não bloqueia."""
+
+    def report_success(self) -> None:
+        """Ignora sucessos."""
+
+    def report_rate_limited(self, wait_seconds: float) -> None:
+        """Registra a pausa pedida."""
+        self.cooldowns.append(wait_seconds)
+
+
 class TestOpenAILabeler:
     """Testes de :mod:`labeling.openai_labeler` (a API é substituída por dublês)."""
 
     @staticmethod
-    def _classify(**overrides: Any) -> tuple[str, float] | None:
+    def _classify(text: str = "adorei", **overrides: Any) -> tuple[str, float] | None:
         arguments: dict[str, Any] = {
             "model": "m",
             "temperature": 0.0,
+            "max_tokens": 100,
             "max_retries": 3,
-            "request_interval_seconds": 0.5,
+            "max_rate_limit_retries": 3,
+            "rate_limiter": _StubRateLimiter(),
             "request_timeout_seconds": 30.0,
             "allowed_labels": ("negativo", "neutro", "positivo"),
         }
-        return _classify_single_text("adorei", 'Tweet: "{{TEXTO}}"', **(arguments | overrides))
+        return _classify_single_text(text, 'Tweet: "{{TEXTO}}"', **(arguments | overrides))
 
-    def test_sleeps_before_every_call_to_avoid_rate_limit(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Deve pausar ``request_interval_seconds`` antes de cada chamada (proteção contra 429)."""
+    @pytest.fixture(autouse=True)
+    def _no_sleep(self, monkeypatch: pytest.MonkeyPatch) -> list[float]:
+        """Evita esperas reais (backoff/limitador) e registra os tempos pedidos."""
         sleeps: list[float] = []
         monkeypatch.setattr(openai_labeler.time, "sleep", sleeps.append)
+        monkeypatch.setattr(rate_limiter_module.time, "sleep", sleeps.append)
+        return sleeps
+
+    def test_passes_messages_model_timeout_and_max_tokens_to_the_api(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """O prompt com o texto, o modelo, o timeout e ``max_tokens`` devem chegar à chamada."""
+        captured: dict[str, Any] = {}
+
+        def _fake_completion(messages: list[dict[str, Any]], **kwargs: Any) -> str:
+            captured.update(kwargs, messages=messages)
+            return '{"label":"neutro","confidence":0.5}'
+
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _fake_completion)
+
+        assert self._classify() == ("neutro", 0.5)
+
+        assert captured["messages"] == [{"role": "user", "content": 'Tweet: "adorei"'}]
+        assert captured["model"] == "m"
+        assert captured["timeout"] == 30.0
+        assert captured["max_tokens"] == 100
+
+    def test_reads_confidence_from_probs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """O formato do prompt padrão (``probs``) deve render a confiança da classe escolhida."""
         monkeypatch.setattr(
             openai_labeler,
-            "generate_completion",
-            lambda **kwargs: '{"label":"positivo","confidence":0.9}',
+            "generate_chat_completion",
+            lambda messages, **kwargs: '{"label":"positivo","probs":{"positivo":0.9}}',
         )
 
         assert self._classify() == ("positivo", 0.9)
-        assert sleeps == [0.5]
-
-    def test_passes_timeout_and_prompt_with_text_to_the_api(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """O timeout configurado e o prompt com o texto devem chegar à chamada."""
-        monkeypatch.setattr(openai_labeler.time, "sleep", lambda seconds: None)
-        captured: dict[str, Any] = {}
-
-        def _fake_completion(**kwargs: Any) -> str:
-            captured.update(kwargs)
-            return '{"label":"neutro","confidence":0.5}'
-
-        monkeypatch.setattr(openai_labeler, "generate_completion", _fake_completion)
-
-        self._classify()
-
-        assert captured["timeout"] == 30.0
-        assert captured["provider"] == "openai"
-        assert captured["prompt"] == 'Tweet: "adorei"'
 
     def test_retries_after_api_error_with_exponential_backoff(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, _no_sleep: list[float]
     ) -> None:
-        """Erros da API (ex.: 429/timeout) são retentados, com espera crescente entre tentativas."""
-        sleeps: list[float] = []
-        monkeypatch.setattr(openai_labeler.time, "sleep", sleeps.append)
+        """Erros da API (ex.: timeout) são retentados, com espera crescente entre tentativas."""
         calls = {"n": 0}
 
-        def _flaky(**kwargs: Any) -> str:
+        def _flaky(messages: list[dict[str, Any]], **kwargs: Any) -> str:
             calls["n"] += 1
             if calls["n"] < 3:
                 raise TimeoutError("simulado")
             return '{"label":"negativo","confidence":0.7}'
 
-        monkeypatch.setattr(openai_labeler, "generate_completion", _flaky)
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _flaky)
 
         assert self._classify() == ("negativo", 0.7)
         assert calls["n"] == 3
-        backoffs = [seconds for seconds in sleeps if seconds >= 1.0]
-        assert backoffs == [1.0, 2.0]
+        assert len(_no_sleep) == 2
+        assert 2.0 <= _no_sleep[0] < 3.0
+        assert 4.0 <= _no_sleep[1] < 5.0
 
-    def test_returns_none_after_exhausting_retries_on_unparseable_response(
+    def test_returns_none_after_exhausting_api_retries(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Respostas fora do formato esgotam as tentativas e devolvem ``None`` (sem exceção)."""
-        monkeypatch.setattr(openai_labeler.time, "sleep", lambda seconds: None)
-        monkeypatch.setattr(openai_labeler, "generate_completion", lambda **kwargs: "sem json")
+        """Falha persistente da API devolve ``None`` (não vira ``indefinido``: será retentado)."""
+        calls = {"n": 0}
+
+        def _always_fails(messages: list[dict[str, Any]], **kwargs: Any) -> str:
+            calls["n"] += 1
+            raise TimeoutError("simulado")
+
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _always_fails)
 
         assert self._classify(max_retries=2) is None
+        assert calls["n"] == 2
+
+    def test_unparseable_response_becomes_undefined_with_zero_score(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Resposta fora do formato vira ``indefinido`` com score 0.0, sem nova chamada."""
+        calls = {"n": 0}
+
+        def _no_json(messages: list[dict[str, Any]], **kwargs: Any) -> str:
+            calls["n"] += 1
+            return "sem json"
+
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _no_json)
+
+        assert self._classify() == ("indefinido", 0.0)
+        assert calls["n"] == 1
+
+    def test_unknown_label_becomes_undefined(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Rótulo fora das classes aceitas vira ``indefinido`` com score 0.0."""
+        monkeypatch.setattr(
+            openai_labeler,
+            "generate_chat_completion",
+            lambda messages, **kwargs: '{"label":"raiva","confidence":0.9}',
+        )
+
+        assert self._classify() == ("indefinido", 0.0)
+
+    def test_empty_text_is_undefined_without_calling_the_api(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Texto vazio não gasta chamada: vira ``indefinido`` com score 0.0."""
+
+        def _must_not_be_called(messages: list[dict[str, Any]], **kwargs: Any) -> str:
+            raise AssertionError("a API não deveria ser chamada")
+
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _must_not_be_called)
+
+        assert self._classify(text="   ") == ("indefinido", 0.0)
+
+    def test_rate_limit_waits_for_retry_after_and_retries(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No HTTP 429, o limitador pausa e a chamada é repetida sem consumir ``max_retries``."""
+        calls = {"n": 0}
+        limiter = _StubRateLimiter()
+
+        def _rate_limited_once(messages: list[dict[str, Any]], **kwargs: Any) -> str:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise _FakeRateLimitError(retry_after="2")
+            return '{"label":"positivo","confidence":0.8}'
+
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _rate_limited_once)
+
+        assert self._classify(rate_limiter=limiter, max_retries=1) == ("positivo", 0.8)
+        assert calls["n"] == 2
+        assert limiter.cooldowns == [2.0]
+
+    def test_rate_limit_returns_none_after_exhausting_rate_limit_retries(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """429 persistente esgota ``max_rate_limit_retries`` e devolve ``None``."""
+        calls = {"n": 0}
+
+        def _always_429(messages: list[dict[str, Any]], **kwargs: Any) -> str:
+            calls["n"] += 1
+            raise _FakeRateLimitError(retry_after="0")
+
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _always_429)
+
+        limiter = _StubRateLimiter()
+
+        assert self._classify(rate_limiter=limiter, max_rate_limit_retries=2) is None
+        assert calls["n"] == 3
+        assert limiter.cooldowns == [0.0, 0.0]
 
     def test_configuration_errors_are_not_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Falha de configuração (chave ausente) interrompe a execução em vez de ser retentada."""
-        monkeypatch.setattr(openai_labeler.time, "sleep", lambda seconds: None)
         calls = {"n": 0}
 
-        def _missing_key(**kwargs: Any) -> str:
+        def _missing_key(messages: list[dict[str, Any]], **kwargs: Any) -> str:
             calls["n"] += 1
             raise MissingEnvironmentVariableError("OPENAI_KEY")
 
-        monkeypatch.setattr(openai_labeler, "generate_completion", _missing_key)
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _missing_key)
 
         with pytest.raises(ProjectError):
             self._classify()
@@ -421,24 +540,142 @@ class TestOpenAILabeler:
     def test_batch_classifier_preserves_order_and_isolates_failures(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """No lote, a ordem é preservada e a falha de um tweet não afeta os demais."""
-        monkeypatch.setattr(openai_labeler.time, "sleep", lambda seconds: None)
+        """No lote, a ordem é preservada e a falha de API de um tweet não afeta os demais."""
 
-        def _fake_completion(*, prompt: str, **kwargs: Any) -> str:
-            if "ruim" in prompt:
+        def _fake_completion(messages: list[dict[str, Any]], **kwargs: Any) -> str:
+            content = messages[0]["content"]
+            if "falha" in content:
+                raise TimeoutError("simulado")
+            if "ruim" in content:
                 return "sem json"
             return '{"label":"positivo","confidence":0.8}'
 
-        monkeypatch.setattr(openai_labeler, "generate_completion", _fake_completion)
+        monkeypatch.setattr(openai_labeler, "generate_chat_completion", _fake_completion)
         classify = create_openai_batch_classifier(
-            "{{TEXTO}}", model="m", max_retries=1, n_workers=3, request_interval_seconds=0.0
+            "{{TEXTO}}", model="m", max_retries=1, n_workers=3, requests_per_minute=None
         )
 
-        assert classify(["bom", "ruim", "otimo"]) == [
+        assert classify(["bom", "falha", "ruim", "otimo"]) == [
             ("positivo", 0.8),
             None,
+            ("indefinido", 0.0),
             ("positivo", 0.8),
         ]
+
+
+class TestRateLimiter:
+    """Testes de :mod:`labeling.rate_limiter`."""
+
+    def test_rejects_non_positive_rate(self) -> None:
+        """Taxa menor ou igual a zero é configuração inválida."""
+        with pytest.raises(ValueError, match="requests_per_minute"):
+            RateLimiter(0)
+
+    def test_acquire_without_limit_does_not_wait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Sem taxa base, ``acquire`` não pausa."""
+        sleeps: list[float] = []
+        monkeypatch.setattr(rate_limiter_module.time, "sleep", sleeps.append)
+
+        limiter = RateLimiter(None)
+        limiter.acquire()
+        limiter.acquire()
+
+        assert sleeps == []
+
+    def test_second_acquire_waits_for_the_base_interval(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Com 60 req/min, a segunda chamada imediata espera cerca de 1 s."""
+        sleeps: list[float] = []
+        monkeypatch.setattr(rate_limiter_module.time, "monotonic", lambda: 100.0)
+        monkeypatch.setattr(
+            rate_limiter_module.time,
+            "sleep",
+            lambda seconds: (
+                sleeps.append(seconds),
+                monkeypatch.setattr(rate_limiter_module.time, "monotonic", lambda: 102.0),
+            ),
+        )
+
+        limiter = RateLimiter(60)
+        limiter.acquire()
+        limiter.acquire()
+
+        assert sleeps == [pytest.approx(1.0)]
+
+    def test_rate_limited_report_imposes_cooldown_capped_at_maximum(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Um 429 pausa todas as threads, no máximo por ``MAX_COOLDOWN_SECONDS``."""
+        sleeps: list[float] = []
+        clock = {"now": 100.0}
+        monkeypatch.setattr(rate_limiter_module.time, "monotonic", lambda: clock["now"])
+
+        def _advance(seconds: float) -> None:
+            sleeps.append(seconds)
+            clock["now"] += seconds
+
+        monkeypatch.setattr(rate_limiter_module.time, "sleep", _advance)
+
+        limiter = RateLimiter(None)
+        limiter.report_rate_limited(10_000.0)
+        limiter.acquire()
+
+        assert sleeps == [pytest.approx(MAX_COOLDOWN_SECONDS)]
+
+    def test_retry_after_header_is_read_in_seconds_and_milliseconds(self) -> None:
+        """``retry-after-ms`` tem prioridade sobre ``retry-after``; ausentes devolvem ``None``."""
+        error_ms = _FakeRateLimitError()
+        error_ms.response.headers.update({"retry-after-ms": "1500", "retry-after": "9"})
+        error_s = _FakeRateLimitError(retry_after="7")
+
+        assert get_retry_after_seconds(error_ms) == pytest.approx(1.5)
+        assert get_retry_after_seconds(error_s) == pytest.approx(7.0)
+        assert get_retry_after_seconds(_FakeRateLimitError()) is None
+        assert get_retry_after_seconds(TimeoutError()) is None
+
+    def test_is_rate_limit_error_checks_status_code(self) -> None:
+        """Só o status HTTP 429 caracteriza limite de taxa."""
+        assert is_rate_limit_error(_FakeRateLimitError())
+        assert not is_rate_limit_error(TimeoutError())
+
+
+class TestUndefinedLabelInBases:
+    """``indefinido`` é aceito na base por fonte e excluído dos consumidores de 3 classes."""
+
+    @staticmethod
+    def _source(labels: list[str], scores: list[float]) -> pl.DataFrame:
+        n = len(labels)
+        return pl.DataFrame(
+            {
+                "id": [str(i) for i in range(n)],
+                "text": ["t"] * n,
+                "text_normalized": ["t"] * n,
+                "sentiment_label": labels,
+                "confidence_score": scores,
+            }
+        )
+
+    def test_labeled_source_schema_accepts_undefined_label(self) -> None:
+        """A base por fonte aceita ``indefinido`` com score 0.0."""
+        frame = self._source(["positivo", "indefinido"], [0.9, 0.0])
+
+        assert validate_labeled_source(frame).height == 2
+
+    def test_labeled_source_schema_still_rejects_unknown_labels(self) -> None:
+        """Rótulos fora das classes e de ``indefinido`` continuam inválidos."""
+        with pytest.raises(DataValidationError):
+            validate_labeled_source(self._source(["raiva"], [0.9]))
+
+    def test_comparison_frame_drops_tweets_undefined_in_either_base(self) -> None:
+        """A comparação entre modelos ignora tweets ``indefinido`` em qualquer base."""
+        huggingface_base = self._source(["positivo", "negativo", "neutro"], [0.9, 0.8, 0.7])
+        openai_base = self._source(["positivo", "indefinido", "neutro"], [0.9, 0.0, 0.6])
+
+        frame = build_comparison_frame(huggingface_base, openai_base)
+
+        assert frame["id"].to_list() == ["0", "2"]
+        assert frame["agree"].to_list() == [True, True]
 
 
 def _build_fake_model() -> HuggingFaceModel:

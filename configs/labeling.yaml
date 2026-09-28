@@ -33,16 +33,19 @@ huggingface:
 
 # LLM via API OpenAI-compatível (src/labeling/openai_labeler.py), autenticada por
 # OPENAI_BASE_URL/OPENAI_KEY no .env (ver .env.example; o endpoint da UnB é o padrão do
-# projeto). Proteção contra HTTP 429: pausa `request_interval_seconds` antes de cada
-# chamada (time.sleep) e backoff exponencial entre tentativas.
+# projeto), via Chat Completions. Proteção contra HTTP 429: limite de `requests_per_minute`
+# somado entre as threads, pausa global no 429 (respeitando Retry-After) e ritmo adaptativo.
+# Resposta fora do formato ou texto vazio => sentiment_label "indefinido" com score 0.0.
 openai:
   model: "UnB-Llama-3.3-70B-Instruct" # OpenAI-compatível (ver .env.example)
   temperature: 0.0
+  max_tokens: 100 # a resposta é um JSON curto (rótulo + probabilidades)
   batch_size: 50 # tweets por lote (e por gravação no checkpoint)
-  n_workers: 4 # taxa efetiva ~ n_workers / request_interval_seconds req/s
-  request_interval_seconds: 1.0
+  n_workers: 4 # requisições concorrentes
+  requests_per_minute: 120 # limite base, somado entre as threads (null desativa)
   request_timeout_seconds: 60
-  max_retries: 3
+  max_retries: 3 # falhas de API (exceto 429)
+  max_rate_limit_retries: 8 # retentativas após HTTP 429
 
 confidence:
   low_confidence_threshold: 0.5 # abaixo disso, candidato à validação humana

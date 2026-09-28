@@ -503,9 +503,11 @@ def _build_labeling_sources(
             prompt_template,
             model=oa_config["model"],
             temperature=oa_config["temperature"],
+            max_tokens=oa_config["max_tokens"],
             max_retries=oa_config["max_retries"],
+            max_rate_limit_retries=oa_config["max_rate_limit_retries"],
             n_workers=args.max_workers or oa_config["n_workers"],
-            request_interval_seconds=oa_config["request_interval_seconds"],
+            requests_per_minute=oa_config["requests_per_minute"],
             request_timeout_seconds=oa_config["request_timeout_seconds"],
         )
         sources.append(

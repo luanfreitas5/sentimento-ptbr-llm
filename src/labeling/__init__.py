@@ -12,8 +12,12 @@ huggingface
     Rotulagem via classificador de sentimento local do Hugging Face Hub (base
     ``tweets_data_huggingface``, ver ``configs/labeling.yaml -> huggingface``).
 openai_labeler
-    Rotulagem via API OpenAI-compatível, com pausa contra HTTP 429, timeout e
-    retentativa (base ``tweets_data_openai``, ver ``configs/labeling.yaml -> openai``).
+    Rotulagem via API OpenAI-compatível (Chat Completions), com limitador de taxa
+    contra HTTP 429, timeout e retentativa; resposta inutilizável vira ``indefinido``
+    com score 0.0 (base ``tweets_data_openai``, ver ``configs/labeling.yaml -> openai``).
+rate_limiter
+    Limitador de taxa compartilhado entre threads (intervalo mínimo, pausa global
+    no 429 e ritmo adaptativo).
 incremental
     Execução incremental e retomável da rotulagem (comum às duas fontes).
 checkpoint

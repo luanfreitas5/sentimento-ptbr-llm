@@ -45,7 +45,13 @@ entrada ficam em `<base>.meta.json`, ao lado da base.
 - **Falhas:** erros de API (timeout, HTTP 429) são retentados com backoff exponencial; se sobrar
   tweet sem rótulo válido, a etapa levanta `IncompleteLabelingError` e a base **não** é gravada
   (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.
-- **HTTP 429:** `time.sleep(request_interval_seconds)` antes de cada chamada à API.
+- **HTTP 429:** limitador de taxa compartilhado (`openai.requests_per_minute`): ao receber 429, todas
+  as threads pausam pelo `Retry-After` do servidor e o ritmo cai até voltar ao normal após uma
+  sequência de sucessos (`src/labeling/rate_limiter.py`).
+- **Sentimento indefinido:** texto vazio ou resposta do LLM fora do formato (sem JSON, rótulo
+  desconhecido) resulta em `sentiment_label = "indefinido"` com `confidence_score = 0.0`, gravado no
+  checkpoint. Esses tweets ficam fora do corpus rotulado das etapas seguintes e da comparação entre
+  os modelos, com aviso no log.
 - **GPU:** a memória é liberada a cada lote e o modelo é descarregado ao fim da fonte.
 - **Modelo Hugging Face:** o padrão é `pysentimiento/bertweet-pt-sentiment` (BERTweet-pt, ~135M de
   parâmetros; classes NEG/NEU/POS mapeadas para negativo/neutro/positivo). É um classificador

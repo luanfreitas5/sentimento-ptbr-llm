@@ -2,20 +2,28 @@
 
 Implementa a seção ``openai`` de ``configs/labeling.yaml``: cada tweet é
 classificado por um LLM acessado pelo cliente único do projeto
-(:func:`hypothesaes.llm_api.generate_completion`, autenticado via
+(:func:`hypothesaes.llm_api.generate_chat_completion`, autenticado via
 ``OPENAI_BASE_URL``/``OPENAI_KEY`` do ``.env``), com o prompt versionado em
-``prompts/``.
+``prompts/``. A chamada usa Chat Completions, aceita por qualquer endpoint
+compatível (a Responses API não é implementada por servidores como o da UnB e
+devolvia respostas vazias, sempre "fora do formato").
 
 Robustez frente à API:
 
-* pausa (``time.sleep``) de ``request_interval_seconds`` antes de cada
-  chamada, para respeitar o limite de taxa e evitar HTTP 429;
-* *timeout* por requisição e nova tentativa com backoff exponencial em caso
-  de erro de rede, limite de taxa ou resposta fora do formato;
+* limitador de taxa compartilhado entre as threads
+  (:class:`labeling.rate_limiter.RateLimiter`): intervalo mínimo por
+  ``requests_per_minute``, pausa global no HTTP 429 (respeitando ``Retry-After``)
+  e adaptação do ritmo;
+* HTTP 429 tem orçamento próprio de retentativas (``max_rate_limit_retries``);
+  demais erros de API usam backoff exponencial com jitter e ``max_retries``;
 * falhas de configuração (chave ausente, biblioteca não instalada) não são
   retentadas: interrompem a execução, e o checkpoint preserva o progresso;
-* um tweet que esgota as tentativas devolve ``None`` (ver
-  :mod:`labeling.incremental`) sem derrubar os demais do lote.
+* resposta do LLM inutilizável (texto livre, JSON inválido, rótulo desconhecido)
+  ou texto vazio não derruba a execução: o tweet recebe o rótulo ``indefinido``
+  com score ``0.0``;
+* um tweet que esgota as retentativas de API devolve ``None`` (ver
+  :mod:`labeling.incremental`): não é gravado no checkpoint e é retentado na
+  próxima execução, sem derrubar os demais do lote.
 """
 
 import concurrent.futures
@@ -23,15 +31,23 @@ import logging
 import time
 from collections.abc import Sequence
 
-from constants.labels import SENTIMENT_CLASSES
+from constants.labels import SENTIMENT_CLASSES, UNDEFINED_LABEL, UNDEFINED_SCORE
 from exceptions.base import ProjectError
-from hypothesaes.llm_api import generate_completion
+from hypothesaes.llm_api import generate_chat_completion
 from labeling.incremental import BatchClassifier, LabelPrediction
 from labeling.llm_response import build_labeling_prompt, parse_llm_label_response
+from labeling.rate_limiter import (
+    MAX_COOLDOWN_SECONDS,
+    RateLimiter,
+    calculate_backoff_seconds,
+    get_retry_after_seconds,
+    is_rate_limit_error,
+)
 
 logger = logging.getLogger(__name__)
 
-_MINIMUM_RETRY_WAIT_SECONDS = 1.0
+# A resposta esperada é um JSON curto (rótulo + probabilidades ou score).
+DEFAULT_MAX_TOKENS = 100
 
 
 def _classify_single_text(
@@ -40,12 +56,19 @@ def _classify_single_text(
     *,
     model: str,
     temperature: float,
+    max_tokens: int,
     max_retries: int,
-    request_interval_seconds: float,
+    max_rate_limit_retries: int,
+    rate_limiter: RateLimiter,
     request_timeout_seconds: float,
     allowed_labels: Sequence[str],
 ) -> LabelPrediction | None:
-    """Classifica um tweet, com pausa entre chamadas e novas tentativas com backoff.
+    """Classifica um tweet, com retentativas em caso de erro da API.
+
+    Erros 429 têm orçamento próprio de retentativas: a espera respeita o
+    ``Retry-After`` do servidor e vale para todas as threads (via
+    ``rate_limiter``). Demais erros usam backoff exponencial com jitter e
+    ``max_retries``.
 
     Parameters
     ----------
@@ -57,10 +80,14 @@ def _classify_single_text(
         Modelo da API OpenAI-compatível.
     temperature : float
         Temperatura de amostragem (0.0 = determinístico).
+    max_tokens : int
+        Máximo de tokens gerados na resposta.
     max_retries : int
-        Máximo de tentativas por tweet (chamada + interpretação da resposta).
-    request_interval_seconds : float
-        Pausa antes de cada chamada; também é a base do backoff entre tentativas.
+        Máximo de tentativas por tweet em falhas de API (exceto 429).
+    max_rate_limit_retries : int
+        Máximo de retentativas após respostas 429.
+    rate_limiter : RateLimiter
+        Limitador de taxa compartilhado entre as threads.
     request_timeout_seconds : float
         Timeout de cada requisição, em segundos.
     allowed_labels : Sequence[str]
@@ -69,40 +96,88 @@ def _classify_single_text(
     Returns
     -------
     tuple[str, float] | None
-        ``(rótulo, confiança)`` ou ``None`` se todas as tentativas falharem.
+        ``(rótulo, confiança)``; ``("indefinido", 0.0)`` se o texto for vazio ou a
+        resposta do LLM for inutilizável; ``None`` se a API falhar em todas as tentativas.
 
     Raises
     ------
     ProjectError
         Falhas de configuração (ex.: ``OPENAI_KEY`` ausente) são propagadas sem retentativa.
     """
-    prompt = build_labeling_prompt(prompt_template, text)
-    for attempt in range(max_retries):
-        if request_interval_seconds > 0:
-            time.sleep(request_interval_seconds)
+    if not text.strip():
+        return UNDEFINED_LABEL, UNDEFINED_SCORE
+
+    messages = [{"role": "user", "content": build_labeling_prompt(prompt_template, text)}]
+    attempt = 0
+    rate_limit_attempt = 0
+
+    while True:
+        rate_limiter.acquire()
         try:
-            # max_retries=1: a retentativa (com backoff próprio) é feita neste laço.
-            raw_response = generate_completion(
-                prompt=prompt,
+            raw_response = generate_chat_completion(
+                messages,
                 model=model,
                 temperature=temperature,
-                provider="openai",
+                max_tokens=max_tokens,
                 timeout=request_timeout_seconds,
-                max_retries=1,
             )
         except ProjectError:
             raise
         except Exception as exception:
+            if is_rate_limit_error(exception):
+                rate_limit_attempt += 1
+                if rate_limit_attempt > max_rate_limit_retries:
+                    logger.error(  # noqa: TRY400
+                        "Limite de requisições (429) persistiu após %d retentativas: %s",
+                        max_rate_limit_retries,
+                        exception,
+                    )
+                    return None
+                retry_after = get_retry_after_seconds(exception)
+                wait_seconds = (
+                    retry_after
+                    if retry_after is not None
+                    else calculate_backoff_seconds(rate_limit_attempt)
+                )
+                logger.warning(
+                    "Limite de requisições (429) atingido (retentativa %d/%d). "
+                    "Pausando todas as requisições por %.1fs.",
+                    rate_limit_attempt,
+                    max_rate_limit_retries,
+                    min(wait_seconds, MAX_COOLDOWN_SECONDS),
+                )
+                rate_limiter.report_rate_limited(wait_seconds)
+                continue
+
+            attempt += 1
+            if attempt >= max_retries:
+                logger.error(  # noqa: TRY400
+                    "Não foi possível classificar o tweet após %d tentativas: %s",
+                    max_retries,
+                    exception,
+                )
+                return None
+            wait_seconds = calculate_backoff_seconds(attempt)
             logger.warning(
-                "Falha na chamada à API (tentativa %d/%d): %s", attempt + 1, max_retries, exception
+                "Falha na chamada à API (tentativa %d/%d): %s. Aguardando %.1fs.",
+                attempt,
+                max_retries,
+                exception,
+                wait_seconds,
             )
-            time.sleep(max(_MINIMUM_RETRY_WAIT_SECONDS, request_interval_seconds) * (2**attempt))
+            time.sleep(wait_seconds)
             continue
+
+        rate_limiter.report_success()
         parsed = parse_llm_label_response(raw_response, allowed_labels=allowed_labels)
-        if parsed is not None:
-            return parsed
-        logger.warning("Resposta fora do formato (tentativa %d/%d).", attempt + 1, max_retries)
-    return None
+        if parsed is None:
+            logger.warning(
+                "Resposta fora do formato; classificando como '%s' com score %.1f.",
+                UNDEFINED_LABEL,
+                UNDEFINED_SCORE,
+            )
+            return UNDEFINED_LABEL, UNDEFINED_SCORE
+        return parsed
 
 
 def create_openai_batch_classifier(
@@ -110,9 +185,11 @@ def create_openai_batch_classifier(
     *,
     model: str,
     temperature: float = 0.0,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     max_retries: int = 3,
+    max_rate_limit_retries: int = 8,
     n_workers: int = 4,
-    request_interval_seconds: float = 1.0,
+    requests_per_minute: float | None = 120.0,
     request_timeout_seconds: float = 60.0,
     allowed_labels: Sequence[str] = SENTIMENT_CLASSES,
 ) -> BatchClassifier:
@@ -126,13 +203,18 @@ def create_openai_batch_classifier(
         Modelo da API OpenAI-compatível (``configs/labeling.yaml -> openai.model``).
     temperature : float, optional
         Temperatura de amostragem, by default 0.0.
+    max_tokens : int, optional
+        Máximo de tokens gerados por classificação, by default :data:`DEFAULT_MAX_TOKENS`.
     max_retries : int, optional
-        Máximo de tentativas por tweet, by default 3.
+        Máximo de tentativas por tweet em falhas de API (exceto 429), by default 3.
+    max_rate_limit_retries : int, optional
+        Máximo de retentativas após respostas 429, by default 8.
     n_workers : int, optional
-        Chamadas simultâneas dentro de um lote; a taxa efetiva é
-        ``n_workers / request_interval_seconds`` requisições por segundo, by default 4.
-    request_interval_seconds : float, optional
-        Pausa (``time.sleep``) antes de cada chamada, para evitar HTTP 429, by default 1.0.
+        Chamadas simultâneas dentro de um lote, by default 4.
+    requests_per_minute : float | None, optional
+        Taxa máxima de requisições por minuto, somada entre todas as threads; se a
+        API responder 429, o ritmo cai sozinho e volta ao normal após uma sequência
+        de sucessos. ``None`` desativa o limite base, by default 120.0.
     request_timeout_seconds : float, optional
         Timeout por requisição, by default 60.0.
     allowed_labels : Sequence[str], optional
@@ -144,12 +226,18 @@ def create_openai_batch_classifier(
         Função ``textos -> [(rótulo, confiança) | None]`` para
         :func:`labeling.incremental.run_incremental_labeling`.
 
+    Raises
+    ------
+    ValueError
+        Se ``requests_per_minute`` não for ``None`` e for menor ou igual a 0.
+
     Examples
     --------
     >>> classifier = create_openai_batch_classifier(
     ...     'Tweet: "{{TEXTO}}"', model="gpt-5-mini"
     ... )  # doctest: +SKIP
     """
+    rate_limiter = RateLimiter(requests_per_minute)
 
     def classify_batch(texts: Sequence[str]) -> list[LabelPrediction | None]:
         with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
@@ -160,8 +248,10 @@ def create_openai_batch_classifier(
                     prompt_template,
                     model=model,
                     temperature=temperature,
+                    max_tokens=max_tokens,
                     max_retries=max_retries,
-                    request_interval_seconds=request_interval_seconds,
+                    max_rate_limit_retries=max_rate_limit_retries,
+                    rate_limiter=rate_limiter,
                     request_timeout_seconds=request_timeout_seconds,
                     allowed_labels=allowed_labels,
                 )

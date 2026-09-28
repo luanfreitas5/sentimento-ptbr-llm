@@ -30,7 +30,7 @@ from sklearn.metrics import cohen_kappa_score
 from statsmodels.stats.contingency_tables import SquareTable
 
 from constants.defaults import DEFAULT_BOOTSTRAP_ITERATIONS, DEFAULT_CONFIDENCE_LEVEL
-from constants.labels import LABEL_TO_ID, SENTIMENT_CLASSES
+from constants.labels import LABEL_TO_ID, SENTIMENT_CLASSES, UNDEFINED_LABEL
 from exceptions.data import DataValidationError, EmptyDatasetError
 from labeling.validation import calculate_cohen_kappa
 from metrics.classification import calculate_confusion_matrix
@@ -58,7 +58,8 @@ def build_comparison_frame(huggingface: pl.DataFrame, openai: pl.DataFrame) -> p
     -------
     pl.DataFrame
         Uma linha por tweet, com os rótulos e confianças dos dois modelos, ``word_count``,
-        ``agree`` e ``label_distance``, na ordem da base do Hugging Face.
+        ``agree`` e ``label_distance``, na ordem da base do Hugging Face. Tweets com
+        sentimento ``indefinido`` em alguma das bases ficam de fora.
 
     Raises
     ------
@@ -109,7 +110,16 @@ def build_comparison_frame(huggingface: pl.DataFrame, openai: pl.DataFrame) -> p
         pl.col("sentiment_label").alias(f"label_{_OA}"),
         pl.col("confidence_score").alias(f"confidence_{_OA}"),
     )
-    return hf_columns.join(oa_columns, on="id", how="inner").with_columns(
+    joined = hf_columns.join(oa_columns, on="id", how="inner")
+    defined = joined.filter(
+        (pl.col(f"label_{_HF}") != UNDEFINED_LABEL) & (pl.col(f"label_{_OA}") != UNDEFINED_LABEL)
+    )
+    if defined.height < joined.height:
+        logger.warning(
+            "%d tweet(s) com sentimento indefinido em alguma base ficaram fora da comparação.",
+            joined.height - defined.height,
+        )
+    return defined.with_columns(
         pl.col("text_normalized").str.count_matches(r"\S+").alias("word_count"),
         (pl.col(f"label_{_HF}") == pl.col(f"label_{_OA}")).alias("agree"),
         (

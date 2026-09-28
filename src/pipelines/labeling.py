@@ -36,6 +36,7 @@ from pathlib import Path
 import polars as pl
 
 from config.paths import ProjectPaths
+from constants.labels import UNDEFINED_LABEL
 from data.loader import read_dataset_file
 from data.writer import write_dataset, write_labeled_corpus
 from exceptions.configuration import InvalidConfigurationError
@@ -262,16 +263,29 @@ def build_labeled_corpus(
         source_path = resolve_labeled_source_path(paths, source_name)
         if not source_path.is_file():
             continue
+        # "indefinido" não é classe de sentimento: vira nulo no corpus das etapas seguintes
         source_labels = read_dataset_file(source_path).select(
             "id",
-            pl.col("sentiment_label").alias(f"sentiment_label_{source_name}"),
+            pl.when(pl.col("sentiment_label") != UNDEFINED_LABEL)
+            .then(pl.col("sentiment_label"))
+            .alias(f"sentiment_label_{source_name}"),
             pl.col("confidence_score").alias(f"confidence_score_{source_name}"),
         )
         labeled_corpus = labeled_corpus.join(source_labels, on="id", how="left")
-    return labeled_corpus.with_columns(
+
+    labeled_corpus = labeled_corpus.with_columns(
         pl.col(f"sentiment_label_{downstream_source}").alias("sentiment_label"),
         pl.col(f"confidence_score_{downstream_source}").alias("confidence_score"),
     )
+    defined_corpus = labeled_corpus.filter(pl.col("sentiment_label").is_not_null())
+    n_undefined = labeled_corpus.height - defined_corpus.height
+    if n_undefined:
+        logger.warning(
+            "%d tweet(s) com sentimento indefinido na base '%s' ficaram fora do corpus rotulado.",
+            n_undefined,
+            downstream_source,
+        )
+    return defined_corpus
 
 
 def _select_and_write_human_validation_sample(

@@ -15,6 +15,12 @@ POSITIVE_LABEL = "positivo"
 # identificador numérico de cada classe (índice na tupla).
 SENTIMENT_CLASSES: tuple[str, ...] = (NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL)
 
+# Rótulo e score atribuídos quando a resposta do LLM não permite definir a classe
+# (texto vazio, resposta fora do formato, rótulo desconhecido). Não é uma classe de
+# sentimento: fica fora de ``SENTIMENT_CLASSES`` e só existe nas bases por fonte.
+UNDEFINED_LABEL = "indefinido"
+UNDEFINED_SCORE = 0.0
+
 LABEL_TO_ID: dict[str, int] = {label: index for index, label in enumerate(SENTIMENT_CLASSES)}
 ID_TO_LABEL: dict[int, str] = dict(enumerate(SENTIMENT_CLASSES))
 

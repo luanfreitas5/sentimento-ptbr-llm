@@ -14,7 +14,7 @@ from pandera.api.polars.model_config import BaseConfig
 from pandera.errors import SchemaError
 from pandera.typing.polars import Series
 
-from constants.labels import SENTIMENT_CLASSES
+from constants.labels import SENTIMENT_CLASSES, UNDEFINED_LABEL
 from exceptions.data import DataValidationError
 
 
@@ -40,13 +40,14 @@ class LabeledSourceSchema(pa.DataFrameModel):
     ``text_normalized`` o texto após o pré-processamento (sem menções/URLs),
     ``sentiment_label`` a classe atribuída pelo modelo e ``confidence_score``
     a confiança da classificação. O modelo usado fica no arquivo de metadados
-    ao lado da base, não em coluna.
+    ao lado da base, não em coluna. Tweets cuja resposta do LLM não permitiu
+    definir a classe recebem ``indefinido`` com ``confidence_score`` 0.0.
     """
 
     id: Series[str] = pa.Field(unique=True)
     text: Series[str]
     text_normalized: Series[str]
-    sentiment_label: Series[str] = pa.Field(isin=list(SENTIMENT_CLASSES))
+    sentiment_label: Series[str] = pa.Field(isin=[*SENTIMENT_CLASSES, UNDEFINED_LABEL])
     confidence_score: Series[float] = pa.Field(ge=0.0, le=1.0)
 
     class Config(BaseConfig):

@@ -41,7 +41,7 @@ for _logger_name in ("openai", "openai._client", "openai._base_client", "httpx",
     logging.getLogger(_logger_name).setLevel(logging.WARNING)
     logging.getLogger(_logger_name).propagate = False
 
-_CLIENT_CACHE: dict[tuple[str, str], Any] = {}
+_CLIENT_CACHE: dict[tuple[str, str, int | None], Any] = {}
 
 # Os IDs de modelo abaixo apontam para as versões mais recentes; versões
 # específicas só são fixadas quando necessário.
@@ -255,14 +255,21 @@ def _resolve_api_key(base_url: str | None) -> str:
     return LOCAL_OPENAI_API_KEY_PLACEHOLDER
 
 
-def create_client() -> Any:
+def create_client(max_retries: int | None = None) -> Any:
     """Cria (ou reaproveita do cache) um cliente OpenAI-compatível.
 
     Lê ``OPENAI_KEY`` (obrigatória para requisições hospedadas pela
     OpenAI) e ``OPENAI_BASE_URL`` (opcional, para apontar a um servidor
     local/compatível, ex.: vLLM, ou o endpoint UnB usado pelas etapas
     ``labeling`` e ``hypothesaes_analysis``). Clientes são cacheados por
-    ``(api_key, base_url)`` para evitar reconexões desnecessárias.
+    ``(api_key, base_url, max_retries)`` para evitar reconexões desnecessárias.
+
+    Parameters
+    ----------
+    max_retries : int | None, optional
+        Retentativas internas do SDK; ``0`` as desativa (usado quando o chamador
+        controla a taxa de requisições e as retentativas), by default None
+        (padrão do SDK).
 
     Returns
     -------
@@ -282,13 +289,15 @@ def create_client() -> Any:
 
     base_url = os.environ.get("OPENAI_BASE_URL")
     api_key = _resolve_api_key(base_url)
-    cache_key = (api_key, base_url or "__openai_default__")
+    cache_key = (api_key, base_url or "__openai_default__", max_retries)
     if cache_key in _CLIENT_CACHE:
         return _CLIENT_CACHE[cache_key]
 
     client_kwargs: dict[str, Any] = {"api_key": api_key}
     if base_url:
         client_kwargs["base_url"] = base_url
+    if max_retries is not None:
+        client_kwargs["max_retries"] = max_retries
 
     _CLIENT_CACHE[cache_key] = openai.OpenAI(**client_kwargs)
     return _CLIENT_CACHE[cache_key]
@@ -674,6 +683,68 @@ def generate_completion(
         backoff_factor=backoff_factor,
         **kwargs,
     )
+
+
+def generate_chat_completion(
+    messages: list[dict[str, Any]],
+    *,
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
+    timeout: float | None = None,
+) -> str:
+    """Gera uma resposta via Chat Completions, sem retentativas (uma única requisição).
+
+    Usada pela rotulagem via API (``labeling.openai_labeler``), que controla a taxa
+    de requisições e as retentativas por conta própria: por isso o cliente é criado
+    com ``max_retries=0`` (o SDK não reenvia requisições fora desse controle) e os
+    erros da API (ex.: ``openai.RateLimitError``) são propagados ao chamador. Serve
+    endpoints compatíveis (ex.: UnB) que não implementam a Responses API.
+
+    Parameters
+    ----------
+    messages : list[dict[str, Any]]
+        Mensagens de chat (``role``/``content``).
+    model : str
+        Modelo (ou abreviação, ver :data:`MODEL_ABBREVIATION_TO_ID`).
+    temperature : float, optional
+        Temperatura de amostragem, by default 0.0.
+    max_tokens : int | None, optional
+        Máximo de tokens gerados; ``None`` usa o padrão do servidor, by default None.
+    timeout : float | None, optional
+        Timeout da requisição, em segundos, by default None.
+
+    Returns
+    -------
+    str
+        Texto gerado pelo modelo (vazio se a resposta não trouxer conteúdo).
+
+    Raises
+    ------
+    ModelError
+        Se a biblioteca ``openai`` não estiver instalada.
+    MissingEnvironmentVariableError
+        Se ``OPENAI_KEY`` for necessária e não estiver definida.
+
+    Examples
+    --------
+    >>> generate_chat_completion(  # doctest: +SKIP
+    ...     [{"role": "user", "content": "Olá!"}], model="gpt-5-mini"
+    ... )
+    """
+    client = create_client(max_retries=0)
+    request_kwargs: dict[str, Any] = {}
+    if max_tokens is not None:
+        request_kwargs["max_tokens"] = max_tokens
+    if timeout is not None:
+        request_kwargs["timeout"] = timeout
+    response = client.chat.completions.create(
+        model=MODEL_ABBREVIATION_TO_ID.get(model, model),
+        messages=messages,
+        temperature=temperature,
+        **request_kwargs,
+    )
+    return response.choices[0].message.content or ""
 
 
 def _generate_completion_openai(
