@@ -150,6 +150,19 @@ class Settings(BaseSettings):
     ollama_base_url: str | None = None
     huggingface_token: str | None = None
 
+    @pydantic.field_validator(
+        "mlflow_tracking_uri", "ollama_base_url", "huggingface_token", mode="before"
+    )
+    @classmethod
+    def _convert_blank_to_none(cls, value: object) -> object:
+        """Converte valores vazios do ``.env`` (``VAR=``) em ``None``.
+
+        Evita enviar o cabeçalho ``Authorization: Bearer `` (token vazio) ao Hugging Face Hub.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
 
 def create_settings(env_file_path: Path | None = None) -> Settings:
     """Cria a instância de :class:`Settings`, opcionalmente a partir de um ``.env`` customizado.
