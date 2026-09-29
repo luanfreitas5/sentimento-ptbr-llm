@@ -134,7 +134,7 @@ cycler==0.12.1
     # via matplotlib
 cyclonedx-python-lib==11.12.0
     # via pip-audit
-databricks-sdk==0.140.0
+databricks-sdk==0.142.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
