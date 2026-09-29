@@ -55,13 +55,18 @@ hypotheses:
     Descreva o padrão em uma frase curta, em português.
 
 llm:
-  # Provedor único, OpenAI-compatível: "ollama" (local) ou "openai" (online).
-  provider: ollama
+  # Método de geração: "openai" (endpoint OpenAI-compatível, ex.: UnB-Llama-3.3-70B-Instruct
+  # via OPENAI_BASE_URL/OPENAI_KEY no .env) ou "ollama" (local).
+  # Pode ser sobrescrito na CLI com --llm-provider.
+  provider: openai
   ollama_base_url: http://localhost:11434
-  openai_base_url: null               # null = endpoint padrão da OpenAI (ou OPENAI_BASE_URL)
+  openai_base_url: null               # null = usa OPENAI_BASE_URL do .env (endpoint UnB)
+  # Um modelo por provedor e papel; vale o do `provider` ativo.
+  interpreter_model_openai: UnB-Llama-3.3-70B-Instruct
+  annotator_model_openai: UnB-Llama-3.3-70B-Instruct
   # ATENÇÃO: llama3.2:1b NÃO segue o formato de anotação (smoke test: 0/6 respostas parseáveis).
-  interpreter_model: gemma2:9b
-  annotator_model: gemma2:9b
+  interpreter_model_ollama: gemma2:9b
+  annotator_model_ollama: gemma2:9b
   max_concurrency: 8                  # limite de requisições simultâneas (semáforo)
   request_timeout_seconds: 120
   max_retries: 3

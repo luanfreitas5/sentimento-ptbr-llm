@@ -90,14 +90,30 @@ class LLMSettings(_Strict):
     provider: Literal["ollama", "openai"] = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     openai_base_url: str | None = None
-    interpreter_model: str
-    annotator_model: str
+    interpreter_model_openai: str = "UnB-Llama-3.3-70B-Instruct"
+    interpreter_model_ollama: str = "gemma2:9b"
+    annotator_model_openai: str = "UnB-Llama-3.3-70B-Instruct"
+    annotator_model_ollama: str = "gemma2:9b"
     max_concurrency: int = Field(gt=0, default=8)
     request_timeout_seconds: float = Field(gt=0, default=120.0)
     max_retries: int = Field(ge=0, default=3)
     temperature: float = Field(ge=0, default=0.0)
     cache_dir: str = "data/interim/diagnostics/llm_cache"
     max_annotation_failure_rate: float = Field(ge=0, le=1, default=0.2)
+
+    @property
+    def interpreter_model(self) -> str:
+        """Modelo que gera as hipóteses, conforme o ``provider`` ativo."""
+        if self.provider == "openai":
+            return self.interpreter_model_openai
+        return self.interpreter_model_ollama
+
+    @property
+    def annotator_model(self) -> str:
+        """Modelo que anota os tweets, conforme o ``provider`` ativo."""
+        if self.provider == "openai":
+            return self.annotator_model_openai
+        return self.annotator_model_ollama
 
 
 class PriceSettings(_Strict):

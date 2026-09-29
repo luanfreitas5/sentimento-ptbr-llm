@@ -15,6 +15,10 @@ Uso::
 
     PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --dry-run
     PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement
+    PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --llm-provider ollama
+
+O método de geração (``openai`` = UnB-Llama-3.3-70B-Instruct; ``ollama`` = local)
+é escolhido em ``configs/diagnostics.yaml -> llm.provider`` ou por ``--llm-provider``.
 
 A validação em partição disjunta (holdout) é feita em :mod:`diagnostics.validation`.
 """
@@ -648,6 +652,11 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--label", help="Classe positiva do one-vs-rest (pseudo_label).")
     parser.add_argument("--corpus", type=Path, help="Parquet já no contrato de diagnóstico.")
     parser.add_argument("--config", type=Path, default=DEFAULT_DIAGNOSTICS_CONFIG_FILE)
+    parser.add_argument(
+        "--llm-provider",
+        choices=("openai", "ollama"),
+        help="Método de geração das hipóteses (padrão: llm.provider de diagnostics.yaml).",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Só estima chamadas e custo.")
     parser.add_argument("--no-mlflow", action="store_true", help="Não registra no MLflow.")
     return parser.parse_args(argv)
@@ -682,6 +691,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_environment_variables()
     configure_logging()
     settings = load_diagnostics_settings(args.config)
+    if args.llm_provider:
+        settings = settings.model_copy(
+            update={"llm": settings.llm.model_copy(update={"provider": args.llm_provider})}
+        )
+    logger.info(
+        "Geração de hipóteses via '%s' (modelo: %s).",
+        settings.llm.provider,
+        settings.llm.interpreter_model,
+    )
     paths = load_project_paths()
     if args.target == "gold_error" and args.corpus is None:
         raise DataValidationError(
