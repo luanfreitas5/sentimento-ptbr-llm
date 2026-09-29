@@ -184,30 +184,39 @@ def parse_multi_tweet_response(
     [('positivo', 1.0), None, None]
     """
     results: list[tuple[str, float] | None] = [None] * n_items
-    text = raw_response.rsplit("</think>", maxsplit=1)[-1].strip()
-    match = _JSON_ARRAY_PATTERN.search(text)
-    if not match:
-        return results
-    try:
-        items = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return results
-    if not isinstance(items, list):
-        return results
-
     seen: set[int] = set()
-    for item in items:
-        if not isinstance(item, dict):
+    for item in _extract_json_items(raw_response):
+        item_id = _read_valid_item_id(item, n_items)
+        if item_id is None:
             continue
-        item_id = item.get("id")
-        if not isinstance(item_id, int) or isinstance(item_id, bool):
-            continue
-        if not 1 <= item_id <= n_items or item_id in seen:
-            if 1 <= item_id <= n_items:
-                results[item_id - 1] = None  # id duplicado é ambíguo: reclassificar
+        if item_id in seen:
+            results[item_id - 1] = None  # id duplicado é ambíguo: reclassificar
             continue
         seen.add(item_id)
         results[item_id - 1] = parse_llm_label_response(
             json.dumps(item), allowed_labels=allowed_labels
         )
     return results
+
+
+def _extract_json_items(raw_response: str) -> list[object]:
+    """Extrai a lista JSON da resposta bruta (vazia se ausente ou inválida)."""
+    text = raw_response.rsplit("</think>", maxsplit=1)[-1].strip()
+    match = _JSON_ARRAY_PATTERN.search(text)
+    if not match:
+        return []
+    try:
+        items = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return []
+    return items if isinstance(items, list) else []
+
+
+def _read_valid_item_id(item: object, n_items: int) -> int | None:
+    """Devolve o ``id`` do item se for inteiro em ``1..n_items``; senão ``None``."""
+    if not isinstance(item, dict):
+        return None
+    item_id = item.get("id")
+    if not isinstance(item_id, int) or isinstance(item_id, bool):
+        return None
+    return item_id if 1 <= item_id <= n_items else None

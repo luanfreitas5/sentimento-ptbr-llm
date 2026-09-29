@@ -282,25 +282,22 @@ def _classify_single_text(
             }
         ]
 
-        def send() -> tuple[str, dict[str, float]]:
-            return generate_chat_completion_first_token_logprobs(
-                label_only_messages,
-                model=model,
-                max_tokens=_LABEL_ONLY_MAX_TOKENS,
-                timeout=request_timeout_seconds,
-            )
+        send = lambda: generate_chat_completion_first_token_logprobs(  # noqa: E731
+            label_only_messages,
+            model=model,
+            max_tokens=_LABEL_ONLY_MAX_TOKENS,
+            timeout=request_timeout_seconds,
+        )
 
     else:
         json_messages = [{"role": "user", "content": build_labeling_prompt(prompt_template, text)}]
-
-        def send() -> str:
-            return generate_chat_completion(
-                json_messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=request_timeout_seconds,
-            )
+        send = lambda: generate_chat_completion(  # noqa: E731
+            json_messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=request_timeout_seconds,
+        )
 
     response = _request_with_retries(
         send,
