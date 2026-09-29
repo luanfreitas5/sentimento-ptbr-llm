@@ -28,7 +28,7 @@ def _fit_alpha_model(
     """Ajusta o modelo linear (Lasso ou logística L1) para um dado ``alpha``
     e retorna os coeficientes."""
     model = (
-        LogisticRegression(penalty="l1", solver="liblinear", C=1 / alpha, max_iter=max_iter)
+        LogisticRegression(l1_ratio=1.0, solver="liblinear", C=1 / alpha, max_iter=max_iter)
         if classification
         else Lasso(alpha=alpha, max_iter=max_iter)
     )
