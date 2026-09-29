@@ -41,7 +41,11 @@ openai:
   temperature: 0.0
   max_tokens: 100 # a resposta é um JSON curto (rótulo + probabilidades)
   batch_size: 50 # tweets por lote (e por gravação no checkpoint)
-  n_workers: 4 # requisições concorrentes
+  n_workers: 4 # requisições concorrentes dentro de um lote
+  parallel_batches: 1 # lotes simultâneos (pool contínuo); total de threads = n_workers x parallel_batches
+  # Modos rápidos (mudam o hash do checkpoint quando diferentes do padrão json + 1):
+  response_mode: "json" # "json" (JSON completo) | "label_logprobs" (só o rótulo; confiança = softmax do 1º token; exige logprobs no endpoint)
+  tweets_per_request: 1 # >1 agrupa tweets numerados por requisição (valide no gold set antes de adotar)
   requests_per_minute: 120 # limite base, somado entre as threads (null desativa)
   request_timeout_seconds: 60
   max_retries: 3 # falhas de API (exceto 429)

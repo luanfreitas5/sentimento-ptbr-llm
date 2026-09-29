@@ -75,6 +75,8 @@ class LabelingSource:
         Temperatura de geração (0.0 = determinístico).
     batch_size : int
         Tweets por lote (e por gravação no checkpoint).
+    n_parallel_batches : int
+        Lotes classificados simultaneamente (1 = sequencial).
     open_classifier : Callable[[], AbstractContextManager[BatchClassifier]]
         Abre o classificador dentro de um ``with`` (o do Hugging Face carrega o
         modelo na entrada e libera a GPU na saída).
@@ -87,6 +89,7 @@ class LabelingSource:
     temperature: float
     batch_size: int
     open_classifier: Callable[[], AbstractContextManager[BatchClassifier]]
+    n_parallel_batches: int = 1
 
 
 def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
@@ -201,6 +204,7 @@ def label_source(
             source_name=source.name,
             checkpoint_path=checkpoint_path,
             batch_size=source.batch_size,
+            n_parallel_batches=source.n_parallel_batches,
             text_column=text_column,
             show_progress=show_progress,
         )

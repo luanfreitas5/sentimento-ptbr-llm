@@ -8,6 +8,7 @@ tweets já rotulados (checkpoint), gravar cada lote assim que concluído,
 exibir progresso e falhar de forma explícita se sobrarem tweets sem rótulo.
 """
 
+import concurrent.futures
 import logging
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -49,9 +50,16 @@ def _build_progress(*, disable: bool) -> Progress:
     )
 
 
-def _validate_inputs(corpus: pl.DataFrame, *, id_column: str, batch_size: int) -> None:
-    """Valida corpus não vazio, ``batch_size`` positivo e ids únicos (chave do checkpoint)."""
+def _validate_inputs(
+    corpus: pl.DataFrame, *, id_column: str, batch_size: int, n_parallel_batches: int
+) -> None:
+    """Valida corpus não vazio, tamanhos positivos e ids únicos (chave do checkpoint)."""
     validate_not_empty_collection(corpus, collection_name="corpus")
+    if n_parallel_batches < 1:
+        raise DataValidationError(
+            schema_name="labeling_parallel_batches",
+            detail=f"n_parallel_batches deve ser >= 1, recebido {n_parallel_batches}",
+        )
     if batch_size < 1:
         raise DataValidationError(
             schema_name="labeling_batch_size",
@@ -64,13 +72,12 @@ def _validate_inputs(corpus: pl.DataFrame, *, id_column: str, batch_size: int) -
         )
 
 
-def _classify_and_store_batch(
-    texts: Sequence[str],
+def _store_batch_predictions(
+    predictions: Sequence[LabelPrediction | None],
     batch_ids: Sequence[str],
-    classify_batch: BatchClassifier,
     checkpoint_path: Path,
 ) -> dict[str, LabelPrediction]:
-    """Classifica um lote e grava no checkpoint os tweets com rótulo válido.
+    """Valida o tamanho das predições e grava no checkpoint as com rótulo válido.
 
     Returns
     -------
@@ -82,13 +89,12 @@ def _classify_and_store_batch(
     DataValidationError
         Se o classificador devolver um número de resultados diferente do lote.
     """
-    predictions = classify_batch(texts)
-    if len(predictions) != len(texts):
+    if len(predictions) != len(batch_ids):
         raise DataValidationError(
             schema_name="labeling_batch_size",
             detail=(
                 f"o classificador devolveu {len(predictions)} resultado(s) para "
-                f"{len(texts)} texto(s)"
+                f"{len(batch_ids)} texto(s)"
             ),
         )
     batch_results = {
@@ -109,30 +115,44 @@ def _label_pending_batches(
     *,
     checkpoint_path: Path,
     batch_size: int,
+    n_parallel_batches: int,
     progress_description: str,
     show_progress: bool,
 ) -> int:
     """Classifica, em lotes, os tweets pendentes, atualizando ``labeled`` e o checkpoint.
+
+    Com ``n_parallel_batches > 1`` os lotes são classificados em paralelo (pool contínuo,
+    sem esperar o lote mais lento) e cada um é gravado no checkpoint, pela thread
+    principal, assim que termina.
 
     Returns
     -------
     int
         Quantidade de tweets que continuam sem rótulo válido.
     """
+    batches = [pending[start : start + batch_size] for start in range(0, len(pending), batch_size)]
     n_failed = 0
-    with _build_progress(disable=not show_progress or not pending) as progress:
+    with (
+        _build_progress(disable=not show_progress or not pending) as progress,
+        concurrent.futures.ThreadPoolExecutor(max_workers=n_parallel_batches) as executor,
+    ):
         task_id = progress.add_task(progress_description, total=len(pending))
-        for start in range(0, len(pending), batch_size):
-            batch_indices = pending[start : start + batch_size]
-            batch_results = _classify_and_store_batch(
-                [texts[index] for index in batch_indices],
-                [ids[index] for index in batch_indices],
-                classify_batch,
-                checkpoint_path,
-            )
-            labeled.update(batch_results)
-            n_failed += len(batch_indices) - len(batch_results)
-            progress.advance(task_id, len(batch_indices))
+        futures = {
+            executor.submit(classify_batch, [texts[index] for index in batch]): batch
+            for batch in batches
+        }
+        try:
+            for future in concurrent.futures.as_completed(futures):
+                batch = futures[future]
+                batch_results = _store_batch_predictions(
+                    future.result(), [ids[index] for index in batch], checkpoint_path
+                )
+                labeled.update(batch_results)
+                n_failed += len(batch) - len(batch_results)
+                progress.advance(task_id, len(batch))
+        except BaseException:
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
     return n_failed
 
 
@@ -143,6 +163,7 @@ def run_incremental_labeling(
     source_name: str,
     checkpoint_path: Path,
     batch_size: int,
+    n_parallel_batches: int = 1,
     id_column: str = "id",
     text_column: str = "text_normalized",
     show_progress: bool = True,
@@ -162,6 +183,10 @@ def run_incremental_labeling(
         Checkpoint JSON Lines (ver :mod:`labeling.checkpoint`).
     batch_size : int
         Tweets por lote; cada lote é gravado no checkpoint ao terminar.
+    n_parallel_batches : int, optional
+        Lotes classificados simultaneamente, by default 1 (sequencial). Use mais de 1 só
+        com classificadores seguros para chamadas concorrentes (ex.: o da API OpenAI);
+        o do Hugging Face usa a GPU e deve ficar em 1.
     id_column : str, optional
         Coluna identificadora, by default "id".
     text_column : str, optional
@@ -180,7 +205,8 @@ def run_incremental_labeling(
     EmptyDatasetError
         Se ``corpus`` estiver vazio.
     DataValidationError
-        Se ``id_column`` tiver valores duplicados, ``batch_size`` for inválido ou o
+        Se ``id_column`` tiver valores duplicados, ``batch_size`` ou
+        ``n_parallel_batches`` forem inválidos ou o
         classificador devolver um número de resultados diferente do lote.
     IncompleteLabelingError
         Se restarem tweets sem rótulo válido; os já rotulados ficam no checkpoint.
@@ -196,7 +222,9 @@ def run_incremental_labeling(
     ...     batch_size=8,
     ... )
     """
-    _validate_inputs(corpus, id_column=id_column, batch_size=batch_size)
+    _validate_inputs(
+        corpus, id_column=id_column, batch_size=batch_size, n_parallel_batches=n_parallel_batches
+    )
 
     ids = [str(value) for value in corpus[id_column].to_list()]
     texts = corpus[text_column].to_list()
@@ -218,6 +246,7 @@ def run_incremental_labeling(
         classify_batch,
         checkpoint_path=checkpoint_path,
         batch_size=batch_size,
+        n_parallel_batches=n_parallel_batches,
         progress_description=f"Rotulando ({source_name})",
         show_progress=show_progress,
     )

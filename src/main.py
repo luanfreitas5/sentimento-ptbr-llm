@@ -499,6 +499,15 @@ def _build_labeling_sources(
 
     if "openai" in requested:
         oa_config = labeling_config["openai"]
+        response_mode = oa_config.get("response_mode", "json")
+        tweets_per_request = oa_config.get("tweets_per_request", 1)
+        # Os modos rápidos mudam o formato da resposta: entram no hash do checkpoint
+        # (o padrão `json` + 1 tweet/requisição não altera o hash, preservando checkpoints).
+        fingerprint_suffix = (
+            f"\n#response_mode={response_mode};tweets_per_request={tweets_per_request}"
+            if (response_mode, tweets_per_request) != ("json", 1)
+            else ""
+        )
         classifier = create_openai_batch_classifier(
             prompt_template,
             model=oa_config["model"],
@@ -509,16 +518,19 @@ def _build_labeling_sources(
             n_workers=args.max_workers or oa_config["n_workers"],
             requests_per_minute=oa_config["requests_per_minute"],
             request_timeout_seconds=oa_config["request_timeout_seconds"],
+            response_mode=response_mode,
+            tweets_per_request=tweets_per_request,
         )
         sources.append(
             LabelingSource(
                 name="openai",
                 model_name=oa_config["model"],
                 prompt_name=prompt_name,
-                prompt_template=prompt_template,
+                prompt_template=prompt_template + fingerprint_suffix,
                 temperature=oa_config["temperature"],
                 batch_size=oa_config["batch_size"],
                 open_classifier=lambda: nullcontext(classifier),
+                n_parallel_batches=oa_config.get("parallel_batches", 1),
             )
         )
     return sources

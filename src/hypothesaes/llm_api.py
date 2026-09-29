@@ -747,6 +747,77 @@ def generate_chat_completion(
     return response.choices[0].message.content or ""
 
 
+def generate_chat_completion_first_token_logprobs(
+    messages: list[dict[str, Any]],
+    *,
+    model: str,
+    max_tokens: int = 3,
+    top_logprobs: int = 10,
+    timeout: float | None = None,
+) -> tuple[str, dict[str, float]]:
+    """Gera uma resposta curta e devolve os logprobs alternativos do primeiro token.
+
+    Serve à rotulagem de resposta mínima (``labeling.openai_labeler``): o rótulo é
+    a primeira palavra gerada e a confiança vem da distribuição de probabilidade
+    do primeiro token, mais calibrada que probabilidades escritas pelo modelo.
+    Usa temperatura 0.0 e uma única requisição (sem retentativas).
+
+    Parameters
+    ----------
+    messages : list[dict[str, Any]]
+        Mensagens de chat (``role``/``content``).
+    model : str
+        Modelo (ou abreviação, ver :data:`MODEL_ABBREVIATION_TO_ID`).
+    max_tokens : int, optional
+        Máximo de tokens gerados, by default 3.
+    top_logprobs : int, optional
+        Quantidade de alternativas por posição, by default 10.
+    timeout : float | None, optional
+        Timeout da requisição, em segundos, by default None.
+
+    Returns
+    -------
+    tuple[str, dict[str, float]]
+        Texto gerado e ``{token: logprob}`` do primeiro token (vazio se o endpoint
+        não devolver ``logprobs``).
+
+    Raises
+    ------
+    ModelError
+        Se a biblioteca ``openai`` não estiver instalada.
+    MissingEnvironmentVariableError
+        Se ``OPENAI_KEY`` for necessária e não estiver definida.
+
+    Examples
+    --------
+    >>> generate_chat_completion_first_token_logprobs(  # doctest: +SKIP
+    ...     [{"role": "user", "content": "Diga sim ou não."}], model="gpt-5-mini"
+    ... )
+    """
+    client = create_client(max_retries=0)
+    request_kwargs: dict[str, Any] = {}
+    if timeout is not None:
+        request_kwargs["timeout"] = timeout
+    response = client.chat.completions.create(
+        model=MODEL_ABBREVIATION_TO_ID.get(model, model),
+        messages=messages,
+        temperature=0.0,
+        max_tokens=max_tokens,
+        logprobs=True,
+        top_logprobs=top_logprobs,
+        **request_kwargs,
+    )
+    choice = response.choices[0]
+    text = choice.message.content or ""
+    content = getattr(getattr(choice, "logprobs", None), "content", None)
+    if not content:
+        return text, {}
+    first_token = content[0]
+    alternatives = {alt.token: alt.logprob for alt in (first_token.top_logprobs or [])}
+    alternatives.setdefault(first_token.token, first_token.logprob)
+    return text, alternatives
+
+
 def _generate_completion_openai(
     prompt: str | None = None,
     *,
