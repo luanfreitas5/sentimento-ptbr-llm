@@ -885,7 +885,7 @@ sqlparse==0.6.0
     # via mlflow-skinny
 stack-data==0.6.3
     # via ipython
-starlette==1.6.0
+starlette==1.7.0
     # via
     #   fastapi
     #   mlflow-skinny
