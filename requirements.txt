@@ -937,10 +937,6 @@ tornado==6.5.10
     #   jupyter-server
     #   jupyterlab
     #   terminado
-tqdm==4.70.1
-    # via
-    #   sentimento-ptbr-llm
-    #   shap
 traitlets==5.16.1
     # via
     #   ipykernel

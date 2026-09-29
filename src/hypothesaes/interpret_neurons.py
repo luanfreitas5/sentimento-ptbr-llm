@@ -16,10 +16,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-from tqdm.auto import tqdm
 
 from hypothesaes.annotate import ANNOTATION_CACHE_DIR, annotate_tasks
 from hypothesaes.llm_api import generate_completion, normalize_llm_kwargs
+from hypothesaes.progress import iterate_with_progress
 from hypothesaes.utils import load_prompt_template, truncate_text
 
 logger = logging.getLogger(__name__)
@@ -592,10 +592,10 @@ class NeuronInterpreter:
                 for idx, prompt in enumerate(valid_prompts)
             }
 
-            iterator = tqdm(
+            iterator = iterate_with_progress(
                 concurrent.futures.as_completed(future_to_idx),
+                "Gerando interpretações",
                 total=len(valid_prompts),
-                desc="Gerando interpretações",
             )
 
             ordered_results: list[tuple[str | None, dict[str, Any] | None]] = [(None, None)] * len(

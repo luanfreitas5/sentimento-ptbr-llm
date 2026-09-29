@@ -31,6 +31,8 @@ utils
     em JSON.
 llm_api
     Cliente OpenAI-compatível (Responses API) para geração de completions.
+progress
+    Barras de progresso ``rich`` compartilhadas (substituem o ``tqdm``).
 embedding
     Cálculo e cache de embeddings de texto (OpenAI ou local).
 annotate

@@ -22,10 +22,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from tqdm.auto import tqdm
 
 from config.paths import PROJECT_ROOT
 from exceptions.model import ModelError
+from hypothesaes.progress import iterate_with_progress
 from hypothesaes.utils import filter_invalid_texts
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ def load_embedding_cache(cache_name: str | None) -> dict[str, np.ndarray]:
     chunk_files = sorted(cache_dir.glob("chunk_*.npy"))
 
     start_time = time.time()
-    for chunk_file in tqdm(chunk_files, desc="Carregando fragmentos de embeddings"):
+    for chunk_file in iterate_with_progress(chunk_files, "Carregando fragmentos de embeddings"):
         # allow_pickle=True: arquivos gerados apenas por _save_embedding_chunk()
         # deste mesmo módulo (cache local de embeddings, nunca dados externos).
         chunk_data = np.load(chunk_file, allow_pickle=True)
@@ -205,9 +205,12 @@ def _embed_openai_batches(
             for batch in batches
         ]
 
-        iterator = concurrent.futures.as_completed(futures)
-        if show_progress:
-            iterator = tqdm(iterator, total=len(batches), desc=chunk_label)
+        iterator = iterate_with_progress(
+            concurrent.futures.as_completed(futures),
+            chunk_label,
+            total=len(batches),
+            disable=not show_progress,
+        )
 
         for future in iterator:
             batch_result = future.result()
@@ -275,8 +278,8 @@ def extract_openai_embeddings(
 
     next_chunk_index = _find_next_chunk_index(cache_name)
     chunk_ranges = _compute_chunk_ranges(len(texts_to_embed), chunk_size)
-    chunk_iterator = (
-        tqdm(chunk_ranges, desc="Processando fragmentos") if show_progress else chunk_ranges
+    chunk_iterator = iterate_with_progress(
+        chunk_ranges, "Processando fragmentos", disable=not show_progress
     )
 
     for chunk_start, chunk_end in chunk_iterator:
@@ -319,9 +322,9 @@ def _embed_local_batches(
 ) -> dict[str, np.ndarray]:
     """Codifica um fragmento de textos em lotes com o modelo local já carregado."""
     chunk_embeddings: dict[str, np.ndarray] = {}
-    batch_iterator: Any = range(0, len(chunk_texts), batch_size)
-    if show_progress:
-        batch_iterator = tqdm(batch_iterator, desc=chunk_label)
+    batch_iterator = iterate_with_progress(
+        range(0, len(chunk_texts), batch_size), chunk_label, disable=not show_progress
+    )
 
     for i in batch_iterator:
         batch = chunk_texts[i : i + batch_size]
@@ -396,8 +399,8 @@ def extract_local_embeddings(
 
     next_chunk_index = _find_next_chunk_index(cache_name)
     chunk_ranges = _compute_chunk_ranges(len(texts_to_embed), chunk_size)
-    chunk_iterator = (
-        tqdm(chunk_ranges, desc="Processando fragmentos") if show_progress else chunk_ranges
+    chunk_iterator = iterate_with_progress(
+        chunk_ranges, "Processando fragmentos", disable=not show_progress
     )
 
     for chunk_start, chunk_end in chunk_iterator:

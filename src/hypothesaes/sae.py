@@ -41,6 +41,7 @@ from pathlib import Path
 import numpy as np
 
 from exceptions.model import ModelError
+from hypothesaes.progress import iterate_with_progress, open_progress
 from utils.validation import validate_file_exists
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,6 @@ try:
     from torch import nn  # type: ignore[reportMissingImports]
     from torch.nn import functional  # type: ignore[reportMissingImports]
     from torch.utils.data import DataLoader, TensorDataset  # type: ignore[reportMissingImports]
-    from tqdm.auto import tqdm  # type: ignore[reportMissingImports]
 except ImportError as _import_error:  # pragma: no cover - guarda defensiva
     raise ModelError(
         "A biblioteca 'torch' não está instalada. Instale com `uv add torch` "
@@ -471,43 +471,47 @@ class SparseAutoencoder(nn.Module):
         }
         avg_val_loss = None
 
-        iterator = tqdm(range(n_epochs), disable=not show_progress)
-        for epoch in iterator:
-            avg_train_loss = self._train_one_epoch(
-                train_loader, optimizer, aux_coef, multi_coef, clip_grad
-            )
-            history["train_loss"].append(avg_train_loss)
+        with open_progress(disable=not show_progress) as progress:
+            task_id = progress.add_task("Treinando SAE", total=n_epochs)
+            for epoch in range(n_epochs):
+                avg_train_loss = self._train_one_epoch(
+                    train_loader, optimizer, aux_coef, multi_coef, clip_grad
+                )
+                history["train_loss"].append(avg_train_loss)
 
-            dead_ratio = (
-                (self.steps_since_activation > self.dead_neuron_threshold_steps)
-                .float()
-                .mean()
-                .item()
-            )
-            history["dead_neuron_ratio"].append(dead_ratio)
+                dead_ratio = (
+                    (self.steps_since_activation > self.dead_neuron_threshold_steps)
+                    .float()
+                    .mean()
+                    .item()
+                )
+                history["dead_neuron_ratio"].append(dead_ratio)
 
-            if val_loader is not None:
-                avg_val_loss = self._evaluate_validation_loss(val_loader, aux_coef, multi_coef)
-                history["val_loss"].append(avg_val_loss)
+                if val_loader is not None:
+                    avg_val_loss = self._evaluate_validation_loss(val_loader, aux_coef, multi_coef)
+                    history["val_loss"].append(avg_val_loss)
 
-                if avg_val_loss < best_val_loss:
-                    best_val_loss = avg_val_loss
-                    patience_counter = 0
-                else:
-                    patience_counter += 1
-                    if patience_counter >= patience:
-                        logger.info("Early stopping ativado após %d época(s).", epoch + 1)
-                        break
+                    if avg_val_loss < best_val_loss:
+                        best_val_loss = avg_val_loss
+                        patience_counter = 0
+                    else:
+                        patience_counter += 1
+                        if patience_counter >= patience:
+                            logger.info("Early stopping ativado após %d época(s).", epoch + 1)
+                            break
 
-            if show_progress:
-                postfix = {
-                    "train_loss": f"{avg_train_loss:.4f}",
-                    "val_loss": f"{avg_val_loss:.4f}" if val_loader else "N/A",
-                    "dead_ratio": f"{dead_ratio:.3f}",
-                }
+                metrics = [
+                    f"train_loss={avg_train_loss:.4f}",
+                    f"val_loss={avg_val_loss:.4f}" if val_loader else "val_loss=N/A",
+                    f"dead_ratio={dead_ratio:.3f}",
+                ]
                 if self.use_batch_topk:
-                    postfix["threshold"] = f"{self.threshold.item():.2e}"
-                iterator.set_postfix(postfix)
+                    metrics.append(f"threshold={self.threshold.item():.2e}")
+                progress.update(
+                    task_id,
+                    advance=1,
+                    description=f"Treinando SAE ({', '.join(metrics)})",
+                )
 
         if save_dir is not None:
             save_dir.mkdir(parents=True, exist_ok=True)
@@ -564,11 +568,11 @@ class SparseAutoencoder(nn.Module):
         num_samples = tensor_inputs.shape[0]
         all_activations = []
         with torch.no_grad():
-            index_range: object = range(0, num_samples, batch_size)
-            if show_progress:
-                index_range = tqdm(
-                    index_range, desc=f"Calculando ativações (tamanho do lote={batch_size})"
-                )
+            index_range = iterate_with_progress(
+                range(0, num_samples, batch_size),
+                f"Calculando ativações (tamanho do lote={batch_size})",
+                disable=not show_progress,
+            )
 
             for i in index_range:
                 batch = tensor_inputs[i : i + batch_size].to(self.device)

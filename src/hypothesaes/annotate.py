@@ -18,10 +18,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from tqdm.auto import tqdm
 
 from config.paths import PROJECT_ROOT
 from hypothesaes.llm_api import generate_completion, normalize_llm_kwargs
+from hypothesaes.progress import iterate_with_progress
 from hypothesaes.utils import load_prompt_template, truncate_text
 
 ANNOTATION_CACHE_DIR: Path = PROJECT_ROOT / "models" / "artifacts" / "hypothesaes_annotation_cache"
@@ -358,10 +358,10 @@ def _annotate_tasks_in_parallel(
             for text, concept in tasks
         }
 
-        iterator = tqdm(
+        iterator = iterate_with_progress(
             concurrent.futures.as_completed(future_to_task),
+            progress_desc,
             total=len(tasks),
-            desc=progress_desc,
             disable=not show_progress,
         )
 

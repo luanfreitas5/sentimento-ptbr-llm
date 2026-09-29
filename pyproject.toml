@@ -73,7 +73,6 @@ dependencies = [
 
     # Terminal, progresso e geração de relatórios
     "rich>=15.0.0",                             # saída de terminal bonita e colorida, logging
-    "tqdm>=4.70.0",                             # barras de progresso em laços simples
     "markitdown[pptx]>=0.1.7",                  # renderização de Markdown em slides PowerPoint
     "python-pptx>=1.0.2",                       # criação de apresentações PowerPoint
 
