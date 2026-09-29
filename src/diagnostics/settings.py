@@ -97,6 +97,8 @@ class LLMSettings(_Strict):
     max_concurrency: int = Field(gt=0, default=8)
     request_timeout_seconds: float = Field(gt=0, default=120.0)
     max_retries: int = Field(ge=0, default=3)
+    requests_per_minute: float | None = Field(gt=0, default=60.0)  # None = sem intervalo base
+    max_rate_limit_retries: int = Field(ge=0, default=8)  # orçamento próprio para HTTP 429
     temperature: float = Field(ge=0, default=0.0)
     cache_dir: str = "data/interim/diagnostics/llm_cache"
     max_annotation_failure_rate: float = Field(ge=0, le=1, default=0.2)

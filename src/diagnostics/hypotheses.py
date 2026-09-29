@@ -64,6 +64,7 @@ from exceptions.data import DataValidationError, EmptyDatasetError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
 from io_utils.parquet import read_parquet, write_parquet
+from labeling.rate_limiter import RateLimiter
 from schemas.diagnostics import validate_diagnostic_corpus
 
 logger = logging.getLogger(__name__)
@@ -226,7 +227,11 @@ def build_generation_kwargs(
         Argumentos nomeados (sem ``texts``/``labels``/``embeddings``/``sae``).
     """
     hyp, llm = settings.hypotheses, settings.llm
-    llm_kwargs = {"provider": llm.provider, "ollama_base_url": llm.ollama_base_url}
+    llm_kwargs: dict[str, Any] = {"provider": llm.provider, "ollama_base_url": llm.ollama_base_url}
+    if llm.provider == "openai":
+        # Um único limitador para interpretação e anotação (mesmo endpoint, evita HTTP 429).
+        llm_kwargs["rate_limiter"] = RateLimiter(llm.requests_per_minute)
+        llm_kwargs["max_rate_limit_retries"] = llm.max_rate_limit_retries
     return {
         "cache_name": cache_name,
         "classification": classification,

@@ -327,6 +327,72 @@ class TestGenerateCompletionDispatch:
             llm_api.generate_completion(prompt="oi", provider="anthropic")  # type: ignore[arg-type]
 
 
+class TestGenerateCompletionRateLimit:
+    """Anti-429 em :func:`hypothesaes.llm_api._generate_completion_openai`."""
+
+    @staticmethod
+    def _setup(monkeypatch: pytest.MonkeyPatch, failures: int) -> dict[str, Any]:
+        class _RateLimitedError(RuntimeError):
+            status_code = 429
+            response = type("R", (), {"headers": {"retry-after": "3"}})()
+
+        state: dict[str, Any] = {"calls": 0, "error": _RateLimitedError}
+
+        class _Responses:
+            def create(self, **kwargs: Any) -> Any:
+                state["calls"] += 1
+                if state["calls"] <= failures:
+                    raise _RateLimitedError("too many requests")
+                return "ok"
+
+        fake_openai = type(
+            "O",
+            (),
+            {"RateLimitError": _RateLimitedError, "APITimeoutError": type("T", (Exception,), {})},
+        )
+        monkeypatch.setattr(llm_api, "_import_openai", lambda: fake_openai)
+        fake_client = type("C", (), {"responses": _Responses()})()
+        monkeypatch.setattr(llm_api, "create_client", lambda: fake_client)
+        monkeypatch.setattr(llm_api, "_extract_output_text", lambda response: response)
+        return state
+
+    def test_429_pauses_limiter_and_retries(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Respostas 429 pausam o limitador (``Retry-After``) e a requisição é refeita."""
+        state = self._setup(monkeypatch, failures=2)
+        pauses: list[float] = []
+        limiter = type(
+            "L",
+            (),
+            {
+                "acquire": lambda self: None,
+                "report_success": lambda self: None,
+                "report_rate_limited": lambda self, wait: pauses.append(wait),
+            },
+        )()
+        result = llm_api.generate_completion(
+            prompt="oi", rate_limiter=limiter, max_rate_limit_retries=5, max_retries=1
+        )
+        assert result == "ok"
+        assert state["calls"] == 3
+        assert pauses == [3.0, 3.0]
+
+    def test_429_budget_exhausted_reraises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Esgotado ``max_rate_limit_retries``, o 429 é propagado."""
+        state = self._setup(monkeypatch, failures=99)
+        limiter = type(
+            "L",
+            (),
+            {
+                "acquire": lambda self: None,
+                "report_success": lambda self: None,
+                "report_rate_limited": lambda self, wait: None,
+            },
+        )()
+        with pytest.raises(state["error"]):
+            llm_api.generate_completion(prompt="oi", rate_limiter=limiter, max_rate_limit_retries=2)
+        assert state["calls"] == 3
+
+
 # =============================================================================
 # embedding.py
 # =============================================================================

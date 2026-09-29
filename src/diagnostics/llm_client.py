@@ -26,6 +26,12 @@ from typing import Any
 from diagnostics.settings import LLMSettings
 from exceptions.configuration import MissingEnvironmentVariableError
 from exceptions.pipeline import PipelineStageError
+from labeling.rate_limiter import (
+    RateLimiter,
+    calculate_backoff_seconds,
+    get_retry_after_seconds,
+    is_rate_limit_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +245,10 @@ class AsyncLLMClient:
         self._client_factory = client_factory or _default_client_factory
         self._client: Any = None
         self._semaphore: asyncio.Semaphore | None = None
+        # Ollama é local: sem intervalo base (a pausa global em 429 continua ativa).
+        self._rate_limiter = RateLimiter(
+            settings.requests_per_minute if settings.provider == "openai" else None
+        )
         self.stats = CallStats()
 
     def _get_client(self) -> Any:
@@ -331,18 +341,29 @@ class AsyncLLMClient:
         messages.append({"role": "user", "content": prompt})
         transient = _transient_exceptions()
         last_error: Exception | None = None
-        for attempt in range(self._settings.max_retries + 1):
+        attempt = 0
+        rate_limit_attempt = 0
+        while attempt <= self._settings.max_retries:
             try:
                 async with self._get_semaphore():
+                    # dentro do semáforo: no máx. `max_concurrency` threads esperam o limitador
+                    await asyncio.to_thread(self._rate_limiter.acquire)
                     response = await self._get_client().chat.completions.create(
                         model=model,
                         messages=messages,
                         temperature=temperature,
                         max_tokens=max_tokens,
                     )
+                self._rate_limiter.report_success()
                 return str(response.choices[0].message.content or "")
             except transient as error:
                 last_error = error
+                if is_rate_limit_error(error):
+                    rate_limit_attempt += 1
+                    if rate_limit_attempt > self._settings.max_rate_limit_retries:
+                        break
+                    self._report_rate_limited(error, rate_limit_attempt)
+                    continue  # a espera é feita pelo limitador (pausa global) no acquire
                 wait_seconds = 2.0**attempt
                 logger.warning(
                     "Erro transitório do LLM (%s); nova tentativa em %.0fs (%d/%d).",
@@ -351,9 +372,24 @@ class AsyncLLMClient:
                     attempt + 1,
                     self._settings.max_retries + 1,
                 )
+                attempt += 1
                 await asyncio.sleep(wait_seconds)
         self.stats.n_failures += 1
         raise PipelineStageError("llm_client", f"falha após retentativas: {last_error}")
+
+    def _report_rate_limited(self, error: Exception, rate_limit_attempt: int) -> None:
+        """Registra um HTTP 429 no limitador: pausa global (``Retry-After``) e ritmo menor."""
+        wait_seconds = get_retry_after_seconds(error)
+        if wait_seconds is None:
+            wait_seconds = calculate_backoff_seconds(rate_limit_attempt)
+        logger.warning(
+            "Limite de requisições (429) atingido (retentativa %d/%d). "
+            "Pausando todas as requisições por %.1fs.",
+            rate_limit_attempt,
+            self._settings.max_rate_limit_retries,
+            wait_seconds,
+        )
+        self._rate_limiter.report_rate_limited(wait_seconds)
 
     async def complete_many(self, prompts: Sequence[str], **kwargs: Any) -> list[str | None]:
         """Executa vários prompts concorrentemente, na ordem de entrada.

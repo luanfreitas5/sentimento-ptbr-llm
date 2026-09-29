@@ -1272,6 +1272,55 @@ class TestAsyncLLMClient:
         assert asyncio.run(client.complete_many(["p"], model="m")) == [None]
         assert client.stats.n_failures == 2
 
+    def test_rate_limit_is_retried_with_retry_after_pause(
+        self, diagnostics_settings: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HTTP 429 tem orçamento próprio, respeita ``Retry-After`` e não gasta ``max_retries``."""
+
+        class _RateLimitedError(RuntimeError):
+            status_code = 429
+            response = SimpleNamespace(headers={"retry-after": "7"})
+
+        monkeypatch.setattr(llm_client, "_transient_exceptions", lambda: (RuntimeError,))
+        attempts = {"n": 0}
+
+        def _limited(kwargs: Any) -> str:
+            attempts["n"] += 1
+            if attempts["n"] <= 3:
+                raise _RateLimitedError("too many requests")
+            return "Yes"
+
+        settings = diagnostics_settings.llm.model_copy(
+            update={"max_retries": 0, "max_rate_limit_retries": 5}
+        )
+        client = AsyncLLMClient(settings, client_factory=_factory(_FakeCompletions(_limited)))
+        pauses: list[float] = []
+        monkeypatch.setattr(client._rate_limiter, "report_rate_limited", pauses.append)
+        monkeypatch.setattr(client._rate_limiter, "acquire", lambda: None)
+        assert asyncio.run(client.complete("p", model="m")) == "Yes"
+        assert attempts["n"] == 4
+        assert pauses == [7.0, 7.0, 7.0]
+
+    def test_rate_limit_budget_exhausted_raises(
+        self, diagnostics_settings: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Depois de ``max_rate_limit_retries`` respostas 429, a requisição falha."""
+
+        class _RateLimitedError(RuntimeError):
+            status_code = 429
+
+        def _always_429(kwargs: Any) -> str:
+            raise _RateLimitedError("too many requests")
+
+        monkeypatch.setattr(llm_client, "_transient_exceptions", lambda: (RuntimeError,))
+        settings = diagnostics_settings.llm.model_copy(update={"max_rate_limit_retries": 2})
+        client = AsyncLLMClient(settings, client_factory=_factory(_FakeCompletions(_always_429)))
+        monkeypatch.setattr(client._rate_limiter, "report_rate_limited", lambda _: None)
+        monkeypatch.setattr(client._rate_limiter, "acquire", lambda: None)
+        with pytest.raises(PipelineStageError):
+            asyncio.run(client.complete("p", model="m"))
+        assert client.stats.n_failures == 1
+
 
 class TestResolveEndpoint:
     """Resolução de endpoint e chave (só do ambiente)."""

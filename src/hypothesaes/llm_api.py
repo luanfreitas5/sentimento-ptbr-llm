@@ -630,7 +630,9 @@ def generate_completion(
         Fator multiplicador do tempo de espera entre tentativas, by
         default 2.0.
     **kwargs : Any
-        Argumentos adicionais repassados ao provedor (``max_output_tokens``,
+        Para ``provider="openai"``, aceita ``rate_limiter`` (controle de taxa
+        compartilhado, evita HTTP 429) e ``max_rate_limit_retries``. Demais
+        argumentos são repassados ao provedor (``max_output_tokens``,
         ``reasoning_effort``, ``verbosity``, ``temperature`` etc. — nem
         todos se aplicam a ``provider="ollama"``, ver
         :func:`generate_completion_ollama`).
@@ -659,6 +661,8 @@ def generate_completion(
         raise UnsupportedModelError(provider, list(LLM_PROVIDER_NAMES))
 
     if provider == "ollama":
+        kwargs.pop("rate_limiter", None)  # controle de taxa só se aplica ao provedor remoto
+        kwargs.pop("max_rate_limit_retries", None)
         if model == DEFAULT_MODEL:
             model = DEFAULT_OLLAMA_MODEL
         return generate_completion_ollama(
@@ -834,6 +838,12 @@ def _generate_completion_openai(
     Implementação de ``provider="openai"`` de :func:`generate_completion`;
     ver esta última para a documentação dos parâmetros.
 
+    Se ``rate_limiter`` (um :class:`labeling.rate_limiter.RateLimiter`
+    compartilhado entre threads) for informado em ``kwargs``, cada requisição
+    respeita o intervalo mínimo e a pausa global; um HTTP 429 tem orçamento
+    próprio de retentativas (``max_rate_limit_retries``, padrão 8), respeita
+    o ``Retry-After`` do servidor e usa backoff exponencial com jitter.
+
     Raises
     ------
     ValueError
@@ -848,22 +858,68 @@ def _generate_completion_openai(
     client = create_client()
     model_id = MODEL_ABBREVIATION_TO_ID.get(model, model)
 
+    rate_limiter = kwargs.pop("rate_limiter", None)
+    max_rate_limit_retries = int(kwargs.pop("max_rate_limit_retries", 8))
     max_output_tokens = _pop_max_output_tokens(kwargs)
     _apply_reasoning_and_verbosity(kwargs)
     request_input = _build_request_input(prompt, messages, system_prompt)
 
     base_wait = timeout if timeout is not None else 1.0
-    for attempt in range(max_retries):
+    attempt = 0
+    rate_limit_attempt = 0
+    while True:
+        if rate_limiter is not None:
+            rate_limiter.acquire()
         try:
             request_kwargs = _build_attempt_kwargs(kwargs, max_output_tokens, timeout)
             response = client.responses.create(
                 model=model_id, input=request_input, **request_kwargs
             )
-            return _extract_output_text(response)
-
         except (openai.RateLimitError, openai.APITimeoutError) as exception:
-            if attempt == max_retries - 1:
+            if rate_limiter is not None and getattr(exception, "status_code", None) == 429:
+                rate_limit_attempt += 1
+                _pause_after_rate_limit(
+                    exception, rate_limiter, rate_limit_attempt, max_rate_limit_retries
+                )
+                continue
+            if attempt >= max_retries - 1:
                 raise
             _wait_before_retry(base_wait, backoff_factor, attempt, max_retries, exception)
+            attempt += 1
+            continue
+        if rate_limiter is not None:
+            rate_limiter.report_success()
+        return _extract_output_text(response)
 
-    return ""
+
+def _pause_after_rate_limit(
+    exception: Exception, rate_limiter: Any, rate_limit_attempt: int, max_rate_limit_retries: int
+) -> None:
+    """Pausa todas as threads após um HTTP 429 ou repropaga o erro se o orçamento esgotou.
+
+    Raises
+    ------
+    Exception
+        A própria ``exception`` quando ``rate_limit_attempt`` excede
+        ``max_rate_limit_retries``.
+    """
+    from labeling.rate_limiter import calculate_backoff_seconds, get_retry_after_seconds
+
+    if rate_limit_attempt > max_rate_limit_retries:
+        logger.error(
+            "Limite de requisições (429) persistiu após %d retentativas: %s",
+            max_rate_limit_retries,
+            exception,
+        )
+        raise exception
+    wait_seconds = get_retry_after_seconds(exception)
+    if wait_seconds is None:
+        wait_seconds = calculate_backoff_seconds(rate_limit_attempt)
+    logger.warning(
+        "Limite de requisições (429) atingido (retentativa %d/%d). "
+        "Pausando todas as requisições por %.1fs.",
+        rate_limit_attempt,
+        max_rate_limit_retries,
+        wait_seconds,
+    )
+    rate_limiter.report_rate_limited(wait_seconds)

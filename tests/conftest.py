@@ -32,7 +32,11 @@ def diagnostics_settings() -> Any:
     """Configuração real de ``configs/diagnostics.yaml``, já validada (sem rede)."""
     from diagnostics.settings import load_diagnostics_settings
 
-    return load_diagnostics_settings()
+    settings = load_diagnostics_settings()
+    # sem intervalo entre requisições: os testes não devem esperar o limitador anti-429
+    return settings.model_copy(
+        update={"llm": settings.llm.model_copy(update={"requests_per_minute": None})}
+    )
 
 
 @pytest.fixture
