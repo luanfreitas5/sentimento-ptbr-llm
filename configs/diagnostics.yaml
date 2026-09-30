@@ -37,11 +37,11 @@ sanity:
   min_effect: 0.0
 
 hypotheses:
-  selection_method: lasso
+  selection_method: correlation
   n_selected_neurons: 20
-  n_candidate_interpretations: 3
+  n_candidate_interpretations: 1
   n_examples_for_interpretation: 20
-  max_words_per_example: 60
+  max_words_per_example: 256
   max_interpretation_tokens: 200
   n_scoring_examples: 100
   scoring_metric: f1
