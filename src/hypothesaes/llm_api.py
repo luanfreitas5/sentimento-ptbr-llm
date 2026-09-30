@@ -869,6 +869,47 @@ def _generate_completion_openai(
     _apply_reasoning_and_verbosity(kwargs)
     request_input = _build_request_input(prompt, messages, system_prompt)
 
+    response = _create_response_with_retries(
+        client,
+        openai,
+        rate_limiter,
+        model_id=model_id,
+        request_input=request_input,
+        kwargs=kwargs,
+        max_output_tokens=max_output_tokens,
+        timeout=timeout,
+        max_retries=max_retries,
+        backoff_factor=backoff_factor,
+        max_rate_limit_retries=max_rate_limit_retries,
+    )
+    return _extract_output_text(response)
+
+
+def _create_response_with_retries(
+    client: Any,
+    openai: Any,
+    rate_limiter: Any,
+    *,
+    model_id: str,
+    request_input: Any,
+    kwargs: dict[str, Any],
+    max_output_tokens: int | None,
+    timeout: float | None,
+    max_retries: int,
+    backoff_factor: float,
+    max_rate_limit_retries: int,
+) -> Any:
+    """Chama ``client.responses.create`` com retentativas para 429 e timeout.
+
+    Um HTTP 429 (com ``rate_limiter``) consome o orçamento
+    ``max_rate_limit_retries``; demais erros transitórios consomem
+    ``max_retries`` com backoff exponencial.
+
+    Raises
+    ------
+    openai.RateLimitError, openai.APITimeoutError
+        Quando o respectivo orçamento de retentativas se esgota.
+    """
     base_wait = timeout if timeout is not None else 1.0
     attempt = 0
     rate_limit_attempt = 0
@@ -894,7 +935,7 @@ def _generate_completion_openai(
             continue
         if rate_limiter is not None:
             rate_limiter.report_success()
-        return _extract_output_text(response)
+        return response
 
 
 _SHARED_RATE_LIMITERS: dict[tuple[str | None, str], Any] = {}

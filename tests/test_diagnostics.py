@@ -901,9 +901,10 @@ class TestSlugAndKwargs:
         )
 
     def test_generation_kwargs_follow_settings(self, diagnostics_settings: Any) -> None:
-        """Os argumentos vêm do YAML (lasso, 3 candidatas, provedor único)."""
+        """Os argumentos vêm do YAML (lasso/correlation/separation_score, 3 candidatas,
+        provedor único)."""
         kwargs = build_generation_kwargs(diagnostics_settings, cache_name="c", classification=True)
-        assert kwargs["selection_method"] == "lasso"
+        assert kwargs["selection_method"] == "correlation"
         assert kwargs["n_candidate_interpretations"] == 3
         assert kwargs["interpret_llm_kwargs"]["provider"] == diagnostics_settings.llm.provider
         assert kwargs["n_workers_annotation"] <= diagnostics_settings.llm.max_concurrency
