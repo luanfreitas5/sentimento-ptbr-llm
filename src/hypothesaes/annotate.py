@@ -229,8 +229,10 @@ def _run_annotation_attempts(
             if annotation is not None:
                 return annotation, total_api_time
         except Exception:
-            if attempt == max_retries - 1:
-                logger.exception("Falha ao anotar texto após %d tentativas.", max_retries)
+            # ``generate_completion`` já retentou 429/timeout com backoff; repetir aqui
+            # apenas multiplicaria a espera. Só respostas não parseáveis são refeitas.
+            logger.exception("Falha ao anotar texto (tentativa %d).", attempt + 1)
+            return None, total_api_time
 
     return None, total_api_time
 

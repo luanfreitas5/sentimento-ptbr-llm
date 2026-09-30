@@ -45,7 +45,8 @@ hypotheses:
   max_interpretation_tokens: 200
   n_scoring_examples: 100
   scoring_metric: f1
-  n_workers: 8
+  n_workers: 8                        # threads da interpretação
+  n_workers_annotation: 30            # threads da anotação/pontuação (limitado por llm.max_concurrency)
   task_specific_instructions: |
     Os textos são tweets em português do Brasil sobre sentimento (positivo, neutro, negativo).
     Gere hipóteses ESPECÍFICAS e verificáveis (evite "expressa emoção" ou "fala de algo").
@@ -67,12 +68,13 @@ llm:
   # ATENÇÃO: llama3.2:1b NÃO segue o formato de anotação (smoke test: 0/6 respostas parseáveis).
   interpreter_model_ollama: gemma2:9b
   annotator_model_ollama: gemma2:9b
-  max_concurrency: 8                  # limite de requisições simultâneas (semáforo)
+  max_concurrency: 30                 # limite de requisições simultâneas (semáforo)
   request_timeout_seconds: 120
   max_retries: 3
-  # Anti-429 (só provedor "openai"/UnB): intervalo mínimo entre requisições, compartilhado
-  # por todas as threads; ao receber 429 há pausa global (Retry-After) e o ritmo cai sozinho.
-  requests_per_minute: 60             # null desativa o intervalo base
+  # Anti-429 (só provedor "openai"/UnB): sem teto fixo (null) as threads disparam em paralelo;
+  # ao receber 429 há pausa global (Retry-After) e o ritmo cai sozinho (AIMD), voltando após sucessos.
+  # Defina um número (ex.: 60) só se o servidor exigir um teto rígido.
+  requests_per_minute: null
   max_rate_limit_retries: 8           # retentativas exclusivas de 429 por requisição
   temperature: 0.0
   cache_dir: data/interim/diagnostics/llm_cache   # fora do git (data/* é ignorado)

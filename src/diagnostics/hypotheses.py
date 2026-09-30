@@ -229,8 +229,10 @@ def build_generation_kwargs(
     hyp, llm = settings.hypotheses, settings.llm
     llm_kwargs: dict[str, Any] = {"provider": llm.provider, "ollama_base_url": llm.ollama_base_url}
     if llm.provider == "openai":
-        # Um único limitador para interpretação e anotação (mesmo endpoint, evita HTTP 429).
-        llm_kwargs["rate_limiter"] = RateLimiter(llm.requests_per_minute)
+        # Com teto configurado, um único limitador para interpretação e anotação; sem teto
+        # (``requests_per_minute: null``) ``llm_api`` usa o limitador adaptativo compartilhado.
+        if llm.requests_per_minute is not None:
+            llm_kwargs["rate_limiter"] = RateLimiter(llm.requests_per_minute)
         llm_kwargs["max_rate_limit_retries"] = llm.max_rate_limit_retries
     return {
         "cache_name": cache_name,
@@ -246,7 +248,7 @@ def build_generation_kwargs(
         "n_scoring_examples": hyp.n_scoring_examples,
         "scoring_metric": hyp.scoring_metric,
         "n_workers_interpretation": hyp.n_workers,
-        "n_workers_annotation": min(hyp.n_workers, llm.max_concurrency),
+        "n_workers_annotation": min(hyp.n_workers_annotation, llm.max_concurrency),
         "task_specific_instructions": hyp.task_specific_instructions,
         "interpret_llm_kwargs": llm_kwargs,
         "annotation_llm_kwargs": llm_kwargs,

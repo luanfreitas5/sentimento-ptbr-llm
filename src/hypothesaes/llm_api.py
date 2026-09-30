@@ -27,6 +27,7 @@ de usar geração de hipóteses via LLM.
 """
 
 import logging
+import threading
 import time
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -855,10 +856,14 @@ def _generate_completion_openai(
         raise ValueError("É necessário informar 'prompt' ou 'messages' para generate_completion()")
 
     openai = _import_openai()
-    client = create_client()
+    # Retentativas do SDK desativadas: as de 429/timeout são feitas abaixo
+    # (evita esperas multiplicadas).
+    client = create_client(max_retries=0)
     model_id = MODEL_ABBREVIATION_TO_ID.get(model, model)
 
     rate_limiter = kwargs.pop("rate_limiter", None)
+    if rate_limiter is None:
+        rate_limiter = _get_shared_rate_limiter(model_id)
     max_rate_limit_retries = int(kwargs.pop("max_rate_limit_retries", 8))
     max_output_tokens = _pop_max_output_tokens(kwargs)
     _apply_reasoning_and_verbosity(kwargs)
@@ -890,6 +895,30 @@ def _generate_completion_openai(
         if rate_limiter is not None:
             rate_limiter.report_success()
         return _extract_output_text(response)
+
+
+_SHARED_RATE_LIMITERS: dict[tuple[str | None, str], Any] = {}
+_SHARED_RATE_LIMITERS_LOCK = threading.Lock()
+
+
+def _get_shared_rate_limiter(model_id: str) -> Any:
+    """Retorna o limitador compartilhado por (endpoint, modelo), sem intervalo base.
+
+    Sem teto fixo de requisições/minuto, todas as threads disparam em paralelo;
+    ao primeiro 429 o limitador pausa todas pelo ``Retry-After`` e desacelera
+    (AIMD), acelerando de novo após uma sequência de sucessos. Assim a vazão se
+    ajusta ao limite real do servidor, em vez de um teto arbitrário.
+    """
+    import os
+
+    from labeling.rate_limiter import RateLimiter
+
+    key = (os.environ.get("OPENAI_BASE_URL"), model_id)
+    with _SHARED_RATE_LIMITERS_LOCK:
+        limiter = _SHARED_RATE_LIMITERS.get(key)
+        if limiter is None:
+            limiter = _SHARED_RATE_LIMITERS[key] = RateLimiter(None)
+        return limiter
 
 
 def _pause_after_rate_limit(

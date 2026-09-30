@@ -81,6 +81,7 @@ class HypothesesSettings(_Strict):
     n_scoring_examples: int = Field(ge=0, default=100)
     scoring_metric: str = "f1"
     n_workers: int = Field(gt=0, default=8)
+    n_workers_annotation: int = Field(gt=0, default=30)
     task_specific_instructions: str | None = None
 
 
@@ -94,10 +95,12 @@ class LLMSettings(_Strict):
     interpreter_model_ollama: str = "gemma2:9b"
     annotator_model_openai: str = "UnB-Llama-3.3-70B-Instruct"
     annotator_model_ollama: str = "gemma2:9b"
-    max_concurrency: int = Field(gt=0, default=8)
+    max_concurrency: int = Field(gt=0, default=30)
     request_timeout_seconds: float = Field(gt=0, default=120.0)
     max_retries: int = Field(ge=0, default=3)
-    requests_per_minute: float | None = Field(gt=0, default=60.0)  # None = sem intervalo base
+    requests_per_minute: float | None = Field(
+        gt=0, default=None
+    )  # None = sem teto (AIMD reage ao 429)
     max_rate_limit_retries: int = Field(ge=0, default=8)  # orçamento próprio para HTTP 429
     temperature: float = Field(ge=0, default=0.0)
     cache_dir: str = "data/interim/diagnostics/llm_cache"

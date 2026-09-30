@@ -352,7 +352,7 @@ class TestGenerateCompletionRateLimit:
         )
         monkeypatch.setattr(llm_api, "_import_openai", lambda: fake_openai)
         fake_client = type("C", (), {"responses": _Responses()})()
-        monkeypatch.setattr(llm_api, "create_client", lambda: fake_client)
+        monkeypatch.setattr(llm_api, "create_client", lambda **_: fake_client)
         monkeypatch.setattr(llm_api, "_extract_output_text", lambda response: response)
         return state
 
