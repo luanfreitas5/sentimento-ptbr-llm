@@ -483,10 +483,35 @@ def annotate_tasks(
             **annotation_kwargs,
         )
 
+    _fill_failed_annotations(tasks, results, uncached_value)
+
     if cache_path:
         save_annotation_cache(cache_path, cache)
 
     return results
+
+
+def _fill_failed_annotations(
+    tasks: list[tuple[str, str]], results: dict[str, dict[str, int]], fill_value: int
+) -> None:
+    """Preenche com ``fill_value`` as tarefas sem anotação (falha do LLM após retentativas).
+
+    Sem isso, o consumidor faz ``results[conceito][texto]`` e levanta ``KeyError``.
+    Os valores preenchidos não vão para o cache em disco, então uma nova execução
+    tenta anotar esses itens novamente.
+    """
+    n_filled = 0
+    for text, concept in tasks:
+        concept_results = results.setdefault(concept, {})
+        if text not in concept_results:
+            concept_results[text] = fill_value
+            n_filled += 1
+    if n_filled:
+        logger.warning(
+            "%d anotação(ões) falharam após as retentativas e foram preenchidas com %d.",
+            n_filled,
+            fill_value,
+        )
 
 
 def annotate_texts_with_concepts(
