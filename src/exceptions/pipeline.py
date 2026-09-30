@@ -47,6 +47,34 @@ class SanityGateFailedError(PipelineError):
         )
 
 
+class AnnotationFailureRateError(PipelineError):
+    """Levantada quando a fração de anotações de LLM sem resposta válida excede o limite.
+
+    Anotações com falha viram 0 (conceito ausente), o que distorce a pontuação das
+    hipóteses; acima do limite o resultado não é confiável e o fluxo aborta.
+
+    Parameters
+    ----------
+    n_failed : int
+        Quantidade de anotações sem resposta válida após as retentativas.
+    n_total : int
+        Quantidade total de anotações solicitadas.
+    max_rate : float
+        Taxa máxima de falha tolerada (0 a 1).
+    """
+
+    def __init__(self, n_failed: int, n_total: int, max_rate: float) -> None:
+        rate = n_failed / n_total if n_total else 0.0
+        super().__init__(
+            f"{n_failed}/{n_total} anotações ({rate:.1%}) falharam, acima do limite de "
+            f"{max_rate:.1%}; verifique o formato da resposta do modelo anotador ou a "
+            "disponibilidade do endpoint. As anotações válidas ficaram no cache.",
+            context={"n_failed": n_failed, "n_total": n_total, "max_rate": max_rate},
+        )
+        self.n_failed = n_failed
+        self.n_total = n_total
+
+
 class IncompleteLabelingError(PipelineError):
     """Levantada quando a rotulagem termina com tweets sem rótulo válido.
 

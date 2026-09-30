@@ -61,6 +61,7 @@ from diagnostics.tracking import (
     track_diagnostics_run,
 )
 from exceptions.data import DataValidationError, EmptyDatasetError
+from exceptions.pipeline import AnnotationFailureRateError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
 from io_utils.parquet import read_parquet, write_parquet
@@ -251,7 +252,10 @@ def build_generation_kwargs(
         "n_workers_annotation": min(hyp.n_workers_annotation, llm.max_concurrency),
         "task_specific_instructions": hyp.task_specific_instructions,
         "interpret_llm_kwargs": llm_kwargs,
-        "annotation_llm_kwargs": llm_kwargs,
+        "annotation_llm_kwargs": {
+            **llm_kwargs,
+            "max_failure_rate": llm.max_annotation_failure_rate,
+        },
     }
 
 
@@ -460,6 +464,9 @@ def run_target_diagnostics(
     ------
     SanityGateFailedError
         Se o gate reprovar o alvo (após registrar o motivo no MLflow).
+    AnnotationFailureRateError
+        Se a taxa de anotações sem resposta válida exceder
+        ``llm.max_annotation_failure_rate``.
 
     Examples
     --------
@@ -492,19 +499,38 @@ def run_target_diagnostics(
         configure_mlflow(paths)
         context = track_diagnostics_run(f"hipoteses-{slug}", params=params)
     with context:
-        result = _execute_target(
-            target,
-            discovery,
-            settings,
-            paths,
-            target_slug=slug,
-            classification=classification,
-            generate_fn=generate_fn or generate_hypotheses,
-        )
+        try:
+            result = _execute_target(
+                target,
+                discovery,
+                settings,
+                paths,
+                target_slug=slug,
+                classification=classification,
+                generate_fn=generate_fn or generate_hypotheses,
+            )
+        except AnnotationFailureRateError as exception:
+            if track:
+                _log_annotation_failure(exception)
+            raise
         if track:
             _log_result(result)
     assert_sanity_gate_passed(result.gate)
     return result
+
+
+def _log_annotation_failure(exception: AnnotationFailureRateError) -> None:
+    """Registra no MLflow a taxa de falha das anotações que abortou o alvo."""
+    import mlflow
+
+    log_diagnostics_metrics(
+        {
+            "annotation_n_failed": float(exception.n_failed),
+            "annotation_n_total": float(exception.n_total),
+            "annotation_failure_rate": exception.n_failed / max(exception.n_total, 1),
+        }
+    )
+    mlflow.set_tag("aborted", "annotation_failure_rate")
 
 
 def _log_result(result: TargetRunResult) -> None:

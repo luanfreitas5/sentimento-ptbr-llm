@@ -9,6 +9,7 @@ conjunto de dados real (``evaluation.py``, ``quickstart.evaluate_hypotheses``).
 """
 
 import concurrent.futures
+import itertools
 import json
 import logging
 import re
@@ -20,6 +21,7 @@ from typing import Any
 import numpy as np
 
 from config.paths import PROJECT_ROOT
+from exceptions.pipeline import AnnotationFailureRateError
 from hypothesaes.llm_api import generate_completion, normalize_llm_kwargs
 from hypothesaes.progress import iterate_with_progress
 from hypothesaes.utils import load_prompt_template, truncate_text
@@ -194,6 +196,24 @@ def _build_annotation_request_kwargs(
     return request_kwargs
 
 
+_MAX_UNPARSEABLE_SAMPLES = 3
+_unparseable_sample_counter = itertools.count(1)
+
+
+def _log_unparseable_sample(response_text: str) -> None:
+    """Loga os primeiros caracteres das primeiras respostas não parseáveis (diagnóstico)."""
+    sample_number = next(_unparseable_sample_counter)
+    if sample_number > _MAX_UNPARSEABLE_SAMPLES:
+        return
+    logger.warning(
+        "Resposta do anotador não parseável (amostra %d/%d, %d caracteres): %r",
+        sample_number,
+        _MAX_UNPARSEABLE_SAMPLES,
+        len(response_text),
+        response_text[:60],
+    )
+
+
 def _try_annotate_once(
     prompt: str,
     system_prompt: str | None,
@@ -208,7 +228,10 @@ def _try_annotate_once(
         .lower()
     )
     elapsed = time.time() - start_time
-    return parse_fn(response_text), elapsed
+    annotation = parse_fn(response_text)
+    if annotation is None:
+        _log_unparseable_sample(response_text)
+    return annotation, elapsed
 
 
 def _run_annotation_attempts(
@@ -417,6 +440,7 @@ def annotate_tasks(
     progress_desc: str = "Anotando",
     use_cache_only: bool = False,
     uncached_value: int = 0,
+    max_failure_rate: float | None = None,
     **annotation_kwargs: Any,
 ) -> dict[str, dict[str, int]]:
     """Anota uma lista de tarefas (texto, conceito), reaproveitando um cache em disco.
@@ -441,6 +465,11 @@ def annotate_tasks(
     uncached_value : int, optional
         Valor atribuído a itens fora do cache quando ``use_cache_only=True``,
         by default 0.
+    max_failure_rate : float | None, optional
+        Fração máxima (0 a 1) de tarefas sem resposta válida tolerada, medida sobre as
+        tarefas que exigiram chamada ao LLM; acima dela levanta
+        :class:`AnnotationFailureRateError` (após salvar as anotações válidas no cache).
+        ``None`` desativa a checagem, by default None.
     **annotation_kwargs : Any
         Argumentos adicionais repassados a :func:`annotate_single_text`.
 
@@ -448,6 +477,11 @@ def annotate_tasks(
     -------
     dict[str, dict[str, int]]
         Mapa aninhado ``{conceito: {texto: anotação}}``.
+
+    Raises
+    ------
+    AnnotationFailureRateError
+        Se a taxa de falha exceder ``max_failure_rate``.
     """
     cache = load_annotation_cache(cache_path) if cache_path else {}
     results: dict[str, dict[str, int]] = {}
@@ -483,22 +517,30 @@ def annotate_tasks(
             **annotation_kwargs,
         )
 
-    _fill_failed_annotations(tasks, results, uncached_value)
+    n_failed = _fill_failed_annotations(tasks, results, uncached_value)
 
     if cache_path:
         save_annotation_cache(cache_path, cache)
+
+    if max_failure_rate is not None and n_failed > max_failure_rate * len(uncached_tasks):
+        raise AnnotationFailureRateError(n_failed, len(uncached_tasks), max_failure_rate)
 
     return results
 
 
 def _fill_failed_annotations(
     tasks: list[tuple[str, str]], results: dict[str, dict[str, int]], fill_value: int
-) -> None:
+) -> int:
     """Preenche com ``fill_value`` as tarefas sem anotação (falha do LLM após retentativas).
 
     Sem isso, o consumidor faz ``results[conceito][texto]`` e levanta ``KeyError``.
     Os valores preenchidos não vão para o cache em disco, então uma nova execução
     tenta anotar esses itens novamente.
+
+    Returns
+    -------
+    int
+        Quantidade de tarefas preenchidas (sem anotação válida).
     """
     n_filled = 0
     for text, concept in tasks:
@@ -512,6 +554,7 @@ def _fill_failed_annotations(
             n_filled,
             fill_value,
         )
+    return n_filled
 
 
 def annotate_texts_with_concepts(

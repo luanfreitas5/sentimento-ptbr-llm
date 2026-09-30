@@ -45,7 +45,7 @@ from diagnostics.settings import (
     load_diagnostics_settings,
 )
 from exceptions.data import DataValidationError
-from exceptions.pipeline import SanityGateFailedError
+from exceptions.pipeline import AnnotationFailureRateError, SanityGateFailedError
 from io_utils.csv import write_csv
 from io_utils.parquet import write_parquet
 from schemas.diagnostics import MODEL_LABEL_PREFIX, validate_diagnostic_corpus
@@ -78,8 +78,9 @@ class HypothesisTargetOutcome:
     target : str
         Nome do alvo.
     status : str
-        ``"concluido"`` ou ``"gate_reprovado"`` (os embeddings não preveem o alvo acima
-        do acaso — resultado científico válido, sem hipóteses).
+        ``"concluido"``, ``"gate_reprovado"`` (os embeddings não preveem o alvo acima
+        do acaso — resultado científico válido, sem hipóteses) ou ``"anotacao_reprovada"``
+        (falhas de LLM acima do limite — resultado inválido, rodar de novo).
     detail : str
         Motivo do gate (quando reprovado) ou resumo das hipóteses geradas.
     n_hypotheses : int
@@ -243,6 +244,11 @@ def _run_single_target(
     except SanityGateFailedError as exception:
         logger.warning("Alvo '%s' abortado pelo gate de sanidade: %s", target, exception.message)
         return HypothesisTargetOutcome(target, "gate_reprovado", exception.message, 0, None, None)
+    except AnnotationFailureRateError as exception:
+        logger.warning("Alvo '%s' abortado por falhas de anotação: %s", target, exception.message)
+        return HypothesisTargetOutcome(
+            target, "anotacao_reprovada", exception.message, 0, None, None
+        )
 
     hypotheses = result.hypotheses if result.hypotheses is not None else pl.DataFrame()
     evidence_path: Path | None = None

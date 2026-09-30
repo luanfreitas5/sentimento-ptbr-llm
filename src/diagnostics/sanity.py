@@ -56,6 +56,10 @@ class SanityGateResult:
         ``True`` se o alvo passa no gate.
     reason : str
         Explicação legível da decisão.
+    null_median : float
+        Mediana da métrica sob permutação do alvo (nível nulo empírico). Para R² é
+        negativa (previsões fixas contra alvo embaralhado), então o p-valor mede
+        associação, não R² positivo.
     """
 
     target_name: str
@@ -68,6 +72,7 @@ class SanityGateResult:
     n_holdout: int
     go: bool
     reason: str
+    null_median: float = float("nan")
 
     def to_dict(self) -> dict[str, Any]:
         """Converte o resultado em dicionário (ex.: para registrar no MLflow)."""
@@ -110,6 +115,27 @@ def _bootstrap_interval(
     return float(lower), float(upper)
 
 
+def _permutation_test(
+    metric_name: MetricName,
+    y_true: FloatArray,
+    y_pred: FloatArray,
+    *,
+    observed: float,
+    n_permutations: int,
+    rng: np.random.Generator,
+) -> tuple[float, float]:
+    """Teste de permutação unilateral: retorna (p-valor, mediana da métrica nula).
+
+    O p-valor é a fração de permutações do alvo com métrica >= observada. Para R²
+    o nulo fica abaixo de 0, então um R² observado negativo ainda pode ter p pequeno.
+    """
+    null_scores = np.array(
+        [_score(metric_name, rng.permutation(y_true), y_pred) for _ in range(n_permutations)]
+    )
+    exceed = int(np.sum(null_scores >= observed))
+    return (1 + exceed) / (1 + n_permutations), float(np.median(null_scores))
+
+
 def _permutation_pvalue(
     metric_name: MetricName,
     y_true: FloatArray,
@@ -120,11 +146,16 @@ def _permutation_pvalue(
     rng: np.random.Generator,
 ) -> float:
     """p-valor unilateral: fração de permutações do alvo com métrica >= observada."""
-    exceed = sum(
-        _score(metric_name, rng.permutation(y_true), y_pred) >= observed
-        for _ in range(n_permutations)
-    )
-    return (1 + exceed) / (1 + n_permutations)
+    return _permutation_test(
+        metric_name, y_true, y_pred, observed=observed, n_permutations=n_permutations, rng=rng
+    )[0]
+
+
+def _holdout_correlation(y_true: FloatArray, y_pred: FloatArray) -> float:
+    """Correlação de Pearson previsão x alvo (``nan`` se algum vetor for constante)."""
+    if np.std(y_true) == 0 or np.std(y_pred) == 0:
+        return float("nan")
+    return float(np.corrcoef(y_true, y_pred)[0, 1])
 
 
 def _validate_inputs(
@@ -279,7 +310,7 @@ def evaluate_sanity_gate(
         confidence_level=confidence_level,
         rng=rng,
     )
-    pvalue = _permutation_pvalue(
+    pvalue, null_median = _permutation_test(
         metric_name, y_ho, predictions, observed=observed, n_permutations=n_permutations, rng=rng
     )
     go, reason = _decide(
@@ -290,13 +321,16 @@ def evaluate_sanity_gate(
         min_effect=min_effect,
     )
     logger.info(
-        "Gate de sanidade '%s': %s=%.4f IC[%.4f, %.4f] p=%.4f -> %s.",
+        "Gate de sanidade '%s': %s=%.4f IC[%.4f, %.4f] p=%.4f (nulo mediano=%.4f, "
+        "correlação=%.3f) -> %s.",
         target_name,
         metric_name,
         observed,
         ci_lower,
         ci_upper,
         pvalue,
+        null_median,
+        _holdout_correlation(y_ho, predictions),
         "GO" if go else "NO-GO",
     )
     return SanityGateResult(
@@ -310,6 +344,7 @@ def evaluate_sanity_gate(
         n_holdout=x_ho.shape[0],
         go=go,
         reason=reason,
+        null_median=null_median,
     )
 
 

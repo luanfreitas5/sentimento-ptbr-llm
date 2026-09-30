@@ -19,6 +19,7 @@ torch = pytest.importorskip("torch")
 from exceptions.configuration import MissingEnvironmentVariableError
 from exceptions.data import DataNotFoundError
 from exceptions.model import UnsupportedModelError
+from exceptions.pipeline import AnnotationFailureRateError
 from hypothesaes import (
     annotate,
     embedding,
@@ -566,6 +567,35 @@ class TestAnnotateTasks:
             tasks, use_cache_only=True, uncached_value=0, show_progress=False
         )
         assert results["conceito a"]["texto novo"] == 0
+
+    def test_raises_when_failure_rate_exceeds_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Falhas acima do limite devem levantar ``AnnotationFailureRateError``."""
+        monkeypatch.setattr(annotate, "generate_completion", lambda **kwargs: "talvez")
+        tasks = [("texto um", "conceito a"), ("texto dois", "conceito a")]
+        with pytest.raises(AnnotationFailureRateError) as error:
+            annotate.annotate_tasks(tasks, n_workers=2, show_progress=False, max_failure_rate=0.2)
+        assert (error.value.n_failed, error.value.n_total) == (2, 2)
+
+    def test_failure_rate_within_limit_fills_with_zero(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Abaixo do limite, a falha é preenchida com 0 sem levantar erro."""
+        monkeypatch.setattr(
+            annotate,
+            "generate_completion",
+            lambda **kwargs: "talvez" if "texto ruim" in str(kwargs["prompt"]) else "yes",
+        )
+        tasks = [("texto bom", "c"), ("texto ruim", "c")]
+        results = annotate.annotate_tasks(
+            tasks, n_workers=1, show_progress=False, max_failure_rate=0.5
+        )
+        assert results["c"] == {"texto bom": 1, "texto ruim": 0}
+
+    def test_failure_rate_check_disabled_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Sem ``max_failure_rate`` o comportamento anterior (preencher com 0) é mantido."""
+        monkeypatch.setattr(annotate, "generate_completion", lambda **kwargs: "talvez")
+        results = annotate.annotate_tasks([("t", "c")], n_workers=1, show_progress=False)
+        assert results["c"]["t"] == 0
 
 
 class TestAnnotateTextsWithConcepts:

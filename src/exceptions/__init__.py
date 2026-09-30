@@ -33,6 +33,7 @@ from exceptions.model import (
     UnsupportedModelError,
 )
 from exceptions.pipeline import (
+    AnnotationFailureRateError,
     IncompleteLabelingError,
     PipelineError,
     PipelineStageError,
@@ -41,6 +42,7 @@ from exceptions.pipeline import (
 )
 
 __all__: list[str] = [
+    "AnnotationFailureRateError",
     "ConfigurationError",
     "ConfigurationFileNotFoundError",
     "DataError",

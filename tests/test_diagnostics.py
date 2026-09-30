@@ -1745,6 +1745,23 @@ class TestEvaluateSanityGate:
         assert result.holdout_score > 0.8
         assert result.ci_lower > 0.5
 
+    def test_r2_null_median_is_negative_and_reported(self) -> None:
+        """Para R² o nulo por permutação fica abaixo de 0 (previsão fixa x alvo embaralhado)."""
+        rng = np.random.default_rng(0)
+        x = rng.normal(size=(300, 5))
+        y = x[:, 0] + rng.normal(size=300)
+        result = evaluate_sanity_gate(
+            x[:200],
+            y[:200],
+            x[200:],
+            y[200:],
+            target_name="cont",
+            classification=False,
+            n_bootstrap=100,
+            n_permutations=100,
+        )
+        assert result.null_median < 0
+
     def test_noise_binary_target_is_no_go(self, noise_binary: tuple) -> None:
         """Ruído puro: não passa no gate."""
         result = evaluate_sanity_gate(
