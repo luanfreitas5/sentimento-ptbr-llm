@@ -252,10 +252,7 @@ def build_generation_kwargs(
         "n_workers_annotation": min(hyp.n_workers_annotation, llm.max_concurrency),
         "task_specific_instructions": hyp.task_specific_instructions,
         "interpret_llm_kwargs": llm_kwargs,
-        "annotation_llm_kwargs": {
-            **llm_kwargs,
-            "max_failure_rate": llm.max_annotation_failure_rate,
-        },
+        "annotation_llm_kwargs": llm_kwargs | {"max_failure_rate": llm.max_annotation_failure_rate},
     }
 
 

@@ -153,7 +153,7 @@ def _permutation_pvalue(
 
 def _holdout_correlation(y_true: FloatArray, y_pred: FloatArray) -> float:
     """Correlação de Pearson previsão x alvo (``nan`` se algum vetor for constante)."""
-    if np.std(y_true) == 0 or np.std(y_pred) == 0:
+    if 0 in (np.std(y_true), np.std(y_pred)):
         return float("nan")
     return float(np.corrcoef(y_true, y_pred)[0, 1])
 
