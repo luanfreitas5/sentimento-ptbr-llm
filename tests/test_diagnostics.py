@@ -905,7 +905,7 @@ class TestSlugAndKwargs:
         provedor único)."""
         kwargs = build_generation_kwargs(diagnostics_settings, cache_name="c", classification=True)
         assert kwargs["selection_method"] == "correlation"
-        assert kwargs["n_candidate_interpretations"] == 3
+        assert kwargs["n_candidate_interpretations"] == 1
         assert kwargs["interpret_llm_kwargs"]["provider"] == diagnostics_settings.llm.provider
         assert kwargs["n_workers_annotation"] <= diagnostics_settings.llm.max_concurrency
         assert "Considere fenômenos" in kwargs["task_specific_instructions"]
@@ -1903,7 +1903,7 @@ class TestLoadDiagnosticsSettings:
         settings = load_diagnostics_settings()
         assert settings.llm.provider in {"ollama", "openai"}
         assert settings.comparison.n_folds >= 6
-        assert settings.hypotheses.selection_method == "lasso"
+        assert settings.hypotheses.selection_method == "correlation"
 
     def test_missing_file_raises(self, tmp_path: Path) -> None:
         """Arquivo inexistente levanta erro específico."""
