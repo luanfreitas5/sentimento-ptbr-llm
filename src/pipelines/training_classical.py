@@ -1,4 +1,4 @@
-"""Treino dos classificadores clássicos de sentimento.
+"""Treino do baseline e dos classificadores clássicos de sentimento.
 
 Implementa o estágio ``training_classical`` de ``configs/config.yaml ->
 stages``: treina cada modelo clássico configurado
@@ -23,7 +23,9 @@ from training.trainer import Trainer, TrainingResult
 
 logger = logging.getLogger(__name__)
 
+# "dummy" é o baseline: o piso de desempenho contra o qual os demais são comparados.
 DEFAULT_CLASSICAL_MODEL_NAMES: tuple[str, ...] = (
+    "dummy",
     "naive_bayes",
     "logistic_regression",
     "svm",

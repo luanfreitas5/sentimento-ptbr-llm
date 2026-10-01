@@ -1963,16 +1963,18 @@ def _namespace(**kwargs: Any) -> Any:
 
 
 class TestRegistration:
-    """O estágio existe, mas é opt-in."""
+    """O diagnóstico é um modo opt-in do estágio ``hypotheses``."""
 
-    def test_stage_is_registered_but_not_in_default_workflow(self) -> None:
-        """``--stage all`` (lista de ``configs/config.yaml``) não executa o diagnóstico."""
-        assert "diagnostics" in STAGE_REGISTRY
-        assert "diagnostics" not in load_general_config().stages
+    def test_diagnostics_is_a_mode_of_the_hypotheses_stage(self) -> None:
+        """O estágio ``hypotheses`` está no workflow; o modo ``diagnostics`` só sob demanda."""
+        assert "hypotheses" in STAGE_REGISTRY
+        assert "diagnostics" not in STAGE_REGISTRY
+        assert "hypotheses" in load_general_config().stages
+        assert main.parse_arguments(["--stage", "hypotheses"]).hypotheses_mode == "disagreement"
 
     def test_cli_accepts_the_stage_and_new_flags(self) -> None:
         """Argumentos do estágio são interpretados com padrões seguros."""
-        args = main.parse_arguments(["--stage", "diagnostics"])
+        args = main.parse_arguments(["--stage", "hypotheses", "--hypotheses-mode", "diagnostics"])
         assert args.diagnostics_step == "hypotheses"
         assert args.diagnostics_target == "disagreement"
         assert args.dry_run is False
@@ -1982,7 +1984,7 @@ class TestRegistration:
         """Todas as flags novas chegam ao construtor de kwargs."""
         args = main.parse_arguments(
             [
-                "--stage", "diagnostics", "--dry-run",
+                "--stage", "hypotheses", "--hypotheses-mode", "diagnostics", "--dry-run",
                 "--diagnostics-step", "validation",
                 "--diagnostics-target", "pseudo_label",
                 "--diagnostics-model-column", "lab_a",
@@ -1992,7 +1994,7 @@ class TestRegistration:
                 "--random-seed", "7",
             ]
         )  # fmt: skip
-        kwargs = main._build_diagnostics_stage_kwargs(
+        kwargs = main._build_diagnostics_kwargs(
             _namespace(),
             _namespace(),
             _namespace(),
@@ -2010,7 +2012,7 @@ class TestRegistration:
     def test_invalid_target_is_rejected_by_argparse(self) -> None:
         """Alvo fora dos quatro permitidos é recusado na linha de comando."""
         with pytest.raises(SystemExit):
-            main.parse_arguments(["--stage", "diagnostics", "--diagnostics-target", "outro"])
+            main.parse_arguments(["--stage", "hypotheses", "--diagnostics-target", "outro"])
 
     def test_builder_is_registered_for_every_stage(self) -> None:
         """Todo estágio do registro tem construtor de kwargs em ``main.py``."""

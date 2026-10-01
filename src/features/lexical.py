@@ -21,6 +21,7 @@ import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
 
+import numpy as np
 import polars as pl
 
 from utils.validation import validate_not_empty_collection
@@ -353,3 +354,121 @@ def pivot_tfidf_features_to_wide(
         .fill_null(0.0)
         .sort(id_column)
     )
+
+
+class LexicalTfidfVectorizer:
+    """Vetorizador TF-IDF ajustável: aprende o vocabulário no treino e o aplica a qualquer texto.
+
+    Usa as mesmas funções de :func:`compute_tfidf_features` (n-gramas, vocabulário,
+    TF sublinear e IDF suavizado), mas guarda o vocabulário e o IDF para transformar também
+    validação e teste sem vazamento de informação. Ao contrário do formato longo, devolve uma
+    linha por texto, inclusive os sem nenhum termo do vocabulário (linha de zeros), e a ordem
+    das colunas é a do vocabulário (alfabética), logo estável entre execuções.
+
+    Parameters
+    ----------
+    ngram_range : tuple[int, int], optional
+        Repassado a :func:`extract_ngrams`, by default (1, 2).
+    max_features : int, optional
+        Repassado a :func:`build_vocabulary`, by default 20000.
+    min_document_frequency : int, optional
+        Repassado a :func:`build_vocabulary`, by default 3.
+    max_document_frequency_ratio : float, optional
+        Repassado a :func:`build_vocabulary`, by default 0.95.
+    sublinear_term_frequency : bool, optional
+        Repassado a :func:`calculate_term_frequency`, by default True.
+
+    Examples
+    --------
+    >>> vectorizer = LexicalTfidfVectorizer(min_document_frequency=1, ngram_range=(1, 1))
+    >>> vectorizer.fit(["bom dia", "bom produto"]).transform(["bom"]).shape
+    (1, 3)
+    """
+
+    def __init__(
+        self,
+        *,
+        ngram_range: tuple[int, int] = (1, 2),
+        max_features: int = 20000,
+        min_document_frequency: int = 3,
+        max_document_frequency_ratio: float = 0.95,
+        sublinear_term_frequency: bool = True,
+    ) -> None:
+        self.ngram_range = ngram_range
+        self.max_features = max_features
+        self.min_document_frequency = min_document_frequency
+        self.max_document_frequency_ratio = max_document_frequency_ratio
+        self.sublinear_term_frequency = sublinear_term_frequency
+        self.vocabulary_: dict[str, int] = {}
+        self.idf_: np.ndarray = np.empty(0, dtype=np.float32)
+
+    def _extract_terms(self, texts: Sequence[str]) -> list[list[str]]:
+        """Tokeniza por espaço e expande cada texto em n-gramas."""
+        return [extract_ngrams(text.split(), self.ngram_range) for text in texts]
+
+    def fit(self, texts: Sequence[str]) -> "LexicalTfidfVectorizer":
+        """Aprende o vocabulário e o IDF a partir dos textos de treino.
+
+        Parameters
+        ----------
+        texts : Sequence[str]
+            Textos de treino já normalizados (termos separados por espaço). Não vazio.
+
+        Returns
+        -------
+        LexicalTfidfVectorizer
+            A própria instância ajustada.
+
+        Raises
+        ------
+        EmptyDatasetError
+            Se ``texts`` estiver vazio.
+        """
+        document_terms = self._extract_terms(texts)
+        self.vocabulary_ = build_vocabulary(
+            document_terms,
+            max_features=self.max_features,
+            min_document_frequency=self.min_document_frequency,
+            max_document_frequency_ratio=self.max_document_frequency_ratio,
+        )
+        document_frequencies = build_document_frequencies(document_terms)
+        n_documents = len(document_terms)
+        self.idf_ = np.zeros(len(self.vocabulary_), dtype=np.float32)
+        for term, index in self.vocabulary_.items():
+            self.idf_[index] = math.log((n_documents + 1) / (document_frequencies[term] + 1)) + 1.0
+        logger.info(
+            "Vetorizador TF-IDF ajustado: %d documento(s), vocabulário de %d termo(s).",
+            n_documents,
+            len(self.vocabulary_),
+        )
+        return self
+
+    def transform(self, texts: Sequence[str]) -> np.ndarray:
+        """Converte textos em uma matriz TF-IDF densa, no vocabulário aprendido em :meth:`fit`.
+
+        Parameters
+        ----------
+        texts : Sequence[str]
+            Textos normalizados (termos separados por espaço).
+
+        Returns
+        -------
+        np.ndarray
+            Matriz ``(n_textos, n_termos)`` de ``float32``.
+
+        Raises
+        ------
+        RuntimeError
+            Se o vetorizador ainda não foi ajustado.
+        """
+        if not self.vocabulary_:
+            raise RuntimeError("Vetorizador TF-IDF não ajustado: chame fit() antes de transform().")
+        matrix = np.zeros((len(texts), len(self.vocabulary_)), dtype=np.float32)
+        for row, terms in enumerate(self._extract_terms(texts)):
+            term_frequencies = calculate_term_frequency(
+                terms, self.vocabulary_, sublinear_term_frequency=self.sublinear_term_frequency
+            )
+            for term, term_frequency in term_frequencies.items():
+                index = self.vocabulary_[term]
+                matrix[row, index] = term_frequency * self.idf_[index]
+        return matrix

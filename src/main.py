@@ -35,26 +35,29 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import polars as pl
 
 from config.constants import CONFIG_FILE_NAMES
 from config.environment import configure_environment_variables, configure_reproducibility
 from config.logging import configure_logging
 from config.paths import CONFIGS_DIR, ProjectPaths, load_project_paths
 from config.settings import GeneralConfig, Settings, create_settings, load_general_config
-from data.loader import load_labeled_corpus, load_training_example_dataset, read_dataset_file
+from data.loader import load_labeled_corpus, load_training_example_dataset
 from diagnostics.targets import TARGET_NAMES
 from exceptions.configuration import InvalidConfigurationError
-from features.lexical import pivot_tfidf_features_to_wide
 from hypothesaes.llm_api import LLM_PROVIDER_NAMES
 from hypothesaes.utils import load_prompt_template
 from io_utils.yaml import read_yaml
 from labeling.huggingface import open_huggingface_classifier
 from labeling.openai_labeler import create_openai_batch_classifier
+from models.persistence import load_classifier
 from pipelines.diagnostics_analysis import DIAGNOSTICS_GOLD_CHOICES, DIAGNOSTICS_STEPS
+from pipelines.features import TFIDF_VECTORIZER_FILE_NAME
+from pipelines.hypotheses import HYPOTHESES_MODES
 from pipelines.labeling import LABEL_SOURCE_NAMES, LabelingSource
 from pipelines.training_classical import DEFAULT_CLASSICAL_MODEL_NAMES
 from pipelines.training_deep_learning import DEFAULT_DEEP_LEARNING_MODEL_NAMES
+from pipelines.training_llm import DEFAULT_LLM_MODEL_NAMES
+from pipelines.training_transformer import DEFAULT_TRANSFORMER_MODEL_NAMES
 from pipelines.workflow import STAGE_REGISTRY, run_pipeline_stage
 
 logger = logging.getLogger(__name__)
@@ -64,17 +67,14 @@ _STAGE_CHOICES: tuple[str, ...] = (*STAGE_REGISTRY, _ALL_STAGES_OPTION)
 _ALL_SOURCES_OPTION = "all"
 _LOG_LEVEL_CHOICES: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
-# Espelha `pipelines.features._TFIDF_FEATURES_FILE_NAME` (constante privada
-# do módulo), já que apenas o caminho dos três conjuntos particionados é
-# exposto publicamente via `pipelines.features.FeatureArtifacts`.
-_TFIDF_FEATURES_FILE_NAME = "tfidf_features.parquet"
-
 # Mapeia cada modelo de deep learning/Transformer para a seção/subseção
 # correspondente em `configs/model_params.yaml` (os nomes não coincidem:
 # "lstm"/"cnn" ficam em `deep_learning.recurrent`/`deep_learning.convolutional`).
 _DEEP_LEARNING_MODEL_PARAM_KEYS: dict[str, tuple[str, str]] = {
     "lstm": ("deep_learning", "recurrent"),
     "cnn": ("deep_learning", "convolutional"),
+}
+_TRANSFORMER_MODEL_PARAM_KEYS: dict[str, tuple[str, str]] = {
     "bertimbau": ("transformers", "bertimbau"),
     "roberta": ("transformers", "roberta"),
     "distilbert": ("transformers", "distilbert"),
@@ -131,7 +131,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Número máximo de threads/processos paralelos (etapas "
-            "`ingestion`/`preprocessing`/`hypothesaes_analysis`; na etapa `labeling`, "
+            "`ingestion`/`preprocessing`/`hypotheses`; na etapa `labeling`, "
             "sobrescreve `configs/labeling.yaml -> openai.n_workers`)."
         ),
     )
@@ -141,7 +141,8 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         metavar="MODELO1,MODELO2,...",
         help=(
             "Lista de modelos separados por vírgula (etapas `training_classical`/"
-            "`training_deep_learning`); usa o padrão da etapa quando omitido."
+            "`training_deep_learning`/`training_transformer`/`training_llm`/`evaluate`); "
+            "usa o padrão da etapa quando omitido."
         ),
     )
     parser.add_argument(
@@ -177,18 +178,30 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--skip-hypotheses",
         action="store_true",
+        help="Dispensa a etapa `hypotheses` (útil em `--stage all` sem LLM/GPU).",
+    )
+    parser.add_argument(
+        "--hypotheses-mode",
+        default="disagreement",
+        choices=HYPOTHESES_MODES,
         help=(
-            "Não executa o HypotheSAEs ao final da etapa `comparative_evaluation` "
-            "(sobrescreve `configs/evaluation.yaml -> llm_comparison.hypotheses.enabled` "
-            "apenas para desligar)."
+            "Modo da etapa `hypotheses`: `disagreement` (discordância/incerteza entre as bases "
+            "Hugging Face e OpenAI), `patterns` (padrões e inconsistências nos rótulos de baixa "
+            "confiança) ou `diagnostics` (gate de sanidade, validação e comparação de prompts; "
+            "ver `--diagnostics-*`)."
         ),
+    )
+    parser.add_argument(
+        "--skip-ablation",
+        action="store_true",
+        help="Dispensa a ablação do pipeline clássico na etapa `evaluate`.",
     )
     parser.add_argument(
         "--hypothesaes-evaluate",
         action="store_true",
         help=(
             "Habilita a avaliação das hipóteses num holdout via LLM (etapa "
-            "`hypothesaes_analysis`); sobrescreve `configs/hypothesaes.yaml -> "
+            "`hypotheses`, modo `patterns`); sobrescreve `configs/hypothesaes.yaml -> "
             "evaluation.enabled` apenas para ligar (nunca desliga)."
         ),
     )
@@ -197,7 +210,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help=(
             "Apenas estima nº de chamadas de LLM, tokens e custo, sem rede, embeddings, SAE "
-            "ou MLflow (etapa `diagnostics`)."
+            "ou MLflow (etapa `hypotheses`, modo `diagnostics`)."
         ),
     )
     parser.add_argument(
@@ -205,7 +218,8 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="hypotheses",
         choices=DIAGNOSTICS_STEPS,
         help=(
-            "Passo da etapa `diagnostics`: `hypotheses` (gate de sanidade + hipóteses), "
+            "Passo do modo `diagnostics` da etapa `hypotheses`: `hypotheses` (gate de sanidade "
+            "+ hipóteses), "
             "`validation` (holdout com Bonferroni + amostra para rotulagem) ou "
             "`comparison` (prompts v1 vs v2 no gold)."
         ),
@@ -214,7 +228,10 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--diagnostics-target",
         default="disagreement",
         choices=TARGET_NAMES,
-        help="Alvo de diagnóstico (etapa `diagnostics`, passos `hypotheses`/`validation`).",
+        help=(
+            "Alvo de diagnóstico (etapa `hypotheses`, modo `diagnostics`, passos "
+            "`hypotheses`/`validation`)."
+        ),
     )
     parser.add_argument(
         "--diagnostics-model-column",
@@ -244,7 +261,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--diagnostics-gold",
         default="tweetsentbr",
         choices=DIAGNOSTICS_GOLD_CHOICES,
-        help="Gold set do passo `comparison` (etapa `diagnostics`).",
+        help="Gold set do passo `comparison` (etapa `hypotheses`, modo `diagnostics`).",
     )
     return parser.parse_args(argv)
 
@@ -303,15 +320,32 @@ def _parse_model_names(raw_value: str | None) -> tuple[str, ...] | None:
     return tuple(name.strip() for name in raw_value.split(",") if name.strip())
 
 
-def _load_classical_training_arrays(paths: ProjectPaths) -> tuple[np.ndarray, list[str]]:
-    """Carrega a matriz TF-IDF de treino (etapa ``features``) como array denso.
+def _load_split_texts(path: Path) -> tuple[list[str], list[str]]:
+    """Lê textos e rótulos de uma partição (``treino``/``validacao``/``teste``).
 
-    Converte o formato longo produzido por
-    :func:`features.lexical.compute_tfidf_features` para uma matriz densa
-    (:func:`features.lexical.pivot_tfidf_features_to_wide`) e alinha cada
-    linha ao rótulo correspondente em ``paths.training_corpus_file`` pelo
-    ``id`` (documentos sem nenhum peso TF-IDF não nulo não aparecem no
-    formato longo, então o corpus de treino é restrito aos ``id`` presentes).
+    Parameters
+    ----------
+    path : Path
+        Caminho do Parquet da partição (``ProjectPaths.*_corpus_file``).
+
+    Returns
+    -------
+    tuple[list[str], list[str]]
+        Textos normalizados e rótulos de sentimento, na mesma ordem.
+    """
+    corpus = load_training_example_dataset(path)
+    return corpus["text"].to_list(), corpus["sentiment_label"].to_list()
+
+
+def _load_classical_split_arrays(
+    paths: ProjectPaths,
+) -> tuple[np.ndarray, list[str], np.ndarray, list[str]]:
+    """Carrega as matrizes TF-IDF de treino e validação para os modelos clássicos.
+
+    Aplica o vetorizador ajustado no treino pela etapa ``features``
+    (``models/checkpoints/tfidf_vectorizer.joblib``) aos textos das duas partições,
+    de modo que treino, validação e teste (``evaluate``) compartilham o mesmo vocabulário
+    e nenhuma informação de validação/teste vaza para o ajuste.
 
     Parameters
     ----------
@@ -320,25 +354,17 @@ def _load_classical_training_arrays(paths: ProjectPaths) -> tuple[np.ndarray, li
 
     Returns
     -------
-    tuple[np.ndarray, list[str]]
-        Matriz de features de treino (``X_train``) e rótulos correspondentes
-        (``y_train``), na mesma ordem.
+    tuple[np.ndarray, list[str], np.ndarray, list[str]]
+        ``X_train``, ``y_train``, ``X_val`` e ``y_val``.
 
     Examples
     --------
-    >>> _load_classical_training_arrays(paths)  # doctest: +SKIP
+    >>> _load_classical_split_arrays(paths)  # doctest: +SKIP
     """
-    tfidf_features_path = paths.data_processed_dir / _TFIDF_FEATURES_FILE_NAME
-    tfidf_wide = pivot_tfidf_features_to_wide(read_dataset_file(tfidf_features_path)).sort("id")
-    training_corpus = (
-        load_training_example_dataset(paths.training_corpus_file)
-        .filter(pl.col("id").is_in(tfidf_wide["id"]))
-        .sort("id")
-    )
-    feature_columns = [column for column in tfidf_wide.columns if column != "id"]
-    X_train = tfidf_wide.select(feature_columns).to_numpy()  # noqa: N806
-    y_train = training_corpus["sentiment_label"].to_list()
-    return X_train, y_train
+    vectorizer = load_classifier(paths.models_checkpoints_dir / TFIDF_VECTORIZER_FILE_NAME)
+    train_texts, y_train = _load_split_texts(paths.training_corpus_file)
+    val_texts, y_val = _load_split_texts(paths.validation_corpus_file)
+    return vectorizer.transform(train_texts), y_train, vectorizer.transform(val_texts), y_val
 
 
 def _build_ingestion_stage_kwargs(
@@ -608,9 +634,8 @@ def _build_training_classical_stage_kwargs(
 ) -> dict[str, Any]:
     """Monta os argumentos de :func:`pipelines.training_classical.run_training_classical_stage`.
 
-    ``X_val``/``y_val`` são sempre ``None``: a etapa ``features`` só calcula
-    TF-IDF para o conjunto de treino (ver ``pipelines.features.run_features_stage``),
-    então nenhuma matriz de validação está disponível em disco.
+    ``X_train``/``X_val`` são as matrizes TF-IDF produzidas pelo vetorizador ajustado no treino
+    (etapa ``features``); a validação alimenta as métricas de cada modelo, nunca o ajuste.
 
     Parameters
     ----------
@@ -631,14 +656,61 @@ def _build_training_classical_stage_kwargs(
         :func:`pipelines.training_classical.run_training_classical_stage`.
     """
     del general_config, settings
-    X_train, y_train = _load_classical_training_arrays(paths)  # noqa: N806
+    X_train, y_train, X_val, y_val = _load_classical_split_arrays(paths)  # noqa: N806
     model_params = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["model_params"])["classical"]
     return {
         "X_train": X_train,
         "y_train": y_train,
-        "X_val": None,
-        "y_val": None,
+        "X_val": X_val,
+        "y_val": y_val,
         "model_names": _parse_model_names(args.model_names) or DEFAULT_CLASSICAL_MODEL_NAMES,
+        "model_params": model_params,
+        "checkpoints_dir": paths.models_checkpoints_dir,
+        "track_with_mlflow": args.track_with_mlflow,
+    }
+
+
+def _build_neural_stage_kwargs(
+    paths: ProjectPaths,
+    args: argparse.Namespace,
+    param_keys: dict[str, tuple[str, str]],
+    default_model_names: tuple[str, ...],
+) -> dict[str, Any]:
+    """Monta os argumentos comuns dos estágios de deep learning e de Transformers.
+
+    ``X_*`` são os textos normalizados de cada partição: cada classificador é responsável pela
+    própria tensorização/tokenização (ver ``src/models/``). A validação alimenta a parada
+    antecipada e o checkpoint de melhor modelo.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--model-names``, ``--track-with-mlflow``).
+    param_keys : dict[str, tuple[str, str]]
+        Seção/subseção de ``configs/model_params.yaml`` de cada modelo do estágio.
+    default_model_names : tuple[str, ...]
+        Modelos treinados quando ``--model-names`` é omitido.
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados do estágio de treino neural.
+    """
+    train_texts, y_train = _load_split_texts(paths.training_corpus_file)
+    val_texts, y_val = _load_split_texts(paths.validation_corpus_file)
+    model_params_by_section = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["model_params"])
+    model_params = {
+        model_name: model_params_by_section[section][subsection]
+        for model_name, (section, subsection) in param_keys.items()
+    }
+    return {
+        "X_train": train_texts,
+        "y_train": y_train,
+        "X_val": val_texts,
+        "y_val": y_val,
+        "model_names": _parse_model_names(args.model_names) or default_model_names,
         "model_params": model_params,
         "checkpoints_dir": paths.models_checkpoints_dir,
         "track_with_mlflow": args.track_with_mlflow,
@@ -649,13 +721,7 @@ def _build_training_deep_learning_stage_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
     """Monta os argumentos de
-    :func:`pipelines.training_deep_learning.run_training_deep_learning_stage`.
-
-    ``X_train`` é o texto (já tokenizado/normalizado) do conjunto de treino:
-    cada classificador (LSTM/CNN/Transformer) é responsável por sua própria
-    tensorização/tokenização específica (ver ``src/models/``). Assim como em
-    :func:`_build_training_classical_stage_kwargs`, ``X_val``/``y_val`` são
-    ``None`` por falta de um conjunto de validação já processado em disco.
+    :func:`pipelines.training_deep_learning.run_training_deep_learning_stage` (LSTM e CNN).
 
     Parameters
     ----------
@@ -664,8 +730,7 @@ def _build_training_deep_learning_stage_kwargs(
     general_config : GeneralConfig
         Configuração geral validada, não utilizada diretamente nesta etapa.
     settings : Settings
-        Configurações sensíveis ao ambiente, não utilizadas diretamente
-        nesta etapa.
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
     args : argparse.Namespace
         Argumentos de linha de comando (``--model-names``, ``--track-with-mlflow``).
 
@@ -676,22 +741,161 @@ def _build_training_deep_learning_stage_kwargs(
         :func:`pipelines.training_deep_learning.run_training_deep_learning_stage`.
     """
     del general_config, settings
-    training_corpus = load_training_example_dataset(paths.training_corpus_file)
-    model_params_by_section = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["model_params"])
-    model_params = {
-        model_name: model_params_by_section[section][subsection]
-        for model_name, (section, subsection) in _DEEP_LEARNING_MODEL_PARAM_KEYS.items()
-    }
+    return _build_neural_stage_kwargs(
+        paths, args, _DEEP_LEARNING_MODEL_PARAM_KEYS, DEFAULT_DEEP_LEARNING_MODEL_NAMES
+    )
+
+
+def _build_training_transformer_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de
+    :func:`pipelines.training_transformer.run_training_transformer_stage`.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada, não utilizada diretamente nesta etapa.
+    settings : Settings
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--model-names``, ``--track-with-mlflow``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para
+        :func:`pipelines.training_transformer.run_training_transformer_stage`.
+    """
+    del general_config, settings
+    return _build_neural_stage_kwargs(
+        paths, args, _TRANSFORMER_MODEL_PARAM_KEYS, DEFAULT_TRANSFORMER_MODEL_NAMES
+    )
+
+
+def _build_training_llm_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de :func:`pipelines.training_llm.run_training_llm_stage`.
+
+    Exige o servidor Ollama ativo. O limite de textos de validação enviados ao LLM vem de
+    ``configs/evaluation.yaml -> evaluate.llm_max_test_samples`` (o mesmo do estágio
+    ``evaluate``, para manter o custo previsível).
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada (semente de reprodutibilidade).
+    settings : Settings
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--model-names``, ``--random-seed``,
+        ``--track-with-mlflow``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para :func:`pipelines.training_llm.run_training_llm_stage`.
+    """
+    del settings
+    train_texts, y_train = _load_split_texts(paths.training_corpus_file)
+    val_texts, y_val = _load_split_texts(paths.validation_corpus_file)
+    evaluation_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["evaluation"])
     return {
-        "X_train": training_corpus["text"].to_list(),
-        "y_train": training_corpus["sentiment_label"].to_list(),
-        "X_val": None,
-        "y_val": None,
-        "model_names": _parse_model_names(args.model_names) or DEFAULT_DEEP_LEARNING_MODEL_NAMES,
-        "model_params": model_params,
+        "X_train": train_texts,
+        "y_train": y_train,
+        "X_val": val_texts,
+        "y_val": y_val,
+        "model_names": _parse_model_names(args.model_names) or DEFAULT_LLM_MODEL_NAMES,
+        "model_params": read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["model_params"])["llm"],
         "checkpoints_dir": paths.models_checkpoints_dir,
+        "max_validation_samples": evaluation_config["evaluate"]["llm_max_test_samples"],
+        "random_seed": _resolve_random_seed(args, general_config),
         "track_with_mlflow": args.track_with_mlflow,
     }
+
+
+def _resolve_random_seed(args: argparse.Namespace, general_config: GeneralConfig) -> int:
+    """Semente efetiva: ``--random-seed`` ou, por padrão, a de ``configs/config.yaml``."""
+    if args.random_seed is not None:
+        return args.random_seed
+    return general_config.reproducibility.random_seed
+
+
+def _build_evaluate_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de :func:`pipelines.evaluate.run_evaluate_stage`.
+
+    Bootstrap, nível de confiança e significância vêm de ``configs/evaluation.yaml``
+    (``uncertainty``/``significance_tests``); a ablação parte dos hiperparâmetros de
+    ``classical.logistic_regression`` em ``configs/model_params.yaml``.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada (semente de reprodutibilidade).
+    settings : Settings
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--model-names``, ``--skip-ablation``,
+        ``--random-seed``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para :func:`pipelines.evaluate.run_evaluate_stage`.
+    """
+    del settings
+    evaluation_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["evaluation"])
+    classical_params = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["model_params"])["classical"]
+    ablation_config = dict(evaluation_config["ablation"])
+    ablation_config["model_params"] = {
+        **classical_params.get(ablation_config["model"], {}),
+        **(ablation_config.get("model_params") or {}),
+    }
+    return {
+        "paths": paths,
+        "model_names": _parse_model_names(args.model_names),
+        "n_bootstrap": evaluation_config["uncertainty"]["n_bootstrap"],
+        "confidence_level": evaluation_config["uncertainty"]["confidence_level"],
+        "alpha": evaluation_config["significance_tests"]["alpha"],
+        "random_seed": _resolve_random_seed(args, general_config),
+        "llm_max_test_samples": evaluation_config["evaluate"]["llm_max_test_samples"],
+        "ablation_config": ablation_config,
+        "skip_ablation": args.skip_ablation,
+    }
+
+
+def _build_report_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de :func:`pipelines.report.run_report_stage` (apenas ``paths``).
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada, não utilizada diretamente nesta etapa.
+    settings : Settings
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
+    args : argparse.Namespace
+        Argumentos de linha de comando, não utilizados diretamente nesta etapa.
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para :func:`pipelines.report.run_report_stage`.
+    """
+    del general_config, settings, args
+    return {"paths": paths}
 
 
 def _build_comparative_evaluation_stage_kwargs(
@@ -701,7 +905,7 @@ def _build_comparative_evaluation_stage_kwargs(
     :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`.
 
     A etapa lê as bases ``tweets_data_huggingface``/``tweets_data_openai`` direto do disco e
-    não exige nenhum argumento manual: limiares, bootstrap e HypotheSAEs vêm de
+    não exige nenhum argumento manual: limiares e bootstrap vêm de
     ``configs/evaluation.yaml -> llm_comparison``.
 
     Parameters
@@ -713,7 +917,7 @@ def _build_comparative_evaluation_stage_kwargs(
     settings : Settings
         Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
     args : argparse.Namespace
-        Argumentos de linha de comando (``--random-seed``, ``--skip-hypotheses``).
+        Argumentos de linha de comando (``--random-seed``).
 
     Returns
     -------
@@ -723,7 +927,6 @@ def _build_comparative_evaluation_stage_kwargs(
     """
     del general_config, settings
     config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["evaluation"])["llm_comparison"]
-    hypotheses_config = config["hypotheses"]
     return {
         "paths": paths,
         "output_subdir": config["output_subdir"],
@@ -735,19 +938,16 @@ def _build_comparative_evaluation_stage_kwargs(
         "low_confidence_threshold": config["low_confidence_threshold"],
         "n_length_bins": config["n_length_bins"],
         "examples_per_transition": config["examples_per_transition"],
-        "run_hypotheses": hypotheses_config["enabled"] and not args.skip_hypotheses,
-        "hypotheses_targets": tuple(hypotheses_config["targets"]),
-        "top_tweets_per_hypothesis": hypotheses_config["top_tweets_per_hypothesis"],
-        "track_with_mlflow": True,
     }
 
 
-def _build_hypothesaes_analysis_stage_kwargs(
+def _build_hypothesaes_patterns_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
     """Monta os argumentos de :func:`pipelines.hypothesaes_analysis.run_hypothesaes_analysis_stage`.
 
-    O endpoint LLM (OpenAI-compatível, modelo ``UnB-Llama-3.3-70B-Instruct``
+    Usado pelo modo ``patterns`` da etapa ``hypotheses``. O endpoint LLM
+    (OpenAI-compatível, modelo ``UnB-Llama-3.3-70B-Instruct``
     por padrão) é resolvido exclusivamente via ``OPENAI_BASE_URL``/
     ``OPENAI_KEY`` (``.env`` — ver ``.env.example``), lidas em tempo de
     chamada por ``hypothesaes.llm_api.create_client``: este é o único
@@ -817,13 +1017,13 @@ def _build_hypothesaes_analysis_stage_kwargs(
     }
 
 
-def _build_diagnostics_stage_kwargs(
+def _build_diagnostics_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
     """Monta os argumentos de :func:`pipelines.diagnostics_analysis.run_diagnostics_stage`.
 
-    Etapa opt-in: não faz parte de ``configs/config.yaml -> stages`` (``--stage all`` não a
-    executa). Parâmetros de modelo, SAE, LLM e custo vêm de ``configs/diagnostics.yaml``
+    Usado pelo modo ``diagnostics`` da etapa ``hypotheses``. Parâmetros de modelo, SAE, LLM e
+    custo vêm de ``configs/diagnostics.yaml``
     (validado por Pydantic); a chave da OpenAI, quando usada, vem de ``OPENAI_KEY`` (``.env``).
 
     Parameters
@@ -843,9 +1043,8 @@ def _build_diagnostics_stage_kwargs(
         Argumentos nomeados para
         :func:`pipelines.diagnostics_analysis.run_diagnostics_stage`.
     """
-    del general_config, settings
+    del general_config, settings, paths
     return {
-        "paths": paths,
         "step": args.diagnostics_step,
         "target_name": args.diagnostics_target,
         "model_column": args.diagnostics_model_column,
@@ -857,18 +1056,73 @@ def _build_diagnostics_stage_kwargs(
     }
 
 
+def _build_hypotheses_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de :func:`pipelines.hypotheses.run_hypotheses_stage`.
+
+    Os argumentos pesados de cada modo (``patterns`` carrega o corpus e o LLM; ``diagnostics``
+    lê ``configs/diagnostics.yaml``) só são montados para o modo escolhido.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada, repassada aos builders de cada modo.
+    settings : Settings
+        Configurações sensíveis ao ambiente, repassadas aos builders de cada modo.
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--hypotheses-mode``, ``--skip-hypotheses``,
+        ``--diagnostics-*``, ``--hypothesaes-evaluate``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para :func:`pipelines.hypotheses.run_hypotheses_stage`.
+    """
+    evaluation_config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["evaluation"])
+    hypotheses_config = evaluation_config["hypotheses"]
+    comparison_config = evaluation_config["llm_comparison"]
+    kwargs: dict[str, Any] = {
+        "paths": paths,
+        "mode": args.hypotheses_mode,
+        "skip": args.skip_hypotheses,
+        "output_subdir": comparison_config["output_subdir"],
+        "targets": tuple(hypotheses_config["targets"]),
+        "top_tweets_per_hypothesis": hypotheses_config["top_tweets_per_hypothesis"],
+        "random_seed": (
+            args.random_seed if args.random_seed is not None else comparison_config["random_seed"]
+        ),
+    }
+    if args.skip_hypotheses:
+        return kwargs
+    if args.hypotheses_mode == "patterns":
+        kwargs["patterns_kwargs"] = _build_hypothesaes_patterns_kwargs(
+            paths, general_config, settings, args
+        )
+    elif args.hypotheses_mode == "diagnostics":
+        kwargs["diagnostics_kwargs"] = _build_diagnostics_kwargs(
+            paths, general_config, settings, args
+        )
+    return kwargs
+
+
 _STAGE_KWARGS_BUILDERS: dict[
     str, Callable[[ProjectPaths, GeneralConfig, Settings, argparse.Namespace], dict[str, Any]]
 ] = {
     "ingestion": _build_ingestion_stage_kwargs,
     "preprocessing": _build_preprocessing_stage_kwargs,
     "labeling": _build_labeling_stage_kwargs,
+    "comparative_evaluation": _build_comparative_evaluation_stage_kwargs,
+    "hypotheses": _build_hypotheses_stage_kwargs,
     "features": _build_features_stage_kwargs,
     "training_classical": _build_training_classical_stage_kwargs,
     "training_deep_learning": _build_training_deep_learning_stage_kwargs,
-    "comparative_evaluation": _build_comparative_evaluation_stage_kwargs,
-    "hypothesaes_analysis": _build_hypothesaes_analysis_stage_kwargs,
-    "diagnostics": _build_diagnostics_stage_kwargs,
+    "training_transformer": _build_training_transformer_stage_kwargs,
+    "training_llm": _build_training_llm_stage_kwargs,
+    "evaluate": _build_evaluate_stage_kwargs,
+    "report": _build_report_stage_kwargs,
 }
 
 

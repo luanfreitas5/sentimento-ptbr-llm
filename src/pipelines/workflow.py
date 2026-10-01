@@ -15,14 +15,17 @@ from typing import Any
 from exceptions.base import ProjectError
 from exceptions.pipeline import PipelineStageError, UnknownPipelineStageError
 from pipelines.comparative_evaluation import run_comparative_evaluation_stage
-from pipelines.diagnostics_analysis import run_diagnostics_stage
+from pipelines.evaluate import run_evaluate_stage
 from pipelines.features import run_features_stage
-from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
+from pipelines.hypotheses import run_hypotheses_stage
 from pipelines.ingestion import run_ingestion_stage
 from pipelines.labeling import run_labeling_stage
 from pipelines.preprocessing import run_preprocessing_stage
+from pipelines.report import run_report_stage
 from pipelines.training_classical import run_training_classical_stage
 from pipelines.training_deep_learning import run_training_deep_learning_stage
+from pipelines.training_llm import run_training_llm_stage
+from pipelines.training_transformer import run_training_transformer_stage
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +33,15 @@ STAGE_REGISTRY: dict[str, Callable[..., Any]] = {
     "ingestion": run_ingestion_stage,
     "preprocessing": run_preprocessing_stage,
     "labeling": run_labeling_stage,
+    "comparative_evaluation": run_comparative_evaluation_stage,
+    "hypotheses": run_hypotheses_stage,
     "features": run_features_stage,
     "training_classical": run_training_classical_stage,
     "training_deep_learning": run_training_deep_learning_stage,
-    "comparative_evaluation": run_comparative_evaluation_stage,
-    "hypothesaes_analysis": run_hypothesaes_analysis_stage,
-    # Opt-in: fora de `configs/config.yaml -> stages`, logo `--stage all` não o executa.
-    "diagnostics": run_diagnostics_stage,
+    "training_transformer": run_training_transformer_stage,
+    "training_llm": run_training_llm_stage,
+    "evaluate": run_evaluate_stage,
+    "report": run_report_stage,
 }
 
 

@@ -1,11 +1,13 @@
-"""Treino dos classificadores de deep learning de sentimento.
+"""Treino dos classificadores de deep learning (LSTM e CNN) de sentimento.
 
 Implementa o estágio ``training_deep_learning`` de ``configs/config.yaml ->
-stages``: treina cada modelo de deep learning/Transformer configurado
-(``configs/model_params.yaml -> deep_learning``/``transformers``) via
+stages``: treina cada modelo de deep learning configurado
+(``configs/model_params.yaml -> deep_learning``) via
 :class:`training.trainer.Trainer`, com parada antecipada e checkpoint por
 passo (``src/training/callbacks.py``), e persiste os modelos treinados em
-formato PyTorch (``src/models/persistence.py``).
+formato PyTorch (``src/models/persistence.py``). Os Transformers têm estágio
+próprio (``src/pipelines/training_transformer.py``), que reutiliza
+:func:`train_neural_models`.
 """
 
 import logging
@@ -21,29 +23,23 @@ from training.trainer import Trainer, TrainingResult
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DEEP_LEARNING_MODEL_NAMES: tuple[str, ...] = (
-    "lstm",
-    "cnn",
-    "bertimbau",
-    "roberta",
-    "distilbert",
-)
+DEFAULT_DEEP_LEARNING_MODEL_NAMES: tuple[str, ...] = ("lstm", "cnn")
 
 
-def run_training_deep_learning_stage(
+def train_neural_models(
     X_train: Sequence[Any],  # noqa: N803
     y_train: Sequence[str],
     X_val: Sequence[Any] | None,  # noqa: N803
     y_val: Sequence[str] | None,
     *,
-    model_names: Sequence[str] = DEFAULT_DEEP_LEARNING_MODEL_NAMES,
+    model_names: Sequence[str],
     model_params: Mapping[str, Mapping[str, Any]] | None = None,
     checkpoints_dir: Path,
     early_stopping_monitor: str = "f1_macro",
     early_stopping_patience: int = 5,
     track_with_mlflow: bool = False,
 ) -> dict[str, TrainingResult]:
-    """Treina cada modelo de deep learning/Transformer configurado, com parada antecipada.
+    """Treina cada modelo neural (deep learning ou Transformer) informado, com parada antecipada.
 
     Parameters
     ----------
@@ -57,14 +53,13 @@ def run_training_deep_learning_stage(
         checkpoint de melhor modelo.
     y_val : Sequence[str] | None
         Rótulos de sentimento de validação, mesmo tamanho de ``X_val``.
-    model_names : Sequence[str], optional
-        Nomes dos modelos a treinar, uma das chaves de
-        :func:`models.factory.create_classifier`, by default
-        :data:`DEFAULT_DEEP_LEARNING_MODEL_NAMES`.
+    model_names : Sequence[str]
+        Nomes dos modelos a treinar, chaves de
+        :func:`models.factory.create_classifier`.
     model_params : Mapping[str, Mapping[str, Any]] | None, optional
-        Hiperparâmetros por modelo (``configs/model_params.yaml ->
-        deep_learning``/``transformers``), indexados pelo nome do modelo,
-        by default None (hiperparâmetros padrão de cada modelo).
+        Hiperparâmetros por modelo (``configs/model_params.yaml``), indexados
+        pelo nome do modelo, by default None (hiperparâmetros padrão de cada
+        modelo).
     checkpoints_dir : Path
         Diretório-raiz dos checkpoints (``paths.models_checkpoints_dir``);
         cada modelo grava seus checkpoints em um subdiretório próprio.
@@ -84,7 +79,7 @@ def run_training_deep_learning_stage(
 
     Examples
     --------
-    >>> run_training_deep_learning_stage(
+    >>> train_neural_models(
     ...     X_train,
     ...     y_train,
     ...     X_val,
@@ -108,10 +103,75 @@ def run_training_deep_learning_stage(
         save_classifier(result.model, checkpoints_dir / f"{model_name}.pt", backend="torch")
         results[model_name] = result
         logger.info(
-            "Modelo de deep learning '%s' treinado em %.2fs (métricas=%s).",
+            "Modelo neural '%s' treinado em %.2fs (métricas=%s).",
             model_name,
             result.elapsed_seconds,
             result.metrics,
         )
 
     return results
+
+
+def run_training_deep_learning_stage(
+    X_train: Sequence[Any],  # noqa: N803
+    y_train: Sequence[str],
+    X_val: Sequence[Any] | None,  # noqa: N803
+    y_val: Sequence[str] | None,
+    *,
+    model_names: Sequence[str] = DEFAULT_DEEP_LEARNING_MODEL_NAMES,
+    model_params: Mapping[str, Mapping[str, Any]] | None = None,
+    checkpoints_dir: Path,
+    early_stopping_monitor: str = "f1_macro",
+    early_stopping_patience: int = 5,
+    track_with_mlflow: bool = False,
+) -> dict[str, TrainingResult]:
+    """Treina cada modelo de deep learning (LSTM/CNN) configurado, com parada antecipada.
+
+    Parameters
+    ----------
+    X_train : Sequence[Any]
+        Amostras de treino (documentos tokenizados).
+    y_train : Sequence[str]
+        Rótulos de sentimento de treino, mesmo tamanho de ``X_train``.
+    X_val : Sequence[Any] | None
+        Amostras de validação, monitoradas pela parada antecipada e pelo
+        checkpoint de melhor modelo.
+    y_val : Sequence[str] | None
+        Rótulos de sentimento de validação, mesmo tamanho de ``X_val``.
+    model_names : Sequence[str], optional
+        Modelos a treinar, by default :data:`DEFAULT_DEEP_LEARNING_MODEL_NAMES`.
+    model_params : Mapping[str, Mapping[str, Any]] | None, optional
+        Hiperparâmetros por modelo (``configs/model_params.yaml ->
+        deep_learning``), by default None.
+    checkpoints_dir : Path
+        Diretório-raiz dos checkpoints (``paths.models_checkpoints_dir``).
+    early_stopping_monitor : str, optional
+        Métrica monitorada pela parada antecipada, by default "f1_macro".
+    early_stopping_patience : int, optional
+        Paciência da parada antecipada, by default 5.
+    track_with_mlflow : bool, optional
+        Repassado a :class:`training.trainer.Trainer`, by default False.
+
+    Returns
+    -------
+    dict[str, TrainingResult]
+        Resultado de treino de cada modelo, indexado pelo nome do modelo.
+
+    Examples
+    --------
+    >>> run_training_deep_learning_stage(
+    ...     X_train, y_train, X_val, y_val, checkpoints_dir=Path("models/checkpoints")
+    ... )  # doctest: +SKIP
+    """
+    return train_neural_models(
+        X_train,
+        y_train,
+        X_val,
+        y_val,
+        model_names=model_names,
+        model_params=model_params,
+        checkpoints_dir=checkpoints_dir,
+        early_stopping_monitor=early_stopping_monitor,
+        early_stopping_patience=early_stopping_patience,
+        track_with_mlflow=track_with_mlflow,
+    )

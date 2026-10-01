@@ -31,6 +31,14 @@ MODEL_COLOR_PALETTE: dict[str, str] = {
     "openai": "#009E73",
 }
 
+# Cor de cada categoria de modelo avaliado (chaves de `evaluation.predictions.CATEGORY_LABELS`).
+CATEGORY_COLOR_PALETTE: dict[str, str] = {
+    "classical": "#E69F00",
+    "deep_learning": "#56B4E9",
+    "transformer": "#009E73",
+    "llm": "#CC79A7",
+}
+
 FIGURE_DPI = 300
 
 

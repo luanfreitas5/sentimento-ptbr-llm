@@ -3,7 +3,7 @@
 Camada **opt-in** (`src/diagnostics/`) que explica e ajuda a melhorar a rotulagem por LLMs de
 tweets pt-BR. O HypotheSAEs **não classifica**: treina um Sparse Autoencoder (SAE) sobre
 embeddings e gera hipóteses em linguagem natural associadas a um **alvo derivado**.
-Nada aqui altera o pipeline de rotulagem; `make pipeline-all` continua igual.
+Nada aqui altera o pipeline de rotulagem; `make all` continua igual.
 
 ## Alvos permitidos
 
@@ -81,10 +81,10 @@ Equivalente sem `make`: `PYTHONPATH=src python -m diagnostics.hypotheses --targe
 Também há o estágio `diagnostics` no orquestrador (`src/main.py`), que dispensa o `PYTHONPATH`:
 
 ```bash
-uv run python src/main.py --stage diagnostics --diagnostics-target disagreement --dry-run
-uv run python src/main.py --stage diagnostics --diagnostics-step validation --diagnostics-target disagreement
-uv run python src/main.py --stage diagnostics --diagnostics-step comparison --diagnostics-gold tweetsentbr
-make pipeline-diagnostics STEP=validation TARGET=disagreement DRY_RUN=--dry-run
+uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-target disagreement --dry-run
+uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step validation --diagnostics-target disagreement
+uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step comparison --diagnostics-gold tweetsentbr
+make diagnostics STEP=validation TARGET=disagreement DRY_RUN=--dry-run
 ```
 
 O estágio é **opt-in**: está registrado em `STAGE_REGISTRY`, mas fora de

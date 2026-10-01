@@ -607,9 +607,7 @@ class TestRunComparativeEvaluationStage:
         """Uma única chamada carrega, valida, compara e grava tabelas, gráficos e métricas."""
         _write_comparison_bases(pipeline_paths)
 
-        result = run_comparative_evaluation_stage(
-            pipeline_paths, n_bootstrap=30, n_length_bins=3, run_hypotheses=False
-        )
+        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30, n_length_bins=3)
 
         expected_tables = {
             "distribuicao_classes",
@@ -639,9 +637,7 @@ class TestRunComparativeEvaluationStage:
         """Em 4 de cada 6 tweets os modelos concordam: concordância = 2/3 e divergência = 1/3."""
         _write_comparison_bases(pipeline_paths)
 
-        result = run_comparative_evaluation_stage(
-            pipeline_paths, n_bootstrap=30, run_hypotheses=False
-        )
+        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
 
         agreement = result.summary["agreement"]
         assert agreement["n_tweets"] == 60
@@ -649,20 +645,18 @@ class TestRunComparativeEvaluationStage:
         assert agreement["divergence_rate"] == pytest.approx(1 / 3)
         lower, upper = agreement["agreement_rate_ci"]
         assert lower <= agreement["agreement_rate"] <= upper
-        assert result.summary["hypotheses"] is None
+        assert "hypotheses" not in result.summary
 
     def test_pairs_tweets_by_id_regardless_of_row_order(self, pipeline_paths: ProjectPaths) -> None:
         """A comparação usa o ``id`` como chave: embaralhar a base OpenAI não muda o resultado."""
         _write_comparison_bases(pipeline_paths)
-        baseline = run_comparative_evaluation_stage(
-            pipeline_paths, n_bootstrap=30, run_hypotheses=False
-        ).summary["agreement"]["n_agree"]
+        baseline = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30).summary[
+            "agreement"
+        ]["n_agree"]
         shuffled = read_dataset_file(pipeline_paths.openai_labeled_file).reverse()
         write_dataset(shuffled, pipeline_paths.openai_labeled_file)
 
-        result = run_comparative_evaluation_stage(
-            pipeline_paths, n_bootstrap=30, run_hypotheses=False
-        )
+        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
 
         assert result.summary["agreement"]["n_agree"] == baseline
 
@@ -673,8 +667,8 @@ class TestRunComparativeEvaluationStage:
         _write_comparison_bases(pipeline_paths)
         pipeline_paths.openai_labeled_file.unlink()
 
-        with pytest.raises(DataNotFoundError, match="pipeline-labeling-openai"):
-            run_comparative_evaluation_stage(pipeline_paths, run_hypotheses=False)
+        with pytest.raises(DataNotFoundError, match="make label-openai"):
+            run_comparative_evaluation_stage(pipeline_paths)
 
     def test_raises_when_bases_do_not_contain_the_same_tweets(
         self, pipeline_paths: ProjectPaths
@@ -685,22 +679,24 @@ class TestRunComparativeEvaluationStage:
         write_dataset(truncated, pipeline_paths.openai_labeled_file)
 
         with pytest.raises(DataValidationError, match="mesmos tweets"):
-            run_comparative_evaluation_stage(pipeline_paths, run_hypotheses=False)
+            run_comparative_evaluation_stage(pipeline_paths)
 
-    def test_runs_hypothesaes_last_and_records_its_outcome(
+
+class TestRunHypothesesStage:
+    """Testes de :func:`pipelines.hypotheses.run_hypotheses_stage` (modo ``disagreement``)."""
+
+    def test_disagreement_mode_runs_hypothesaes_on_the_joined_bases(
         self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Com ``run_hypotheses=True``, o HypotheSAEs roda depois das tabelas e vai ao resumo."""
+        """As bases são unidas por ``id``, o HypotheSAEs recebe o quadro e o resumo é gravado."""
         from diagnostics import model_disagreement
+        from pipelines.hypotheses import run_hypotheses_stage
 
         _write_comparison_bases(pipeline_paths)
         captured: dict[str, Any] = {}
 
         def _fake_run_hypotheses(frame: pl.DataFrame, paths: ProjectPaths, **kwargs: Any) -> list:
             captured["n_tweets"] = frame.height
-            captured["tables_already_written"] = (
-                kwargs["output_dir"] / "casos_ambiguos.csv"
-            ).is_file()
             captured["targets"] = kwargs["targets"]
             return [
                 model_disagreement.HypothesisTargetOutcome(
@@ -710,20 +706,56 @@ class TestRunComparativeEvaluationStage:
 
         monkeypatch.setattr(model_disagreement, "run_disagreement_hypotheses", _fake_run_hypotheses)
 
-        result = run_comparative_evaluation_stage(
-            pipeline_paths,
-            n_bootstrap=30,
-            run_hypotheses=True,
-            hypotheses_targets=("disagreement",),
+        summary = run_hypotheses_stage(pipeline_paths, targets=("disagreement",))
+
+        assert captured == {"n_tweets": 60, "targets": ("disagreement",)}
+        assert summary[0]["status"] == "gate_reprovado"
+        written = read_json(
+            pipeline_paths.reports_metrics_dir / "hipoteses_comparativo_hf_openai.json"
+        )
+        assert written[0]["target"] == "disagreement"
+
+    def test_skip_returns_none_without_touching_the_bases(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """``skip=True`` dispensa a etapa mesmo sem nenhuma base em disco."""
+        from pipelines.hypotheses import run_hypotheses_stage
+
+        assert run_hypotheses_stage(pipeline_paths, skip=True) is None
+
+    def test_unknown_mode_raises(self, pipeline_paths: ProjectPaths) -> None:
+        """Modo desconhecido lista os disponíveis."""
+        from pipelines.hypotheses import run_hypotheses_stage
+
+        with pytest.raises(DataValidationError, match="modo desconhecido"):
+            run_hypotheses_stage(pipeline_paths, mode="outro")
+
+    def test_patterns_mode_requires_its_arguments(self, pipeline_paths: ProjectPaths) -> None:
+        """O modo ``patterns`` sem ``patterns_kwargs`` falha com mensagem clara."""
+        from pipelines.hypotheses import run_hypotheses_stage
+
+        with pytest.raises(DataValidationError, match="patterns_kwargs"):
+            run_hypotheses_stage(pipeline_paths, mode="patterns")
+
+    def test_diagnostics_mode_delegates_to_the_diagnostics_stage(
+        self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """O modo ``diagnostics`` repassa ``paths`` e os argumentos ao estágio de diagnóstico."""
+        from pipelines import hypotheses
+
+        calls: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            hypotheses,
+            "run_diagnostics_stage",
+            lambda paths, **kwargs: calls.append({"paths": paths, **kwargs}) or "ok",
         )
 
-        assert captured == {
-            "n_tweets": 60,
-            "tables_already_written": True,
-            "targets": ("disagreement",),
-        }
-        assert result.summary["hypotheses"][0]["status"] == "gate_reprovado"
-        assert "gate_reprovado" in read_json(result.metrics_path)["hypotheses"][0]["status"]
+        result = hypotheses.run_hypotheses_stage(
+            pipeline_paths, mode="diagnostics", diagnostics_kwargs={"step": "validation"}
+        )
+
+        assert result == "ok"
+        assert calls == [{"paths": pipeline_paths, "step": "validation"}]
 
 
 def _fake_extract_local_embeddings(texts: list[str], **kwargs: Any) -> dict[str, np.ndarray]:

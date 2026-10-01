@@ -4,7 +4,9 @@ Implementa o estágio ``features`` de ``configs/config.yaml -> stages``:
 particiona o corpus rotulado em treino/validação/teste
 (``src/data/splitter.py``), grava os três conjuntos validados contra
 :class:`schemas.training.TrainingExampleSchema` e calcula a matriz de
-features TF-IDF (``src/features/lexical.py``) do conjunto de treino.
+features TF-IDF (``src/features/lexical.py``) do conjunto de treino. O
+vetorizador TF-IDF ajustado no treino é persistido para que validação, teste e
+os classificadores clássicos usem exatamente o mesmo vocabulário.
 """
 
 import logging
@@ -19,12 +21,14 @@ from constants.defaults import DEFAULT_RANDOM_SEED, DEFAULT_TEST_SIZE, DEFAULT_V
 from data.loader import load_labeled_corpus
 from data.splitter import create_stratified_split
 from data.writer import write_dataset, write_training_example_dataset
-from features.lexical import compute_tfidf_features
+from features.lexical import LexicalTfidfVectorizer, compute_tfidf_features
+from models.persistence import save_classifier
 
 logger = logging.getLogger(__name__)
 
 _TRAINING_EXAMPLE_COLUMNS: tuple[str, ...] = ("id", "text", "sentiment_label", "split")
 _TFIDF_FEATURES_FILE_NAME = "tfidf_features.parquet"
+TFIDF_VECTORIZER_FILE_NAME = "tfidf_vectorizer.joblib"
 
 
 @dataclass(frozen=True)
@@ -42,12 +46,16 @@ class FeatureArtifacts:
     tfidf_features_path : Path
         Caminho da matriz de features TF-IDF (formato longo) do conjunto de
         treino.
+    tfidf_vectorizer_path : Path
+        Caminho do vetorizador TF-IDF ajustado no treino, reutilizado para
+        transformar validação e teste (``models/checkpoints``).
     """
 
     training_corpus_path: Path
     validation_corpus_path: Path
     test_corpus_path: Path
     tfidf_features_path: Path
+    tfidf_vectorizer_path: Path
 
 
 def run_features_stage(
@@ -137,6 +145,13 @@ def run_features_stage(
     tfidf_features_path = paths.data_processed_dir / _TFIDF_FEATURES_FILE_NAME
     write_dataset(tfidf_features, tfidf_features_path)
 
+    vectorizer = LexicalTfidfVectorizer(**(tfidf_overrides or {})).fit(
+        training_split[text_column].to_list()
+    )
+    tfidf_vectorizer_path = save_classifier(
+        vectorizer, paths.models_checkpoints_dir / TFIDF_VECTORIZER_FILE_NAME
+    )
+
     logger.info(
         "Etapa de features concluída: %d treino, %d validação, %d teste, %d peso(s) TF-IDF.",
         training_split.height,
@@ -149,4 +164,5 @@ def run_features_stage(
         validation_corpus_path=paths.validation_corpus_file,
         test_corpus_path=paths.test_corpus_file,
         tfidf_features_path=tfidf_features_path,
+        tfidf_vectorizer_path=tfidf_vectorizer_path,
     )

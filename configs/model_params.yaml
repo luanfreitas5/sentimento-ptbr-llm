@@ -11,6 +11,11 @@ classical:
     max_df: 0.95
     sublinear_tf: true
 
+  # Baseline: piso de desempenho (sorteia a classe pela distribuição do treino).
+  dummy:
+    strategy: "stratified"
+    random_state: 42
+
   naive_bayes:
     alpha: 1.0
 
@@ -126,4 +131,16 @@ transformers:
     warmup_ratio: 0.1
     weight_decay: 0.01
     early_stopping_patience: 2
+    random_state: 42
+
+# LLMs open-source via Ollama (estágio `training_llm`). Sem ajuste de pesos: o "treino"
+# só seleciona exemplos few-shot do conjunto de treino. A chave é o nome do artefato
+# (models/checkpoints/<chave>.llm.json); `model_name` deve ter sido baixado com `ollama pull`.
+llm:
+  llama3_2:
+    model_name: "llama3.2"
+    few_shot: true
+    n_examples_per_class: 2
+    temperature: 0.0
+    max_retries: 3
     random_state: 42

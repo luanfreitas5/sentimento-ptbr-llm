@@ -31,13 +31,19 @@ data_split:
   stratify: true
   random_state: 42
 
-# Estágios executáveis via `python -m src.main --stage <nome>` (src/pipelines/workflow.py)
+# Estágios executáveis via `python src/main.py --stage <nome>` (src/pipelines/workflow.py),
+# na ordem de execução de `--stage all`. A geração de hipóteses (HypotheSAEs) é a
+# etapa `hypotheses`; seus modos `patterns` e `diagnostics` são opt-in (--hypotheses-mode).
 stages:
   - ingestion
   - preprocessing
   - labeling
   - comparative_evaluation
+  - hypotheses
   - features
   - training_classical
   - training_deep_learning
-  - hypothesaes_analysis
+  - training_transformer
+  - training_llm
+  - evaluate
+  - report

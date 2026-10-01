@@ -48,6 +48,42 @@ stages:
       - data/processed/tweets_data_openai.parquet
       - data/processed/corpus_rotulado.parquet
 
+  comparative_evaluation:
+    cmd: uv run python src/main.py --stage comparative_evaluation
+    deps:
+      - src/pipelines/comparative_evaluation.py
+      - src/evaluation/llm_comparison.py
+      - src/visualization/comparison.py
+      - data/processed/tweets_data_huggingface.parquet
+      - data/processed/tweets_data_openai.parquet
+    params:
+      - configs/evaluation.yaml:
+          - llm_comparison
+    outs:
+      - reports/metrics/comparativo_hf_openai.json:
+          cache: false
+      - reports/tables/comparativo_hf_openai:
+          cache: false
+      - reports/figures/comparativo_hf_openai:
+          cache: false
+
+  # Modo padrão (`disagreement`): HypotheSAEs sobre a discordância/incerteza entre as bases.
+  # Os modos `patterns` e `diagnostics` são opt-in (`--hypotheses-mode`) e ficam fora do DAG.
+  hypotheses:
+    cmd: uv run python src/main.py --stage hypotheses
+    deps:
+      - src/pipelines/hypotheses.py
+      - src/diagnostics
+      - data/processed/tweets_data_huggingface.parquet
+      - data/processed/tweets_data_openai.parquet
+    params:
+      - configs/evaluation.yaml:
+          - hypotheses
+      - configs/diagnostics.yaml:
+    outs:
+      - reports/metrics/hipoteses_comparativo_hf_openai.json:
+          cache: false
+
   features:
     cmd: uv run python src/main.py --stage features
     deps:
@@ -64,6 +100,8 @@ stages:
       - data/processed/validacao.parquet
       - data/processed/teste.parquet
       - data/processed/tfidf_features.parquet
+      - models/checkpoints/tfidf_vectorizer.joblib:
+          persist: true
 
   training_classical:
     cmd: uv run python src/main.py --stage training_classical
@@ -73,11 +111,22 @@ stages:
       - src/training
       - data/processed/treino.parquet
       - data/processed/validacao.parquet
+      - models/checkpoints/tfidf_vectorizer.joblib
     params:
       - configs/model_params.yaml:
           - classical
     outs:
-      - models/checkpoints:
+      - models/checkpoints/dummy.joblib:
+          persist: true
+      - models/checkpoints/naive_bayes.joblib:
+          persist: true
+      - models/checkpoints/logistic_regression.joblib:
+          persist: true
+      - models/checkpoints/svm.joblib:
+          persist: true
+      - models/checkpoints/random_forest.joblib:
+          persist: true
+      - models/checkpoints/gradient_boosting.joblib:
           persist: true
 
   training_deep_learning:
@@ -91,41 +140,89 @@ stages:
     params:
       - configs/model_params.yaml:
           - deep_learning
-          - transformers
-          - autoencoder
     outs:
-      - models/checkpoints:
+      - models/checkpoints/lstm.pt:
+          persist: true
+      - models/checkpoints/cnn.pt:
           persist: true
 
-  comparative_evaluation:
-    cmd: uv run python src/main.py --stage comparative_evaluation
+  training_transformer:
+    cmd: uv run python src/main.py --stage training_transformer
     deps:
-      - src/pipelines/comparative_evaluation.py
-      - src/evaluation/llm_comparison.py
-      - src/visualization/comparison.py
-      - src/diagnostics
-      - data/processed/tweets_data_huggingface.parquet
-      - data/processed/tweets_data_openai.parquet
+      - src/pipelines/training_transformer.py
+      - src/pipelines/training_deep_learning.py
+      - src/models
+      - src/training
+      - data/processed/treino.parquet
+      - data/processed/validacao.parquet
+    params:
+      - configs/model_params.yaml:
+          - transformers
+    outs:
+      - models/checkpoints/bertimbau.pt:
+          persist: true
+      - models/checkpoints/roberta.pt:
+          persist: true
+      - models/checkpoints/distilbert.pt:
+          persist: true
+
+  training_llm:
+    cmd: uv run python src/main.py --stage training_llm
+    deps:
+      - src/pipelines/training_llm.py
+      - src/models/llm.py
+      - data/processed/treino.parquet
+      - data/processed/validacao.parquet
+    params:
+      - configs/model_params.yaml:
+          - llm
+      - configs/evaluation.yaml:
+          - evaluate
+    outs:
+      - models/checkpoints/llama3_2.llm.json:
+          cache: false
+
+  evaluate:
+    cmd: uv run python src/main.py --stage evaluate
+    deps:
+      - src/pipelines/evaluate.py
+      - src/evaluation
+      - data/processed/treino.parquet
+      - data/processed/validacao.parquet
+      - data/processed/teste.parquet
+      - models/checkpoints
     params:
       - configs/evaluation.yaml:
-          - llm_comparison
-      - configs/diagnostics.yaml:
+          - uncertainty
+          - significance_tests
+          - ablation
+          - evaluate
     outs:
-      - reports/metrics/comparativo_hf_openai.json:
+      - reports/tables/avaliacao:
           cache: false
-      - reports/tables/comparativo_hf_openai:
+      - reports/statistics:
           cache: false
-      - reports/figures/comparativo_hf_openai:
+      - reports/ablation:
+          cache: false
+      - reports/metrics/avaliacao.json:
           cache: false
 
-  hypothesaes_analysis:
-    cmd: uv run python src/main.py --stage hypothesaes_analysis
+  report:
+    cmd: uv run python src/main.py --stage report
     deps:
-      - src/pipelines/hypothesaes_analysis.py
-      - src/hypothesaes
-      - data/processed/corpus_rotulado.parquet
-    params:
-      - configs/hypothesaes.yaml:
+      - src/pipelines/report.py
+      - src/reporting
+      - src/visualization/evaluation.py
+      - reports/tables/avaliacao
+      - reports/statistics
+      - reports/ablation
+      - reports/metrics/avaliacao.json
     outs:
-      - reports/interpretability:
-          persist: true
+      - reports/figures/avaliacao:
+          cache: false
+      - reports/tables/relatorio:
+          cache: false
+      - reports/model_cards:
+          cache: false
+      - reports/datasheets:
+          cache: false

@@ -13,11 +13,9 @@ export PYTHONHASHSEED := 42
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
 	clean-processed clean-reports clean-outputs clean-notebooks \
-	pipeline-ingestion pipeline-preprocessing pipeline-labeling pipeline-labeling-huggingface \
-	pipeline-labeling-openai pipeline-features \
-	pipeline-training-classical pipeline-training-deep-learning \
-	pipeline-comparative-evaluation pipeline-all \
-	pipeline-diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
+	ingest preprocess label label-hf label-openai compare hypotheses features \
+	classical deep transformer llm evaluate report all \
+	patterns diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
 	mlflow app \
 	docker-build docker-up docker-down docker-ollama \
 	dvc-repro dvc-dag dvc-push dvc-pull \
@@ -56,8 +54,8 @@ spacy-model:  ## Baixa o modelo do spaCy para português (habilita a lematizaç�
 nltk-data:  ## Baixa o corpus de stopwords do nltk (enriquece a lista curada em pt-BR)
 	uv run python -m nltk.downloader stopwords
 
-ollama:  ## Baixa o modelo llama3.2:1b para uso local via Ollama (requer: make install-hypothesaes)
-	uv run ollama pull llama3.2:1b
+ollama:  ## Baixa o modelo llama3.2 para uso local via Ollama (requer: make install-hypothesaes)
+	uv run ollama pull llama3.2
 
 install-viz:  ## Instala os extras de visualização (wordcloud, networkx, umap-learn)
 	uv sync --extra viz --dev
@@ -188,48 +186,68 @@ tree:
 # --- Pipeline ---------------------------------------------------------------
 # Cada alvo executa uma etapa isolada; o acoplamento entre elas é o sistema de
 # arquivos, então qualquer etapa pode ser reexecutada sem repetir as anteriores.
+# Ordem de `make all`: ingest -> preprocess -> label -> compare -> hypotheses ->
+# features -> classical -> deep -> transformer -> llm -> evaluate -> report.
 # Ver `uv run python src/main.py --help` para a lista completa de opções.
 
-pipeline-ingestion:  ## Executa a coleta de dados (requer SCRAPE_FUNC=modulo:funcao QUERIES="q1 q2")
+ingest:  ## [1] Coleta de dados (requer SCRAPE_FUNC=modulo:funcao QUERIES="q1 q2")
 	$(RUN) --stage ingestion --scrape-func $(SCRAPE_FUNC) --queries $(QUERIES)
 
-pipeline-preprocessing:  ## Executa a etapa de pré-processamento do corpus bruto
+preprocess:  ## [2] Pré-processa (limpa e normaliza) o corpus bruto
 	$(RUN) --stage preprocessing
 
-pipeline-labeling:  ## Rotula TODOS os tweets com as duas fontes: bases tweets_data_huggingface e tweets_data_openai (requer: make install-labeling)
+label:  ## [3] Rotula TODOS os tweets com as duas fontes: tweets_data_huggingface e tweets_data_openai (requer: make install-labeling)
 	$(RUN) --stage labeling --label-source all
 
-pipeline-labeling-huggingface:  ## Rotula com o LLM local do Hugging Face (base tweets_data_huggingface; retoma do checkpoint)
+label-hf:  ## [3] Rotula com o LLM local do Hugging Face (base tweets_data_huggingface; retoma do checkpoint)
 	$(RUN) --stage labeling --label-source huggingface
 
-pipeline-labeling-openai:  ## Rotula via API OpenAI (base tweets_data_openai; requer OPENAI_KEY no .env; retoma do checkpoint)
+label-openai:  ## [3] Rotula via API OpenAI (base tweets_data_openai; requer OPENAI_KEY no .env; retoma do checkpoint)
 	$(RUN) --stage labeling --label-source openai
 
-pipeline-features:  ## Executa o split treino/validação/teste e a extração de features
+compare:  ## [4] Compara as bases Hugging Face x OpenAI (concordância, Kappa, divergências; tabelas e gráficos)
+	$(RUN) --stage comparative_evaluation
+
+hypotheses:  ## [5] Gera as hipóteses HypotheSAEs (requer: make install-hypothesaes; MODE=disagreement|patterns|diagnostics)
+	$(RUN) --stage hypotheses --hypotheses-mode $(or $(MODE),disagreement) $(EXTRA_ARGS)
+
+features:  ## [6] Split treino/validação/teste e extração de features (TF-IDF)
 	$(RUN) --stage features
 
-pipeline-training-classical:  ## Treina os classificadores clássicos de sentimento
+classical:  ## [7] Treina Baseline (dummy) + ML tradicional (NB, LR, SVM, RF, XGBoost)
 	$(RUN) --stage training_classical
 
-pipeline-training-deep-learning:  ## Treina os classificadores de deep learning/Transformers
+deep:  ## [8] Treina os modelos de Deep Learning (LSTM, CNN)
 	$(RUN) --stage training_deep_learning
 
-pipeline-comparative-evaluation:  ## Compara as bases Hugging Face x OpenAI e gera tabelas, gráficos e hipóteses (EXTRA_ARGS=--skip-hypotheses dispensa o HypotheSAEs)
-	$(RUN) --stage comparative_evaluation $(EXTRA_ARGS)
+transformer:  ## [9] Faz o fine-tuning dos Transformers (BERTimbau, RoBERTa, DistilBERT)
+	$(RUN) --stage training_transformer
 
-pipeline-all:  ## Executa o workflow completo, na ordem configurada em configs/config.yaml
-	$(RUN) --stage all
+llm:  ## [10] Prepara e valida os LLMs open-source via Ollama (requer: make install-hypothesaes e Ollama ativo)
+	$(RUN) --stage training_llm
 
-# --- Camada de diagnóstico HypotheSAEs (opt-in, fora de `pipeline-all`) -------
+evaluate:  ## [11] Avalia no teste (métricas com IC, McNemar) e roda a ablação (EXTRA_ARGS=--skip-ablation dispensa)
+	$(RUN) --stage evaluate $(EXTRA_ARGS)
+
+report:  ## [12] Gera figuras, tabelas, Model Cards e Datasheet
+	$(RUN) --stage report
+
+all:  ## Executa o workflow completo, na ordem configurada em configs/config.yaml (EXTRA_ARGS=--skip-hypotheses dispensa o HypotheSAEs)
+	$(RUN) --stage all $(EXTRA_ARGS)
+
+# --- Camada de diagnóstico HypotheSAEs (opt-in, fora de `make all`) -----------
 # 'diagnostics' vive em src/, que não está no sys.path do venv: exporta PYTHONPATH=src.
 DIAG := PYTHONPATH=src uv run python -m diagnostics
 TARGET ?= disagreement
 GOLD ?= tweetsentbr
 
-pipeline-diagnostics:  ## Estágio opt-in `diagnostics` via main.py (STEP=hypotheses|validation|comparison, TARGET=..., DRY_RUN=--dry-run)
-	$(RUN) --stage diagnostics --diagnostics-step $(or $(STEP),hypotheses) --diagnostics-target $(TARGET) --diagnostics-gold $(GOLD) $(DRY_RUN)
+patterns:  ## Hipóteses sobre padrões/inconsistências nos rótulos de baixa confiança (HypotheSAEs, modo patterns)
+	$(RUN) --stage hypotheses --hypotheses-mode patterns
 
-install-hypothesaes:  ## Instala os extras do HypotheSAEs (torch + sentence-transformers + openai)
+diagnostics:  ## Camada de diagnóstico via main.py (STEP=hypotheses|validation|comparison, TARGET=..., DRY_RUN=--dry-run)
+	$(RUN) --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step $(or $(STEP),hypotheses) --diagnostics-target $(TARGET) --diagnostics-gold $(GOLD) $(DRY_RUN)
+
+install-hypothesaes:  ## Instala os extras do HypotheSAEs (torch + sentence-transformers + openai + ollama)
 	uv sync --extra hypothesaes --dev
 
 diag-dry-run:  ## Estima chamadas/custo do alvo (TARGET=disagreement|uncertainty|pseudo_label|gold_error), sem rede

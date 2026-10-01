@@ -26,7 +26,7 @@ Este projeto desenvolve e avalia comparativamente um pipeline de análise de sen
 | Transformers (fine-tuning) | BERTimbau, RoBERTa pt-BR, DistilBERT pt-BR | Embeddings contextuais |
 | LLMs locais | Llama 3.1, Gemma 2 via Ollama/Hugging Face | Prompting zero-shot / few-shot / chain-of-thought |
 
-A rotulagem de todos os tweets é feita por dois LLMs independentes — um do Hugging Face (execução local) e outro via API OpenAI-compatível —, gerando as bases `tweets_data_huggingface` e `tweets_data_openai`, comparadas pela etapa `comparative_evaluation` (concordância, Kappa, confiança, divergências e hipóteses do HypotheSAEs). A execução local dos LLMs é particularmente relevante para dados de redes sociais, que envolvem restrições de privacidade e custo que desaconselham o uso de APIs proprietárias na nuvem. A métrica principal é o **F1-macro** (robusto ao desbalanceamento entre classes), complementado pelo **MCC**, testes de significância (McNemar, Wilcoxon, Friedman + post-hoc de Nemenyi), calibração de probabilidades e avaliação por slice — com ênfase em rigor metodológico, escalabilidade computacional e reprodutibilidade.
+A rotulagem de todos os tweets é feita por dois LLMs independentes — um do Hugging Face (execução local) e outro via API OpenAI-compatível —, gerando as bases `tweets_data_huggingface` e `tweets_data_openai`, comparadas pela etapa `comparative_evaluation` (concordância, Kappa, confiança e divergências); as hipóteses do HypotheSAEs têm etapa própria (`hypotheses`). A execução local dos LLMs é particularmente relevante para dados de redes sociais, que envolvem restrições de privacidade e custo que desaconselham o uso de APIs proprietárias na nuvem. A métrica principal é o **F1-macro** (robusto ao desbalanceamento entre classes), complementado pelo **MCC**, testes de significância (McNemar, Wilcoxon, Friedman + post-hoc de Nemenyi), calibração de probabilidades e avaliação por slice — com ênfase em rigor metodológico, escalabilidade computacional e reprodutibilidade.
 
 ---
 
@@ -191,16 +191,21 @@ Guia detalhado: [`docs/guides/setup.md`](docs/guides/setup.md).
 O pipeline é orquestrado por estágios via `src/main.py --stage <nome>` (ver `configs/config.yaml -> stages`), com atalhos no `Makefile`:
 
 ```bash
-make pipeline-ingestion SCRAPE_FUNC=parallel.scraping:collect_tweets QUERIES="palavra1 palavra2"
-make pipeline-preprocessing
-make pipeline-labeling               # as duas bases: tweets_data_huggingface e tweets_data_openai
-make pipeline-labeling-huggingface   # só o LLM local do Hugging Face (GPU)
-make pipeline-labeling-openai        # só a API OpenAI (OPENAI_KEY no .env)
-make pipeline-comparative-evaluation # compara as duas bases: tabelas, gráficos e hipóteses
-make pipeline-features
-make pipeline-training-classical
-make pipeline-training-deep-learning
-make pipeline-all          # executa todos os estágios, na ordem de configs/config.yaml
+make ingest SCRAPE_FUNC=parallel.scraping:collect_tweets QUERIES="palavra1 palavra2"
+make preprocess
+make label               # as duas bases: tweets_data_huggingface e tweets_data_openai
+make label-hf   # só o LLM local do Hugging Face (GPU)
+make label-openai        # só a API OpenAI (OPENAI_KEY no .env)
+make compare             # compara as duas bases: concordância, Kappa, divergências, tabelas e gráficos
+make hypotheses          # hipóteses do HypotheSAEs (MODE=disagreement|patterns|diagnostics)
+make features            # split + TF-IDF
+make classical           # Baseline (dummy) + ML tradicional
+make deep                # Deep Learning (LSTM, CNN)
+make transformer         # Transformers (BERTimbau, RoBERTa, DistilBERT)
+make llm                 # LLM open-source via Ollama (few-shot)
+make evaluate            # teste + estatística (McNemar) + ablação
+make report              # figuras + tabelas + Model Cards + Datasheet
+make all                 # todos os estágios, na ordem de configs/config.yaml
 
 make mlflow    # UI do MLflow (mlruns/)
 make app       # dashboard Streamlit (app/dashboard.py)

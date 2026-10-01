@@ -47,6 +47,7 @@ PROJECT_PACKAGE_NAMES: tuple[str, ...] = (
     "parallel",
     "pipelines",
     "preprocessing",
+    "reporting",
     "schemas",
     "training",
     "utils",

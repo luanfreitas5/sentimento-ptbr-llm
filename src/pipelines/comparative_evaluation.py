@@ -1,7 +1,7 @@
 """Avaliação comparativa entre as bases rotuladas pelo Hugging Face e pela OpenAI.
 
 Implementa o estágio ``comparative_evaluation`` de ``configs/config.yaml ->
-stages``. Executada diretamente (``make pipeline-comparative-evaluation``), a
+stages``. Executada diretamente (``make compare``), a
 etapa faz sozinha todo o fluxo, sem passos manuais intermediários:
 
 1. carrega ``tweets_data_huggingface`` e ``tweets_data_openai``;
@@ -13,11 +13,13 @@ etapa faz sozinha todo o fluxo, sem passos manuais intermediários:
 5. gera os gráficos (``reports/figures/<subpasta>/``, PNG 300 dpi + SVG);
 6. analisa divergências, conflitos de confiança, tamanho do texto, casos
    ambíguos e transições de classe;
-7. opcionalmente, aplica o HypotheSAEs à divergência/incerteza entre os modelos
-   (``src/diagnostics/model_disagreement.py``), como última etapa — as tabelas
-   e os gráficos já estão em disco quando ele roda;
-8. grava o resumo consolidado (``reports/metrics/<subpasta>.json``) e um
+7. grava o resumo consolidado (``reports/metrics/<subpasta>.json``) e um
    resumo em Markdown.
+
+A geração de hipóteses (HypotheSAEs) sobre a divergência/incerteza entre os
+modelos NÃO faz parte desta etapa: tem estágio próprio (``hypotheses``,
+``src/pipelines/hypotheses.py``), que reutiliza as bases lidas por
+:func:`load_labeled_source`.
 
 Sem gold set, a comparação mede concordância entre os modelos e descreve o
 comportamento de cada um; nunca "acerto". Todas as tabelas com texto usam o
@@ -25,7 +27,6 @@ texto normalizado (sem menções/URLs).
 """
 
 import logging
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -74,7 +75,7 @@ class ComparativeEvaluationResult:
     comparison_frame : pl.DataFrame
         Bases unidas por ``id`` (ver :func:`evaluation.llm_comparison.build_comparison_frame`).
     summary : dict[str, Any]
-        Métricas consolidadas (concordância, Kappa, confiança, hipóteses), o mesmo conteúdo do
+        Métricas consolidadas (concordância, Kappa, confiança, ambiguidade), o mesmo conteúdo do
         JSON gravado em ``metrics_path``.
     tables : dict[str, Path]
         Tabelas gravadas, indexadas pelo nome.
@@ -91,12 +92,12 @@ class ComparativeEvaluationResult:
     metrics_path: Path
 
 
-def _load_labeled_source(path: Path, source_name: str) -> pl.DataFrame:
+def load_labeled_source(path: Path, source_name: str) -> pl.DataFrame:
     """Lê uma base rotulada, com mensagem orientada quando ainda não foi gerada."""
     if not path.is_file():
+        make_target = "label-hf" if source_name == "huggingface" else "label-openai"
         raise DataNotFoundError(
-            f"{path} — base '{source_name}' ausente; gere-a com "
-            f"`make pipeline-labeling-{source_name}`"
+            f"{path} — base '{source_name}' ausente; gere-a com `make {make_target}`"
         )
     return read_dataset_file(path)
 
@@ -180,12 +181,6 @@ def _build_markdown_summary(summary: dict[str, Any]) -> str:
         "",
         "Sem gold set, estes números medem concordância entre os modelos, não acerto.",
     ]
-    hypotheses = summary.get("hypotheses")
-    if hypotheses:
-        lines += ["", "## HypotheSAEs"]
-        lines += [
-            f"- `{item['target']}`: {item['status']} — {item['detail']}" for item in hypotheses
-        ]
     return "\n".join(lines) + "\n"
 
 
@@ -201,11 +196,6 @@ def run_comparative_evaluation_stage(
     low_confidence_threshold: float = 0.5,
     n_length_bins: int = 5,
     examples_per_transition: int = 3,
-    run_hypotheses: bool = True,
-    hypotheses_targets: Sequence[str] = ("disagreement", "uncertainty"),
-    top_tweets_per_hypothesis: int = 10,
-    diagnostics_config_file: Path | None = None,
-    track_with_mlflow: bool = True,
 ) -> ComparativeEvaluationResult:
     """Executa toda a avaliação comparativa entre as bases do Hugging Face e da OpenAI.
 
@@ -217,7 +207,7 @@ def run_comparative_evaluation_stage(
         Subpasta de ``reports/tables``, ``reports/figures`` e nome do JSON em
         ``reports/metrics``, by default "comparativo_hf_openai".
     random_seed : int, optional
-        Semente do bootstrap e do HypotheSAEs, by default 42.
+        Semente do bootstrap, by default 42.
     n_bootstrap : int, optional
         Reamostragens do bootstrap, by default 1000.
     confidence_level : float, optional
@@ -232,17 +222,6 @@ def run_comparative_evaluation_stage(
         Faixas de tamanho do texto (quantis de palavras), by default 5.
     examples_per_transition : int, optional
         Exemplos por par de classes divergentes, by default 3.
-    run_hypotheses : bool, optional
-        Se ``True``, aplica o HypotheSAEs ao final (exige ``make install-hypothesaes`` e o LLM de
-        ``configs/diagnostics.yaml``), by default True.
-    hypotheses_targets : Sequence[str], optional
-        ``disagreement`` e/ou ``uncertainty``, by default os dois.
-    top_tweets_per_hypothesis : int, optional
-        Tweets de evidência por hipótese, by default 10.
-    diagnostics_config_file : Path | None, optional
-        ``configs/diagnostics.yaml`` alternativo, by default None.
-    track_with_mlflow : bool, optional
-        Se registra a etapa de hipóteses no MLflow, by default True.
 
     Returns
     -------
@@ -260,8 +239,8 @@ def run_comparative_evaluation_stage(
     --------
     >>> run_comparative_evaluation_stage(paths)  # doctest: +SKIP
     """
-    hf_base = _load_labeled_source(paths.huggingface_labeled_file, "huggingface")
-    oa_base = _load_labeled_source(paths.openai_labeled_file, "openai")
+    hf_base = load_labeled_source(paths.huggingface_labeled_file, "huggingface")
+    oa_base = load_labeled_source(paths.openai_labeled_file, "openai")
     frame = build_comparison_frame(hf_base, oa_base)
     logger.info("Comparando %d tweet(s) das bases huggingface e openai.", frame.height)
 
@@ -313,36 +292,8 @@ def run_comparative_evaluation_stage(
             "low_confidence": low_confidence_threshold,
         },
         "ambiguity": ambiguity_summary.to_dicts(),
-        "hypotheses": None,
     }
     write_json(summary, metrics_path)
-
-    if run_hypotheses:
-        from diagnostics.model_disagreement import run_disagreement_hypotheses
-
-        outcomes = run_disagreement_hypotheses(
-            frame,
-            paths,
-            output_dir=tables_dir,
-            targets=hypotheses_targets,
-            top_tweets_per_hypothesis=top_tweets_per_hypothesis,
-            config_file=diagnostics_config_file,
-            random_seed=random_seed,
-            track=track_with_mlflow,
-        )
-        summary["hypotheses"] = [
-            {
-                "target": outcome.target,
-                "status": outcome.status,
-                "detail": outcome.detail,
-                "n_hypotheses": outcome.n_hypotheses,
-                "hypotheses_path": str(outcome.hypotheses_path or ""),
-                "evidence_path": str(outcome.evidence_path or ""),
-            }
-            for outcome in outcomes
-        ]
-        write_json(summary, metrics_path)
-
     (tables_dir / _SUMMARY_MARKDOWN_FILE_NAME).write_text(
         _build_markdown_summary(summary), encoding="utf-8"
     )

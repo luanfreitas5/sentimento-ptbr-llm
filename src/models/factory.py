@@ -15,6 +15,7 @@ from models.autoencoder import build_autoencoder_reducer
 from models.bertimbau import build_bertimbau_classifier
 from models.cnn import build_cnn_classifier
 from models.distilbert import build_distilbert_classifier
+from models.dummy import build_dummy_classifier
 from models.gradient_boosting import build_gradient_boosting_classifier
 from models.llm import LLMSentimentClassifier, load_ollama_backend
 from models.logistic_regression import build_logistic_regression_classifier
@@ -67,6 +68,7 @@ _MODEL_BUILDERS: Mapping[str, Callable[..., Any]] = {
     "bertimbau": build_bertimbau_classifier,
     "cnn": build_cnn_classifier,
     "distilbert": build_distilbert_classifier,
+    "dummy": build_dummy_classifier,
     "gradient_boosting": build_gradient_boosting_classifier,
     "llm": _build_llm_classifier,
     "logistic_regression": build_logistic_regression_classifier,
@@ -94,7 +96,7 @@ def list_available_models() -> tuple[str, ...]:
     return tuple(sorted(_MODEL_BUILDERS))
 
 
-def create_classifier(model_name: str, **overrides: Any) -> Any:
+def create_classifier(model_name: str, /, **overrides: Any) -> Any:
     """Constrói um classificador de sentimento a partir do nome do modelo.
 
     Parameters
@@ -102,7 +104,9 @@ def create_classifier(model_name: str, **overrides: Any) -> Any:
     model_name : str
         Nome do modelo, uma das chaves retornadas por
         :func:`list_available_models` (ex.: ``"logistic_regression"``,
-        ``"bertimbau"``, ``"llm"``).
+        ``"bertimbau"``, ``"llm"``). Posicional apenas: ``model_name`` também é
+        um hiperparâmetro válido em ``overrides`` (checkpoint do Transformer,
+        modelo do Ollama) e não pode colidir com este argumento.
     **overrides : Any
         Hiperparâmetros que sobrescrevem os padrões de
         ``configs/model_params.yaml`` para o modelo escolhido.

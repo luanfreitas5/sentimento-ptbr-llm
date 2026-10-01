@@ -40,12 +40,33 @@ regression_thresholds:
   f1_macro_minimum: 0.65
   mcc_minimum: 0.45
 
+# Estágio `evaluate`: ablação do pipeline clássico, avaliada na VALIDAÇÃO (nunca no teste).
+# Cada componente remove uma peça por vez da configuração completa (model_params.yaml ->
+# classical.logistic_regression + TF-IDF abaixo); `sem_*` = componente desligado.
 ablation:
+  model: "logistic_regression"
+  model_params: {} # vazio = usa classical.logistic_regression do model_params.yaml (via main.py)
+  tfidf_params:
+    ngram_range: [1, 2]
+    max_features: 20000
+    min_document_frequency: 3
+    sublinear_term_frequency: true
   components:
-    - "sem_embeddings_contextuais"
-    - "sem_autoencoder"
-    - "sem_preprocessamento_emojis"
-    - "sem_chain_of_thought"
+    sem_bigramas:
+      tfidf: { ngram_range: [1, 1] }
+    sem_tf_sublinear:
+      tfidf: { sublinear_term_frequency: false }
+    sem_limite_vocabulario:
+      tfidf: { max_features: 1000000 }
+    sem_filtro_frequencia_minima:
+      tfidf: { min_document_frequency: 1 }
+    sem_class_weight:
+      model: { class_weight: null }
+
+# Estágio `evaluate`: LLMs são caros; limita quantos tweets de teste cada um recebe
+# (null = todo o teste). A comparação estatística usa só os tweets preditos por ambos.
+evaluate:
+  llm_max_test_samples: 500
 
 # Etapa `comparative_evaluation` (src/pipelines/comparative_evaluation.py): compara as
 # bases `tweets_data_huggingface` e `tweets_data_openai` pelo `id` do tweet.
@@ -59,10 +80,11 @@ llm_comparison:
   low_confidence_threshold: 0.5 # "baixa confiança" (conflito de confiança e ambiguidade)
   n_length_bins: 5 # quantis do tamanho do texto (em palavras)
   examples_per_transition: 3 # exemplos por par de classes divergentes
-  # Etapa opcional: HypotheSAEs sobre a divergência/incerteza entre os dois modelos
-  # (src/diagnostics/model_disagreement.py; usa configs/diagnostics.yaml). Exige as
-  # dependências pesadas (`make install-hypothesaes`) e o LLM configurado em diagnostics.yaml.
-  hypotheses:
-    enabled: true
-    targets: ["disagreement", "uncertainty"]
-    top_tweets_per_hypothesis: 10 # tweets mais ativados por hipótese, exportados como evidência
+
+# Estágio `hypotheses` (src/pipelines/hypotheses.py, modo `disagreement`): HypotheSAEs sobre a
+# divergência/incerteza entre as duas bases (src/diagnostics/model_disagreement.py; usa
+# configs/diagnostics.yaml). Exige as dependências pesadas (`make install-hypothesaes`) e o LLM
+# configurado em diagnostics.yaml. Grava em reports/tables/<llm_comparison.output_subdir>/.
+hypotheses:
+  targets: ["disagreement", "uncertainty"]
+  top_tweets_per_hypothesis: 10 # tweets mais ativados por hipótese, exportados como evidência

@@ -146,6 +146,7 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: evaluation.hypothesaes_report
 ::: evaluation.reports
 ::: evaluation.llm_comparison
+::: evaluation.predictions
 
 ## `visualization` — gráficos e diagnósticos
 
@@ -160,6 +161,12 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: visualization.diagnostics
 ::: visualization.hypothesaes
 ::: visualization.comparison
+::: visualization.evaluation
+
+## `reporting` — tabelas, Model Cards e Datasheet
+
+::: reporting.tables
+::: reporting.documents
 
 ## `experiment` — rastreamento de experimentos (MLflow)
 
@@ -176,8 +183,14 @@ Gerada automaticamente a partir das docstrings NumPy (em pt-BR) via [mkdocstring
 ::: pipelines.features
 ::: pipelines.training_classical
 ::: pipelines.training_deep_learning
+::: pipelines.training_transformer
+::: pipelines.training_llm
 ::: pipelines.comparative_evaluation
+::: pipelines.hypotheses
 ::: pipelines.hypothesaes_analysis
+::: pipelines.diagnostics_analysis
+::: pipelines.evaluate
+::: pipelines.report
 
 ## `parallel` — programação paralela transversal
 
