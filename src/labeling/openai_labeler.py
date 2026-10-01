@@ -384,6 +384,13 @@ def _classify_tweet_group(
     ]
 
     def send() -> str:
+        """Envia o grupo de tweets em uma única requisição.
+
+        Returns
+        -------
+        Any
+            Resposta bruta do LLM.
+        """
         return generate_chat_completion(
             messages,
             model=model,
@@ -498,6 +505,18 @@ def create_openai_batch_classifier(
     cache_lock = threading.Lock()
 
     def classify_one(text: str) -> LabelPrediction | None:
+        """Classifica um único texto com o LLM.
+
+        Parameters
+        ----------
+        text : str
+            Texto a classificar.
+
+        Returns
+        -------
+        LabelPrediction | None
+            Predição ou ``None`` em caso de falha.
+        """
         return _classify_single_text(
             text,
             prompt_template,
@@ -513,6 +532,18 @@ def create_openai_batch_classifier(
         )
 
     def classify_group(group: Sequence[str]) -> list[LabelPrediction | None]:
+        """Classifica um grupo de textos, usando chamada individual se houver um só.
+
+        Parameters
+        ----------
+        group : Sequence[str]
+            Textos do grupo.
+
+        Returns
+        -------
+        list[LabelPrediction | None]
+            Predição por texto, na ordem do grupo.
+        """
         if len(group) == 1:
             return [classify_one(group[0])]
         return _classify_tweet_group(
@@ -529,6 +560,18 @@ def create_openai_batch_classifier(
         )
 
     def classify_batch(texts: Sequence[str]) -> list[LabelPrediction | None]:
+        """Classifica um lote de textos com cache, deduplicação e agrupamento.
+
+        Parameters
+        ----------
+        texts : Sequence[str]
+            Textos a classificar.
+
+        Returns
+        -------
+        list[LabelPrediction | None]
+            Predição por texto, na mesma ordem.
+        """
         with cache_lock:
             pending = [text for text in dict.fromkeys(texts) if text not in cache]
         blank = [text for text in pending if not text.strip()]

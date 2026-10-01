@@ -143,6 +143,18 @@ class DiskCompletionCache:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _path(self, key: str) -> Path:
+        """Resolve o caminho do arquivo de cache de uma chave.
+
+        Parameters
+        ----------
+        key : str
+            Chave (hash) da requisição.
+
+        Returns
+        -------
+        Path
+            Caminho ``<diretório>/<2 primeiros caracteres>/<chave>.json``.
+        """
         return self._directory / key[:2] / f"{key}.json"
 
     def get(self, key: str) -> str | None:
@@ -252,11 +264,25 @@ class AsyncLLMClient:
         self.stats = CallStats()
 
     def _get_client(self) -> Any:
+        """Cria o cliente OpenAI-compatível sob demanda (inicialização preguiçosa).
+
+        Returns
+        -------
+        Any
+            Instância do cliente, reutilizada entre chamadas.
+        """
         if self._client is None:
             self._client = self._client_factory(self._settings)
         return self._client
 
     def _get_semaphore(self) -> asyncio.Semaphore:
+        """Cria o semáforo de concorrência sob demanda no loop de eventos atual.
+
+        Returns
+        -------
+        asyncio.Semaphore
+            Semáforo limitado por ``max_concurrency``.
+        """
         if self._semaphore is None:
             self._semaphore = asyncio.Semaphore(self._settings.max_concurrency)
         return self._semaphore
@@ -408,6 +434,18 @@ class AsyncLLMClient:
         """
 
         async def _safe(prompt: str) -> str | None:
+            """Completa um prompt convertendo falhas do pipeline em ``None``.
+
+            Parameters
+            ----------
+            prompt : str
+                Prompt a enviar ao LLM.
+
+            Returns
+            -------
+            str | None
+                Resposta do LLM ou ``None`` se houver ``PipelineStageError``.
+            """
             try:
                 return await self.complete(prompt, **kwargs)
             except PipelineStageError:

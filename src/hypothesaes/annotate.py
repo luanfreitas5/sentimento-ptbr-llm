@@ -318,6 +318,13 @@ def annotate_single_text(
     prompt = annotate_prompt.format(hypothesis=concept, text=text)
 
     def build_request_kwargs() -> dict[str, Any]:
+        """Monta os argumentos da requisição de anotação.
+
+        Returns
+        -------
+        dict[str, Any]
+            Argumentos para a chamada de completion.
+        """
         return _build_annotation_request_kwargs(
             completion_kwargs,
             model,

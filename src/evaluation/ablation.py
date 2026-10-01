@@ -194,7 +194,7 @@ def calculate_paired_bootstrap_difference(
     >>> low <= high
     True
     """
-    if len(y_true) == 0:
+    if not y_true:
         raise EmptyDatasetError("y_true")
 
     generator = np.random.default_rng(random_state)
@@ -298,6 +298,20 @@ def run_pipeline_ablation(
     def _fit_predict(
         tfidf_overrides: Mapping[str, Any], model_overrides: Mapping[str, Any]
     ) -> list[str]:
+        """Ajusta vectorizer e classificador com sobrescritas e prevê o conjunto de avaliação.
+
+        Parameters
+        ----------
+        tfidf_overrides : Mapping[str, Any]
+            Parâmetros do TF-IDF a sobrescrever.
+        model_overrides : Mapping[str, Any]
+            Hiperparâmetros do classificador a sobrescrever.
+
+        Returns
+        -------
+        list[str]
+            Rótulos previstos.
+        """
         vectorizer = LexicalTfidfVectorizer(**dict(tfidf_overrides))
         features_train = vectorizer.fit(train_texts).transform(train_texts)
         model = create_classifier(model_name, **dict(model_overrides))
@@ -328,8 +342,7 @@ def run_pipeline_ablation(
             random_state=random_state,
         )
 
-    impact = calculate_ablation_impact(baseline_metrics, ablated_metrics)
-    return impact.with_columns(
+    return calculate_ablation_impact(baseline_metrics, ablated_metrics).with_columns(
         pl.col("component")
         .map_elements(lambda name: intervals[name][0], return_dtype=pl.Float64)
         .alias("impact_ci_low"),

@@ -198,6 +198,13 @@ def synthesize_rules(
     """
 
     async def _run() -> list[str]:
+        """Executa a síntese assíncrona de regras com o cliente ativo.
+
+        Returns
+        -------
+        list[str]
+            Regras sintetizadas.
+        """
         active = client or AsyncLLMClient(
             settings.llm, cache=DiskCompletionCache(resolve_project_path(settings.llm.cache_dir))
         )

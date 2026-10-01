@@ -259,6 +259,22 @@ class Trainer:
             def _on_fold_end(
                 fold_index: int, fold_score: float, fold_model: SentimentClassifier
             ) -> bool:
+                """Notifica os callbacks ao fim de cada fold da validação cruzada.
+
+                Parameters
+                ----------
+                fold_index : int
+                    Índice do fold.
+                fold_score : float
+                    Score do fold.
+                fold_model : SentimentClassifier
+                    Modelo treinado no fold.
+
+                Returns
+                -------
+                bool
+                    Retorno de ``on_step_end`` dos callbacks (sinal de parada).
+                """
                 return self.callback_list.on_step_end(fold_index, fold_model, {scoring: fold_score})
 
             cross_validation_result = run_stratified_cross_validation(

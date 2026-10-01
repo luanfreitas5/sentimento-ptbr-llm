@@ -183,6 +183,13 @@ def classify_texts(
     """
 
     async def _run() -> tuple[list[str | None], CallStats]:
+        """Executa a classificação assíncrona dos textos com o cliente ativo.
+
+        Returns
+        -------
+        tuple[list[str | None], CallStats]
+            Rótulos previstos (``None`` em falhas) e estatísticas de chamadas.
+        """
         active = client or AsyncLLMClient(
             settings.llm, cache=DiskCompletionCache(resolve_project_path(settings.llm.cache_dir))
         )
@@ -459,6 +466,18 @@ def summarize_hypothesis_weakening(
     """
 
     def _summary(table: pl.DataFrame) -> tuple[float, int]:
+        """Resume o enfraquecimento das hipóteses mais separadoras da tabela.
+
+        Parameters
+        ----------
+        table : pl.DataFrame
+            Tabela de hipóteses com a coluna ``separation_score``.
+
+        Returns
+        -------
+        tuple[float, int]
+            Média do módulo do score das ``top_k`` hipóteses e quantidade considerada.
+        """
         top = (
             table.with_columns(pl.col("separation_score").abs().alias("_abs"))
             .sort("_abs", descending=True)

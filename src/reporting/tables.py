@@ -163,6 +163,18 @@ def dataframe_to_latex(table: pl.DataFrame, *, caption: str, label: str) -> str:
     """
 
     def _escape(text: object) -> str:
+        """Escapa caracteres especiais do LaTeX em um valor.
+
+        Parameters
+        ----------
+        text : object
+            Valor a escapar.
+
+        Returns
+        -------
+        str
+            Texto seguro para LaTeX.
+        """
         return "".join(_LATEX_ESCAPES.get(char, char) for char in str(text))
 
     column_format = "l" * len(table.columns)

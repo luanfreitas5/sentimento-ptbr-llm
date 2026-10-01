@@ -338,6 +338,18 @@ def create_huggingface_batch_classifier(
     """
 
     def classify_batch(texts: Sequence[str]) -> list[LabelPrediction | None]:
+        """Classifica um lote de textos com o modelo Hugging Face.
+
+        Parameters
+        ----------
+        texts : Sequence[str]
+            Textos a classificar.
+
+        Returns
+        -------
+        list[LabelPrediction | None]
+            Predição por texto, na mesma ordem.
+        """
         probabilities = _predict_probabilities(hf_model, texts, max_input_tokens=max_input_tokens)
         release_gpu_memory()
         results: list[LabelPrediction | None] = []

@@ -274,6 +274,20 @@ def calculate_agreement_summary(
     classes = list(SENTIMENT_CLASSES)
 
     def weighted_kappa(a: np.ndarray, b: np.ndarray) -> float:
+        """Calcula o kappa quadrático ponderado entre dois vetores de rótulos.
+
+        Parameters
+        ----------
+        a : np.ndarray
+            Rótulos do primeiro anotador.
+        b : np.ndarray
+            Rótulos do segundo anotador.
+
+        Returns
+        -------
+        float
+            Kappa; ``1.0`` se idênticos e ``0.0`` se indefinido.
+        """
         # Kappa indefinido (ex.: reamostra com uma única classe): 1.0 se idênticos, senão 0.0,
         # o mesmo critério de labeling.validation.calculate_cohen_kappa.
         with warnings.catch_warnings():

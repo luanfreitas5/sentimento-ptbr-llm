@@ -318,6 +318,13 @@ def annotate_concepts(
     resolved_template = template if template is not None else load_annotation_template()
 
     async def _run() -> tuple[AnnotationResult, CallStats]:
+        """Executa a anotação assíncrona e devolve resultado e estatísticas de chamadas.
+
+        Returns
+        -------
+        tuple[AnnotationResult, CallStats]
+            Resultado da anotação e contagem de chamadas.
+        """
         active = client or AsyncLLMClient(
             settings.llm,
             cache=DiskCompletionCache(resolve_project_path(settings.llm.cache_dir)),

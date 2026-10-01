@@ -258,6 +258,22 @@ def validate_hypotheses(
 
 
 def _discovery_table_path(paths: ProjectPaths, settings: DiagnosticsSettings, slug: str) -> Path:
+    """Monta o caminho do parquet da tabela de descoberta de um alvo.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos do projeto.
+    settings : DiagnosticsSettings
+        Configuração do diagnóstico.
+    slug : str
+        Identificador do alvo.
+
+    Returns
+    -------
+    Path
+        Caminho do arquivo ``<slug>.parquet``.
+    """
     return paths.reports_interpretability_dir / settings.data.output_dir / f"{slug}.parquet"
 
 

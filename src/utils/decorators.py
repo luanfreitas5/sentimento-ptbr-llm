@@ -43,6 +43,20 @@ def log_execution_time(func: Callable[_P, _R]) -> Callable[_P, _R]:
 
     @functools.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        """Executa a função e registra o tempo de execução.
+
+        Parameters
+        ----------
+        *args : _P.args
+            Argumentos posicionais da função decorada.
+        **kwargs : _P.kwargs
+            Argumentos nomeados da função decorada.
+
+        Returns
+        -------
+        _R
+            Retorno da função decorada.
+        """
         with measure_execution_time() as tempo:
             result = func(*args, **kwargs)
         logger.info(
@@ -98,8 +112,35 @@ def retry_on_exception(
         raise ValueError(f"max_attempts deve ser >= 1, recebido: {max_attempts}")
 
     def decorator(func: Callable[_P, _R]) -> Callable[_P, _R]:
+        """Envolve a função com a política de novas tentativas.
+
+        Parameters
+        ----------
+        func : Callable[_P, _R]
+            Função a decorar.
+
+        Returns
+        -------
+        Callable[_P, _R]
+            Função decorada.
+        """
+
         @functools.wraps(func)
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+            """Chama a função, repetindo em caso de exceção até ``max_attempts``.
+
+            Parameters
+            ----------
+            *args : _P.args
+                Argumentos posicionais da função decorada.
+            **kwargs : _P.kwargs
+                Argumentos nomeados da função decorada.
+
+            Returns
+            -------
+            _R
+                Retorno da função decorada.
+            """
             last_exception: Exception | None = None
             for attempt in range(1, max_attempts + 1):
                 try:
