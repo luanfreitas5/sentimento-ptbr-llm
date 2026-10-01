@@ -544,6 +544,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#treino-por-categoria-de-modelo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Treino por categoria de modelo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#avaliacao-e-relatorio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Avaliação e relatório
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hipoteses-hypothesaes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hipóteses (HypotheSAEs)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rotulagem-duas-bases-independentes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -730,6 +763,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#treino-por-categoria-de-modelo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Treino por categoria de modelo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#avaliacao-e-relatorio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Avaliação e relatório
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hipoteses-hypothesaes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hipóteses (HypotheSAEs)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rotulagem-duas-bases-independentes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -819,62 +885,144 @@
 <tbody>
 <tr>
 <td><code>ingestion</code></td>
-<td><code>pipeline-ingestion</code></td>
+<td><code>ingest</code></td>
 <td><code>src/pipelines/ingestion.py</code></td>
 <td>função de coleta definida pelo usuário (<code>--scrape-func</code>)</td>
 <td><code>data/interim/tweets_coletados.parquet</code></td>
 </tr>
 <tr>
 <td><code>preprocessing</code></td>
-<td><code>pipeline-preprocessing</code></td>
+<td><code>preprocess</code></td>
 <td><code>src/pipelines/preprocessing.py</code></td>
 <td>lote de tweets brutos coletados por usuário, <code>data/raw/*.parquet</code> (ver <code>src/data/loader.py::load_raw_tweet_batch</code>)</td>
 <td><code>data/interim/corpus_normalizado.parquet</code></td>
 </tr>
 <tr>
 <td><code>labeling</code></td>
-<td><code>pipeline-labeling</code> (<code>-huggingface</code> / <code>-openai</code>)</td>
+<td><code>label</code> (<code>label-hf</code> / <code>label-openai</code>)</td>
 <td><code>src/pipelines/labeling.py</code></td>
 <td>corpus normalizado</td>
 <td><code>data/processed/tweets_data_huggingface.parquet</code>, <code>tweets_data_openai.parquet</code> (+ <code>.meta.json</code>) e <code>corpus_rotulado.parquet</code></td>
 </tr>
 <tr>
 <td><code>comparative_evaluation</code></td>
-<td><code>pipeline-comparative-evaluation</code></td>
+<td><code>compare</code></td>
 <td><code>src/pipelines/comparative_evaluation.py</code></td>
 <td>as duas bases rotuladas</td>
 <td>tabelas em <code>reports/tables/comparativo_hf_openai/</code>, gráficos em <code>reports/figures/comparativo_hf_openai/</code>, resumo em <code>reports/metrics/comparativo_hf_openai.json</code></td>
 </tr>
 <tr>
+<td><code>hypotheses</code></td>
+<td><code>hypotheses</code></td>
+<td><code>src/pipelines/hypotheses.py</code></td>
+<td>as duas bases rotuladas (modo <code>disagreement</code>), corpus rotulado (<code>patterns</code>)</td>
+<td>hipóteses do HypotheSAEs em <code>reports/tables/comparativo_hf_openai/</code> e <code>reports/metrics/hipoteses_*.json</code> (ver <a href="#hipoteses-hypothesaes">Hipóteses</a>)</td>
+</tr>
+<tr>
 <td><code>features</code></td>
-<td><code>pipeline-features</code></td>
+<td><code>features</code></td>
 <td><code>src/pipelines/features.py</code></td>
 <td>corpus rotulado</td>
-<td>splits treino/validação/teste + features TF-IDF</td>
+<td>splits treino/validação/teste, features TF-IDF e o vetorizador ajustado no treino (<code>models/checkpoints/tfidf_vectorizer.joblib</code>)</td>
 </tr>
 <tr>
 <td><code>training_classical</code></td>
-<td><code>pipeline-training-classical</code></td>
+<td><code>classical</code></td>
 <td><code>src/pipelines/training_classical.py</code></td>
-<td>splits + features</td>
-<td>checkpoints em <code>models/checkpoints/</code></td>
+<td>splits + vetorizador</td>
+<td>Baseline (<code>dummy</code>) + ML tradicional (NB, LR, SVM, RF, XGBoost) em <code>models/checkpoints/*.joblib</code></td>
 </tr>
 <tr>
 <td><code>training_deep_learning</code></td>
-<td><code>pipeline-training-deep-learning</code></td>
+<td><code>deep</code></td>
 <td><code>src/pipelines/training_deep_learning.py</code></td>
-<td>splits + embeddings</td>
-<td>checkpoints (DL/Transformers/autoencoder)</td>
+<td>splits</td>
+<td>LSTM e CNN em <code>models/checkpoints/*.pt</code></td>
 </tr>
 <tr>
-<td><code>hypothesaes_analysis</code></td>
-<td>—</td>
-<td><code>src/pipelines/hypothesaes_analysis.py</code></td>
-<td>corpus rotulado</td>
-<td>diagnóstico de rotulagem em <code>reports/interpretability/</code></td>
+<td><code>training_transformer</code></td>
+<td><code>transformer</code></td>
+<td><code>src/pipelines/training_transformer.py</code></td>
+<td>splits</td>
+<td>BERTimbau, RoBERTa e DistilBERT em <code>models/checkpoints/*.pt</code></td>
+</tr>
+<tr>
+<td><code>training_llm</code></td>
+<td><code>llm</code></td>
+<td><code>src/pipelines/training_llm.py</code></td>
+<td>splits + servidor Ollama</td>
+<td>especificação few-shot e métricas de validação em <code>models/checkpoints/*.llm.json</code></td>
+</tr>
+<tr>
+<td><code>evaluate</code></td>
+<td><code>evaluate</code></td>
+<td><code>src/pipelines/evaluate.py</code></td>
+<td>todos os checkpoints + teste</td>
+<td>métricas com IC 95%, por classe, por comprimento, McNemar (Holm), ablação e <code>reports/metrics/avaliacao.json</code></td>
+</tr>
+<tr>
+<td><code>report</code></td>
+<td><code>report</code></td>
+<td><code>src/pipelines/report.py</code></td>
+<td>saídas de <code>evaluate</code></td>
+<td>figuras, tabelas (CSV/MD/LaTeX), Model Cards e Datasheet</td>
 </tr>
 </tbody>
 </table>
+<p>Ordem de <code>make all</code>: <code>ingest</code> → <code>preprocess</code> → <code>label</code> → <code>compare</code> → <code>hypotheses</code> → <code>features</code> → <code>classical</code> → <code>deep</code> → <code>transformer</code> → <code>llm</code> → <code>evaluate</code> → <code>report</code>.</p>
+<h2 id="treino-por-categoria-de-modelo">Treino por categoria de modelo<a class="headerlink" href="#treino-por-categoria-de-modelo" title="Permanent link">&para;</a></h2>
+<p>Cada categoria dos "Modelos avaliados" tem estágio próprio, reexecutável isoladamente:</p>
+<table>
+<thead>
+<tr>
+<th>Categoria</th>
+<th>Estágio</th>
+<th>Modelos (<code>configs/model_params.yaml</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline + ML tradicional</td>
+<td><code>training_classical</code></td>
+<td><code>dummy</code>, <code>naive_bayes</code>, <code>logistic_regression</code>, <code>svm</code>, <code>random_forest</code>, <code>gradient_boosting</code></td>
+</tr>
+<tr>
+<td>Deep Learning</td>
+<td><code>training_deep_learning</code></td>
+<td><code>lstm</code>, <code>cnn</code></td>
+</tr>
+<tr>
+<td>Transformer</td>
+<td><code>training_transformer</code></td>
+<td><code>bertimbau</code>, <code>roberta</code>, <code>distilbert</code></td>
+</tr>
+<tr>
+<td>LLM open-source</td>
+<td><code>training_llm</code></td>
+<td><code>llm.llama3_2</code> (Ollama, few-shot; sem ajuste de pesos)</td>
+</tr>
+</tbody>
+</table>
+<p><code>--model-names a,b</code> restringe os modelos de cada estágio. O vocabulário TF-IDF é ajustado
+só no treino e reutilizado em validação e teste (sem vazamento).</p>
+<h2 id="avaliacao-e-relatorio">Avaliação e relatório<a class="headerlink" href="#avaliacao-e-relatorio" title="Permanent link">&para;</a></h2>
+<p><code>evaluate</code> é o único estágio que toca o conjunto de <strong>teste</strong>. Para cada modelo reporta
+F1-macro, MCC, acurácia etc. com IC 95% por bootstrap, relatório por classe, desempenho por
+faixa de comprimento e, quando há probabilidades, Brier/ECE. Compara os modelos par a par
+com McNemar (correção de Holm, só nos tweets preditos pelos dois). A <strong>ablação</strong> retreina o
+pipeline clássico removendo um componente por vez (<code>configs/evaluation.yaml -&gt; ablation</code>) e
+é medida na <strong>validação</strong>, com IC pareado da queda de F1-macro. LLMs recebem no máximo
+<code>evaluate.llm_max_test_samples</code> tweets (custo de inferência). <code>report</code> não recalcula nada:
+só lê as saídas de <code>evaluate</code>. Os Model Cards e o Datasheet gerados
+(<code>*_resultados.md</code>, <code>datasheet_corpus_tweets_estatisticas.md</code>) complementam os documentos
+escritos à mão e não contêm texto de tweets.</p>
+<h2 id="hipoteses-hypothesaes">Hipóteses (HypotheSAEs)<a class="headerlink" href="#hipoteses-hypothesaes" title="Permanent link">&para;</a></h2>
+<p>O estágio <code>hypotheses</code> reúne toda a geração de hipóteses. O modo (<code>--hypotheses-mode</code>, ou
+<code>make hypotheses MODE=...</code>) escolhe a análise: <code>disagreement</code> (padrão: discordância e
+incerteza entre as bases HF × OpenAI), <code>patterns</code> (padrões e inconsistências nos rótulos de
+baixa confiança; <code>make patterns</code>) e <code>diagnostics</code> (gate de sanidade, validação e comparação
+de prompts; <code>make diagnostics</code>, ver <a href="../diagnostico-hypothesaes/">diagnóstico</a>).
+<code>--skip-hypotheses</code> dispensa a etapa em <code>make all</code>.</p>
 <h2 id="rotulagem-duas-bases-independentes">Rotulagem: duas bases independentes<a class="headerlink" href="#rotulagem-duas-bases-independentes" title="Permanent link">&para;</a></h2>
 <p>O estágio <code>labeling</code> classifica <strong>todos</strong> os tweets do corpus normalizado com duas fontes, sobre o
 texto já sanitizado (<code>text_normalized</code>, sem menções/URLs). A fonte OpenAI usa o prompt de
@@ -928,11 +1076,11 @@ entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
   vira <code>sentiment_label</code> em <code>corpus_rotulado.parquet</code> (consumido por <code>features</code> e
   <code>hypothesaes_analysis</code>); as duas ficam em <code>sentiment_label_&lt;fonte&gt;</code>/<code>confidence_score_&lt;fonte&gt;</code>.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>pipeline-labeling-huggingface<span class="w">   </span><span class="c1"># GPU local</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>pipeline-labeling-openai<span class="w">        </span><span class="c1"># API</span>
+<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>label-hf<span class="w">   </span><span class="c1"># GPU local</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>label-openai<span class="w">        </span><span class="c1"># API</span>
 </span></code></pre></div>
 <h2 id="avaliacao-comparativa-comparative_evaluation">Avaliação comparativa (<code>comparative_evaluation</code>)<a class="headerlink" href="#avaliacao-comparativa-comparative_evaluation" title="Permanent link">&para;</a></h2>
-<p>Executa diretamente, sem argumentos manuais (<code>make pipeline-comparative-evaluation</code>): carrega e
+<p>Executa diretamente, sem argumentos manuais (<code>make compare</code>): carrega e
 valida as duas bases, une-as pelo <code>id</code>, calcula as métricas, grava tabelas e gráficos, analisa as
 divergências e, por fim, aplica o HypotheSAEs. Limiares e opções em
 <code>configs/evaluation.yaml -&gt; llm_comparison</code>; <code>EXTRA_ARGS=--skip-hypotheses</code> dispensa o HypotheSAEs.</p>
@@ -999,7 +1147,7 @@ o comportamento dos modelos e devem ser validadas antes de serem tratadas como e
 <p>Apenas <code>ingestion</code> não tem implementação fixa por design — o projeto não assume uma fonte de scraping:</p>
 <div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># ingestion: --scrape-func aponta para uma função "modulo:funcao" implementada</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># por você (ver src/data/downloader.py para o contrato esperado).</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>make<span class="w"> </span>pipeline-ingestion<span class="w"> </span><span class="nv">SCRAPE_FUNC</span><span class="o">=</span>meu_modulo:minha_funcao_de_coleta<span class="w"> </span><span class="nv">QUERIES</span><span class="o">=</span><span class="s2">"termo1 termo2"</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>make<span class="w"> </span>ingest<span class="w"> </span><span class="nv">SCRAPE_FUNC</span><span class="o">=</span>meu_modulo:minha_funcao_de_coleta<span class="w"> </span><span class="nv">QUERIES</span><span class="o">=</span><span class="s2">"termo1 termo2"</span>
 </span></code></pre></div>
 <p>O caminho é resolvido dinamicamente por <code>src/main.py::_import_callable_from_dotted_path</code>.</p>
 
