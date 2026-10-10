@@ -114,15 +114,24 @@ constraint-dependencies = ["gitpython>=3.1.58", "numba>=0.57.1"]
 # projeto não decripta PKCS#7 diretamente, então o risco é aceito e ignorado
 # explicitamente no pip-audit até que o mlflow eleve o teto da dependência.
 
+# setuptools 81.0.0 tem PYSEC-2026-3447 (corrigido na 83.0.0). É dependência
+# transitiva do torch 2.11.0, que declara `setuptools<82` — não há como subir
+# a versão sem violar o requisito do torch. Risco aceito e ignorado
+# explicitamente no pip-audit até que o torch eleve o teto da dependência.
+
+# nltk 3.10.3 tem PYSEC-2026-3740 sem versão corrigida publicada até o
+# momento (3.10.3 é a mais recente). Risco aceito e ignorado explicitamente
+# no pip-audit até que exista uma versão corrigida.
+
 [[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu124" }
-torchvision = { index = "pytorch-cu124" }
-torchaudio = { index = "pytorch-cu124" }
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
 
 # --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
 [project.optional-dependencies]
@@ -132,9 +141,9 @@ torchaudio = { index = "pytorch-cu124" }
 # (src/labeling/openai_labeler.py). Dependência pesada (PyTorch + CUDA) — não
 # instale em ambientes que só rodam etapas anteriores à rotulagem.
 labeling = [
-    "torch>=2.2",                     # backend de tensores para Transformers/DL
+    "torch>=2.11.0",                     # backend de tensores para Transformers/DL
     "transformers>=4.56",             # LLMs do Hugging Face (argumento `dtype` de from_pretrained)
-    "accelerate>=0.33",               # carrega o modelo direto na GPU (device_map)
+    "accelerate>=1.15.0",               # carrega o modelo direto na GPU (device_map)
     "openai>=3.8.0",                  # cliente OpenAI-compatível (base tweets_data_openai)
 ]
 
@@ -142,9 +151,9 @@ labeling = [
 # (`make install-hypothesaes`). Dependências pesadas (PyTorch + CUDA) — não instale
 # em ambientes que só rodam ML clássico/DL sobre embeddings estáticos.
 hypothesaes = [
-    "torch>=2.2",                     # backend de tensores para Transformers/DL
+    "torch>=2.11.0",                     # backend de tensores para Transformers/DL
     "transformers>=4.44",             # checkpoints Hugging Face (BERTimbau, RoBERTa, DistilBERT, LLMs)
-    "accelerate>=0.33",               # execução eficiente de modelos Hugging Face (CPU/GPU)
+    "accelerate>=1.15.0",               # execução eficiente de modelos Hugging Face (CPU/GPU)
     "datasets>=2.20",                 # carregamento de datasets do Hugging Face Hub
     "ollama>=0.3",                    # cliente Python do servidor Ollama (LLMs locais)
     "sentencepiece>=0.2.2",           # tokenizador exigido por alguns checkpoints (ex.: RoBERTa/Llama)
