@@ -577,10 +577,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rotulagem-duas-bases-independentes" class="md-nav__link">
+  <a href="#rotulagem-modelo-do-hugging-face-e-gold-sets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rotulagem: duas bases independentes
+        Rotulagem: modelo do Hugging Face e gold sets
       
     </span>
   </a>
@@ -796,10 +796,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#rotulagem-duas-bases-independentes" class="md-nav__link">
+  <a href="#rotulagem-modelo-do-hugging-face-e-gold-sets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rotulagem: duas bases independentes
+        Rotulagem: modelo do Hugging Face e gold sets
       
     </span>
   </a>
@@ -899,24 +899,24 @@
 </tr>
 <tr>
 <td><code>labeling</code></td>
-<td><code>label</code> (<code>label-hf</code> / <code>label-openai</code>)</td>
+<td><code>label</code> (<code>label-hf</code> / <code>label-gold-openai</code> / <code>label-gold-unb</code>)</td>
 <td><code>src/pipelines/labeling.py</code></td>
 <td>corpus normalizado</td>
-<td><code>data/gold/tweets_data_huggingface.parquet</code>, <code>tweets_data_openai.parquet</code> (+ <code>.meta.json</code>) e <code>corpus_rotulado.parquet</code></td>
+<td><code>data/gold/tweets_data_huggingface.parquet</code>, gold sets <code>gold_gpt-6-luna.parquet</code> e <code>gold_UnB-Llama-3.3-70B-Instruct.parquet</code> (+ <code>.meta.json</code>) e <code>corpus_rotulado.parquet</code></td>
 </tr>
 <tr>
 <td><code>comparative_evaluation</code></td>
 <td><code>compare</code></td>
 <td><code>src/pipelines/comparative_evaluation.py</code></td>
-<td>as duas bases rotuladas</td>
-<td>tabelas em <code>reports/tables/comparativo_hf_openai/</code>, gráficos em <code>reports/figures/comparativo_hf_openai/</code>, resumo em <code>reports/metrics/comparativo_hf_openai.json</code></td>
+<td>base do Hugging Face + gold sets</td>
+<td>tabelas em <code>reports/tables/comparativo_hf_&lt;gold&gt;/</code>, gráficos em <code>reports/figures/comparativo_hf_&lt;gold&gt;/</code>, resumo em <code>reports/metrics/comparativo_hf_&lt;gold&gt;.json</code> (<code>&lt;gold&gt;</code> = <code>gold_openai</code> ou <code>gold_unb</code>)</td>
 </tr>
 <tr>
 <td><code>hypotheses</code></td>
 <td><code>hypotheses</code></td>
 <td><code>src/pipelines/hypotheses.py</code></td>
-<td>as duas bases rotuladas (modo <code>disagreement</code>), corpus rotulado (<code>patterns</code>)</td>
-<td>hipóteses do HypotheSAEs em <code>reports/tables/comparativo_hf_openai/</code> e <code>reports/metrics/hipoteses_*.json</code> (ver <a href="#hipoteses-hypothesaes">Hipóteses</a>)</td>
+<td>base do Hugging Face + gold sets (modo <code>disagreement</code>), corpus rotulado (<code>patterns</code>)</td>
+<td>hipóteses do HypotheSAEs em <code>reports/tables/comparativo_hf_&lt;gold&gt;/</code> e <code>reports/metrics/hipoteses_*.json</code> (ver <a href="#hipoteses-hypothesaes">Hipóteses</a>)</td>
 </tr>
 <tr>
 <td><code>features</code></td>
@@ -1019,15 +1019,16 @@ escritos à mão e não contêm texto de tweets.</p>
 <h2 id="hipoteses-hypothesaes">Hipóteses (HypotheSAEs)<a class="headerlink" href="#hipoteses-hypothesaes" title="Permanent link">&para;</a></h2>
 <p>O estágio <code>hypotheses</code> reúne toda a geração de hipóteses. O modo (<code>--hypotheses-mode</code>, ou
 <code>make hypotheses MODE=...</code>) escolhe a análise: <code>disagreement</code> (padrão: discordância e
-incerteza entre as bases HF × OpenAI), <code>patterns</code> (padrões e inconsistências nos rótulos de
+incerteza entre o Hugging Face e cada gold set), <code>patterns</code> (padrões e inconsistências nos rótulos de
 baixa confiança; <code>make patterns</code>) e <code>diagnostics</code> (gate de sanidade, validação e comparação
 de prompts; <code>make diagnostics</code>, ver <a href="../diagnostico-hypothesaes/">diagnóstico</a>).
 <code>--skip-hypotheses</code> dispensa a etapa em <code>make all</code>.</p>
-<h2 id="rotulagem-duas-bases-independentes">Rotulagem: duas bases independentes<a class="headerlink" href="#rotulagem-duas-bases-independentes" title="Permanent link">&para;</a></h2>
-<p>O estágio <code>labeling</code> classifica <strong>todos</strong> os tweets do corpus normalizado com duas fontes, sobre o
-texto já sanitizado (<code>text_normalized</code>, sem menções/URLs). A fonte OpenAI usa o prompt de
-<code>prompts/</code> (<code>configs/labeling.yaml -&gt; prompt_name</code>); a fonte Hugging Face é um classificador
-ajustado e não recebe prompt:</p>
+<h2 id="rotulagem-modelo-do-hugging-face-e-gold-sets">Rotulagem: modelo do Hugging Face e gold sets<a class="headerlink" href="#rotulagem-modelo-do-hugging-face-e-gold-sets" title="Permanent link">&para;</a></h2>
+<p>O estágio <code>labeling</code> produz três bases, sobre o texto já sanitizado (<code>text_normalized</code>, sem
+menções/URLs). O modelo do Hugging Face rotula <strong>todos</strong> os tweets; os dois gold sets rotulam a
+<strong>mesma amostra</strong> do corpus (<code>configs/labeling.yaml -&gt; gold_sets.sample_size</code>, mesma semente) via
+API OpenAI-compatível, com o prompt de <code>prompts/</code> (<code>configs/labeling.yaml -&gt; prompt_name</code>). O
+classificador do Hugging Face é ajustado e não recebe prompt:</p>
 <table>
 <thead>
 <tr>
@@ -1043,9 +1044,14 @@ ajustado e não recebe prompt:</p>
 <td><code>configs/labeling.yaml -&gt; huggingface</code></td>
 </tr>
 <tr>
-<td><code>tweets_data_openai</code></td>
-<td>API OpenAI-compatível (<code>src/labeling/openai_labeler.py</code>)</td>
-<td><code>configs/labeling.yaml -&gt; openai</code>; <code>OPENAI_BASE_URL</code>/<code>OPENAI_KEY</code> no <code>.env</code></td>
+<td><code>gold_gpt-6-luna</code> (<code>gold_openai</code>)</td>
+<td><code>gpt-6-luna</code>, <code>reasoning_effort: low</code> (<code>src/labeling/openai_labeler.py</code>)</td>
+<td><code>configs/labeling.yaml -&gt; gold_sets.openai</code>; <code>OPENAI_BASE_URL</code>/<code>OPENAI_KEY</code> no <code>.env</code></td>
+</tr>
+<tr>
+<td><code>gold_UnB-Llama-3.3-70B-Instruct</code> (<code>gold_unb</code>)</td>
+<td><code>UnB-Llama-3.3-70B-Instruct</code> (<code>src/labeling/openai_labeler.py</code>)</td>
+<td><code>configs/labeling.yaml -&gt; gold_sets.unb</code>; <code>OPENAI_BASE_URL</code>/<code>OPENAI_KEY</code> no <code>.env</code></td>
 </tr>
 </tbody>
 </table>
@@ -1059,7 +1065,7 @@ entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
   modelo, prompt ou temperatura mudarem.</li>
 <li><strong>Falhas:</strong> erros de API (timeout, HTTP 429) são retentados com backoff exponencial; se sobrar
   tweet sem rótulo válido, a etapa levanta <code>IncompleteLabelingError</code> e a base <strong>não</strong> é gravada
-  (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.</li>
+  (cada base sempre cobre todos os tweets do seu escopo: corpus inteiro ou a amostra). Rode de novo para reprocessar só os pendentes.</li>
 <li><strong>HTTP 429:</strong> limitador de taxa compartilhado (<code>openai.requests_per_minute</code>): ao receber 429, todas
   as threads pausam pelo <code>Retry-After</code> do servidor e o ritmo cai até voltar ao normal após uma
   sequência de sucessos (<code>src/labeling/rate_limiter.py</code>).</li>
@@ -1072,24 +1078,30 @@ entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
   parâmetros; classes NEG/NEU/POS mapeadas para negativo/neutro/positivo). É um classificador
   ajustado, não um LLM gerativo: não usa prompt, é determinístico e a confiança é a probabilidade
   softmax da classe. Roda em CPU ou GPU pequena. Fixe <code>huggingface.revision</code> num SHA.</li>
-<li><strong>Corpus das etapas seguintes:</strong> <code>configs/labeling.yaml -&gt; downstream_source</code> escolhe qual base
-  vira <code>sentiment_label</code> em <code>corpus_rotulado.parquet</code> (consumido por <code>features</code> e
-  <code>hypothesaes_analysis</code>); as duas ficam em <code>sentiment_label_&lt;fonte&gt;</code>/<code>confidence_score_&lt;fonte&gt;</code>.</li>
+<li><strong>Corpus das etapas seguintes:</strong> o rótulo do modelo do Hugging Face vira <code>sentiment_label</code> em
+  <code>corpus_rotulado.parquet</code> (consumido por <code>features</code> e <code>hypothesaes_analysis</code>). Os gold sets não
+  entram no treino: servem de referência na <code>comparative_evaluation</code>.</li>
+<li><strong>Endpoints:</strong> os dois gold sets usam <code>OPENAI_BASE_URL</code>/<code>OPENAI_KEY</code>; se os modelos estiverem em
+  endpoints diferentes, rode <code>make label-gold-openai</code> e <code>make label-gold-unb</code> separadamente,
+  trocando o <code>.env</code> entre as execuções.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>label-hf<span class="w">   </span><span class="c1"># GPU local</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>label-openai<span class="w">        </span><span class="c1"># API</span>
+<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>label-hf<span class="w">            </span><span class="c1"># modelo do Hugging Face, todos os tweets</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>label-gold-openai<span class="w">   </span><span class="c1"># gold set gpt-6-luna (API)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>make<span class="w"> </span>label-gold-unb<span class="w">      </span><span class="c1"># gold set UnB-Llama-3.3-70B-Instruct (API)</span>
 </span></code></pre></div>
 <h2 id="avaliacao-comparativa-comparative_evaluation">Avaliação comparativa (<code>comparative_evaluation</code>)<a class="headerlink" href="#avaliacao-comparativa-comparative_evaluation" title="Permanent link">&para;</a></h2>
 <p>Executa diretamente, sem argumentos manuais (<code>make compare</code>): carrega e
-valida as duas bases, une-as pelo <code>id</code>, calcula as métricas, grava tabelas e gráficos, analisa as
-divergências e, por fim, aplica o HypotheSAEs. Limiares e opções em
+valida a base do Hugging Face e cada gold set já gerado, une-os pelo <code>id</code> (o Hugging Face é restrito à
+amostra do gold set), calcula as métricas, grava tabelas e gráficos e analisa as divergências, uma
+vez por gold set. Limiares e opções em
 <code>configs/evaluation.yaml -&gt; llm_comparison</code>; <code>EXTRA_ARGS=--skip-hypotheses</code> dispensa o HypotheSAEs.</p>
-<p>Sem gold set, mede-se <strong>concordância entre os modelos</strong> (não acerto).</p>
+<p>Os gold sets são rotulados por LLMs (não por humanos): mede-se a <strong>concordância com esses LLMs</strong>, não o
+acerto absoluto.</p>
 <table>
 <thead>
 <tr>
 <th>Análise</th>
-<th>Saída (em <code>reports/tables/comparativo_hf_openai/</code>)</th>
+<th>Saída (em <code>reports/tables/comparativo_hf_&lt;gold&gt;/</code>)</th>
 </tr>
 </thead>
 <tbody>
@@ -1099,7 +1111,7 @@ divergências e, por fim, aplica o HypotheSAEs. Limiares e opções em
 </tr>
 <tr>
 <td>Concordância/divergência (IC bootstrap), Kappa simples e ponderado, Stuart-Maxwell</td>
-<td><code>reports/metrics/comparativo_hf_openai.json</code>, <code>resumo_comparativo.md</code></td>
+<td><code>reports/metrics/comparativo_hf_&lt;gold&gt;.json</code>, <code>resumo_comparativo.md</code></td>
 </tr>
 <tr>
 <td>Matriz de concordância</td>
@@ -1131,11 +1143,12 @@ divergências e, por fim, aplica o HypotheSAEs. Limiares e opções em
 </tr>
 </tbody>
 </table>
-<p>Gráficos (PNG 300 dpi + SVG) em <code>reports/figures/comparativo_hf_openai/</code>. As tabelas com texto usam
+<p>Gráficos (PNG 300 dpi + SVG) em <code>reports/figures/comparativo_hf_&lt;gold&gt;/</code>. As tabelas com texto usam
 apenas o texto normalizado.</p>
 <h3 id="hypothesaes-sobre-a-divergencia">HypotheSAEs sobre a divergência<a class="headerlink" href="#hypothesaes-sobre-a-divergencia" title="Permanent link">&para;</a></h3>
 <p><code>src/diagnostics/model_disagreement.py</code> aplica o HypotheSAEs a dois alvos: <code>disagreement</code>
-(<code>lab_huggingface != lab_openai</code>) e <code>uncertainty</code> (<code>1 - min(confiança_HF, confiança_OpenAI)</code>).
+(<code>lab_huggingface != lab_openai</code>, onde <code>lab_openai</code> é o rótulo do gold set) e <code>uncertainty</code>
+(<code>1 - min(confiança_HF, confiança_gold)</code>), uma execução por gold set.
 Entrada: texto normalizado + alvo. Processamento: embeddings BERTimbau → SAE (treinado uma vez) →
 gate de sanidade → neurônios → hipóteses interpretadas por LLM (<code>configs/diagnostics.yaml</code>).
 Se o gate reprovar um alvo, isso é registrado como resultado (<code>gate_reprovado</code>) — os embeddings

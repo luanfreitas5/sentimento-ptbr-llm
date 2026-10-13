@@ -893,7 +893,7 @@ Nada aqui altera o pipeline de rotulagem; <code>make all</code> continua igual.<
 <div class="admonition warning">
 <p class="admonition-title">Limites de interpretação</p>
 <p>Hipóteses sobre pseudo-rótulo descrevem o comportamento do modelo, nunca a verdade. Somente o
-gold set (TweetSentBR/RePro) ou uma amostra rotulada por humanos mede acerto. Uma hipótese
+gold set ou uma amostra rotulada por humanos mede acerto. Uma hipótese
 sobre discordância diz <em>onde</em> os modelos divergem, não <em>qual</em> rótulo está certo: as regras do
 prompt v2 exigem revisão humana.</p>
 </div>
@@ -903,12 +903,12 @@ mais colunas <code>lab_&lt;modelo&gt;</code> e, opcionalmente, <code>gold_label<
 mapeia o corpus rotulado (<code>sentiment_label_huggingface</code> → <code>lab_huggingface</code>,
 <code>sentiment_label_openai</code> → <code>lab_openai</code>, <code>confidence_score</code> → <code>agreement_score</code>). Só as colunas do
 contrato passam: <code>user_id</code> e o texto bruto são descartados (LGPD). A etapa <code>comparative_evaluation</code>
-monta o mesmo contrato direto das duas bases (<code>agreement_score</code> = menor confiança) — ver
+monta o mesmo contrato direto do Hugging Face e de cada gold set (<code>agreement_score</code> = menor confiança) — ver
 <a href="../pipeline/">o guia do pipeline</a>.</p>
 <div class="admonition note">
 <p class="admonition-title">Alvo <code>disagreement</code></p>
-<p>O alvo só usa tweets rotulados por <strong>todos</strong> os modelos; como as duas bases cobrem todos os
-tweets, não há viés de seleção.</p>
+<p>O alvo só usa tweets rotulados por <strong>todos</strong> os modelos, ou seja, a amostra do gold set
+(aleatória e igual nos dois gold sets), então não há viés de seleção.</p>
 </div>
 <h2 id="fluxo">Fluxo<a class="headerlink" href="#fluxo" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>corpus rotulado ──► adapt_labeled_corpus ──► partições disjuntas (treino/validação/teste)
@@ -944,14 +944,14 @@ tweets, não há viés de seleção.</p>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>diag-dry-run<span class="w"> </span><span class="nv">TARGET</span><span class="o">=</span>disagreement<span class="w">       </span><span class="c1"># estima chamadas/custo, sem rede</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>make<span class="w"> </span>diag-hypotheses<span class="w"> </span><span class="nv">TARGET</span><span class="o">=</span>disagreement<span class="w">    </span><span class="c1"># gate + hipóteses (+ MLflow)</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>make<span class="w"> </span>diag-validate<span class="w"> </span><span class="nv">TARGET</span><span class="o">=</span>disagreement<span class="w">      </span><span class="c1"># Bonferroni + reports/tables/para_rotular.csv</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>diag-compare<span class="w"> </span><span class="nv">GOLD</span><span class="o">=</span>tweetsentbr<span class="w">          </span><span class="c1"># v1 vs v2 no gold</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>diag-compare<span class="w"> </span><span class="nv">GOLD</span><span class="o">=</span>gold_unb<span class="w">          </span><span class="c1"># v1 vs v2 no gold</span>
 </span></code></pre></div>
 <p>Equivalente sem <code>make</code>: <code>PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --dry-run</code>.
 <code>src/</code> não está no <code>sys.path</code> do venv (o projeto usa <code>package = false</code>), por isso o <code>PYTHONPATH=src</code>.</p>
 <p>Também há o estágio <code>diagnostics</code> no orquestrador (<code>src/main.py</code>), que dispensa o <code>PYTHONPATH</code>:</p>
 <div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>src/main.py<span class="w"> </span>--stage<span class="w"> </span>hypotheses<span class="w"> </span>--hypotheses-mode<span class="w"> </span>diagnostics<span class="w"> </span>--diagnostics-target<span class="w"> </span>disagreement<span class="w"> </span>--dry-run
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>src/main.py<span class="w"> </span>--stage<span class="w"> </span>hypotheses<span class="w"> </span>--hypotheses-mode<span class="w"> </span>diagnostics<span class="w"> </span>--diagnostics-step<span class="w"> </span>validation<span class="w"> </span>--diagnostics-target<span class="w"> </span>disagreement
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>src/main.py<span class="w"> </span>--stage<span class="w"> </span>hypotheses<span class="w"> </span>--hypotheses-mode<span class="w"> </span>diagnostics<span class="w"> </span>--diagnostics-step<span class="w"> </span>comparison<span class="w"> </span>--diagnostics-gold<span class="w"> </span>tweetsentbr
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>src/main.py<span class="w"> </span>--stage<span class="w"> </span>hypotheses<span class="w"> </span>--hypotheses-mode<span class="w"> </span>diagnostics<span class="w"> </span>--diagnostics-step<span class="w"> </span>comparison<span class="w"> </span>--diagnostics-gold<span class="w"> </span>gold_unb
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>make<span class="w"> </span>diagnostics<span class="w"> </span><span class="nv">STEP</span><span class="o">=</span>validation<span class="w"> </span><span class="nv">TARGET</span><span class="o">=</span>disagreement<span class="w"> </span><span class="nv">DRY_RUN</span><span class="o">=</span>--dry-run
 </span></code></pre></div>
 <p>O estágio é <strong>opt-in</strong>: está registrado em <code>STAGE_REGISTRY</code>, mas fora de
@@ -1016,8 +1016,8 @@ antes de confiar na estimativa em dólares.</p>
 <li><strong>Modelo anotador</strong>: <code>llama3.2:1b</code> não segue o formato Yes/No (smoke test: 0 de 6 respostas
   parseáveis; ele repete o prompt). O fluxo aborta se mais de 20 % das respostas não forem
   parseáveis. Use um modelo maior (ex.: <code>gemma2:9b</code>) ou a OpenAI.</li>
-<li><strong>Gold sets</strong>: <code>data/bronze/external/</code> deve conter <code>tweetsentbr.parquet</code>/<code>repro.parquet</code>
-  (<code>id</code>, <code>text</code>, <code>sentiment_label</code>). Confirme fonte e licença; não há download automático.</li>
+<li><strong>Gold sets</strong>: <code>data/gold/</code> deve conter <code>gold_gpt-6-luna.parquet</code>/<code>gold_UnB-Llama-3.3-70B-Instruct.parquet</code>,
+  gerados por <code>make label-gold-openai</code> / <code>make label-gold-unb</code> (rótulos de LLM, não de humanos).</li>
 <li><strong>Nenhum tweet de <code>G_eval</code> entra na descoberta</strong>: o gold é dividido em <code>G_disc</code> (descoberta do
   alvo <code>gold_error</code> e rerun pós-v2) e <code>G_eval</code> (reporte v1 vs v2).</li>
 <li><strong><code>prompts/v2.md</code></strong>: o carregador de prompts do pipeline de rotulagem só lê <code>.txt</code>; a comparação

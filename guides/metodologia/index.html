@@ -860,7 +860,7 @@
 <h2 id="fontes-de-dados">Fontes de dados<a class="headerlink" href="#fontes-de-dados" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Coleta própria</strong> de tweets via <code>twscrape</code> (<code>src/parallel/scraping.py</code>, <code>src/data/downloader.py</code>), termos de busca informados pelo usuário.</li>
-<li><strong>Gold sets públicos</strong> para validação/benchmark: <a href="https://huggingface.co/datasets">TweetSentBR</a> e RePro, carregados em <code>data/bronze/external/</code>.</li>
+<li><strong>Gold sets</strong> de referência: amostra do corpus rotulada por LLMs via API (<code>gpt-6-luna</code> e <code>UnB-Llama-3.3-70B-Instruct</code>), gerada pela etapa <code>labeling</code> em <code>data/gold/</code>. Não são anotações humanas: medem concordância com esses LLMs.</li>
 </ul>
 <h2 id="rotulagem-semiautomatica-em-cascata">Rotulagem semiautomática em cascata<a class="headerlink" href="#rotulagem-semiautomatica-em-cascata" title="Permanent link">&para;</a></h2>
 <p>Implementada em <code>src/labeling/</code>: rotuladores automáticos/heurísticos combinados por consenso (<code>consensus.py</code>), com pontuação de confiança/discordância por amostra (<code>confidence.py</code>). Amostras de baixa confiança são encaminhadas para validação humana (<code>manual.py</code>), e o resultado é comparado contra os gold sets via Kappa/Alpha (<code>validation.py</code>).</p>
