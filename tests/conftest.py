@@ -105,6 +105,7 @@ def minimal_paths_config_dict() -> dict[str, Any]:
             "corpus_normalizado": "data/silver/normalizado.parquet",
             "corpus_rotulado": "data/gold/rotulado.parquet",
             "tweets_data_huggingface": "data/gold/tweets_hf.parquet",
+            "tweets_data_huggingface_cardiff": "data/gold/tweets_hf_cardiff.parquet",
             "gold_openai": "data/gold/gold_openai.parquet",
             "gold_unb": "data/gold/gold_unb.parquet",
             "corpus_treino": "data/gold/treino.parquet",

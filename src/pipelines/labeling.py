@@ -36,7 +36,12 @@ from pathlib import Path
 import polars as pl
 
 from config.paths import ProjectPaths
-from constants.labels import HUGGINGFACE_SOURCE, LABEL_SOURCE_NAMES, UNDEFINED_LABEL
+from constants.labels import (
+    HUGGINGFACE_CARDIFF_SOURCE,
+    HUGGINGFACE_SOURCE,
+    LABEL_SOURCE_NAMES,
+    UNDEFINED_LABEL,
+)
 from data.loader import read_dataset_file
 from data.writer import write_dataset, write_labeled_corpus
 from exceptions.configuration import InvalidConfigurationError
@@ -62,7 +67,8 @@ class LabelingSource:
     Parameters
     ----------
     name : str
-        ``huggingface``, ``gold_openai`` ou ``gold_unb`` (um de :data:`LABEL_SOURCE_NAMES`).
+        ``huggingface``, ``huggingface_cardiff``, ``gold_openai`` ou ``gold_unb`` (um de
+        :data:`LABEL_SOURCE_NAMES`).
     model_name : str
         Modelo usado, registrado nos metadados da base.
     prompt_name : str
@@ -130,6 +136,7 @@ def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
     """
     known_paths = {
         HUGGINGFACE_SOURCE: paths.huggingface_labeled_file,
+        HUGGINGFACE_CARDIFF_SOURCE: paths.huggingface_cardiff_file,
         "gold_openai": paths.gold_openai_file,
         "gold_unb": paths.gold_unb_file,
     }

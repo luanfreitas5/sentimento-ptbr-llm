@@ -29,6 +29,9 @@ training_llm
 comparative_evaluation
     Avaliação comparativa (concordância, confiança e divergências) entre o
     Hugging Face e cada gold set.
+label_consensus
+    Consenso de rotulagem (votos, nível de consenso, Kappa de Fleiss/Cohen) entre os
+    modelos do Hugging Face e os gold sets.
 hypotheses
     Geração de hipóteses com o HypotheSAEs (discordância/incerteza entre o
     Hugging Face e os gold sets, padrões de baixa confiança e camada de diagnóstico).
@@ -51,6 +54,7 @@ from pipelines.evaluate import EvaluateResult, run_evaluate_stage
 from pipelines.features import FeatureArtifacts, run_features_stage
 from pipelines.hypotheses import run_hypotheses_stage
 from pipelines.ingestion import run_ingestion_stage
+from pipelines.label_consensus import LabelConsensusResult, run_label_consensus_stage
 from pipelines.labeling import run_labeling_stage
 from pipelines.preprocessing import run_preprocessing_stage
 from pipelines.report import ReportResult, run_report_stage
@@ -78,6 +82,7 @@ __all__: list[str] = [
     "ComparativeEvaluationResult",
     "EvaluateResult",
     "FeatureArtifacts",
+    "LabelConsensusResult",
     "ReportResult",
     "run_comparative_evaluation_stage",
     "run_evaluate_stage",
@@ -85,6 +90,7 @@ __all__: list[str] = [
     "run_full_workflow",
     "run_hypotheses_stage",
     "run_ingestion_stage",
+    "run_label_consensus_stage",
     "run_labeling_stage",
     "run_pipeline_stage",
     "run_preprocessing_stage",

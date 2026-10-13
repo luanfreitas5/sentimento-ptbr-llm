@@ -19,6 +19,7 @@ from pipelines.evaluate import run_evaluate_stage
 from pipelines.features import run_features_stage
 from pipelines.hypotheses import run_hypotheses_stage
 from pipelines.ingestion import run_ingestion_stage
+from pipelines.label_consensus import run_label_consensus_stage
 from pipelines.labeling import run_labeling_stage
 from pipelines.preprocessing import run_preprocessing_stage
 from pipelines.report import run_report_stage
@@ -34,6 +35,7 @@ STAGE_REGISTRY: dict[str, Callable[..., Any]] = {
     "preprocessing": run_preprocessing_stage,
     "labeling": run_labeling_stage,
     "comparative_evaluation": run_comparative_evaluation_stage,
+    "label_consensus": run_label_consensus_stage,
     "hypotheses": run_hypotheses_stage,
     "features": run_features_stage,
     "training_classical": run_training_classical_stage,

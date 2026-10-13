@@ -29,6 +29,19 @@ huggingface:
   batch_size: 64 # tweets por lote (e por gravação no checkpoint)
   max_input_tokens: 128 # limite do BERTweet-pt (o excedente é truncado)
 
+# Segundo classificador do Hugging Face, para a análise de consenso (etapa `label_consensus`):
+# XLM-RoBERTa treinado em tweets multilíngues (inclui português), classes
+# negative/neutral/positive. Roda só na MESMA amostra dos gold sets (`gold_sets.sample_size`
+# e `gold_sets.random_state`), então cobre exatamente os mesmos tweets, e não alimenta
+# nenhuma etapa de treino. Demais chaves como em `huggingface`.
+huggingface_cardiff:
+  model: "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual" # https://huggingface.co/cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual
+  revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
+  device: "auto"
+  dtype: "auto"
+  batch_size: 64
+  max_input_tokens: 128 # tweets são curtos; o XLM-R aceita até 512
+
 # Parâmetros comuns da chamada à API OpenAI-compatível (src/labeling/openai_labeler.py),
 # autenticada por OPENAI_BASE_URL/OPENAI_KEY no .env (ver .env.example), via Chat
 # Completions. Proteção contra HTTP 429: limite de `requests_per_minute` somado entre as

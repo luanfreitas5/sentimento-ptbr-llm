@@ -41,7 +41,12 @@ from config.environment import configure_environment_variables, configure_reprod
 from config.logging import configure_logging
 from config.paths import CONFIGS_DIR, ProjectPaths, load_project_paths
 from config.settings import GeneralConfig, Settings, create_settings, load_general_config
-from constants.labels import GOLD_SOURCE_NAMES, HUGGINGFACE_SOURCE, LABEL_SOURCE_NAMES
+from constants.labels import (
+    GOLD_SOURCE_NAMES,
+    HUGGINGFACE_CARDIFF_SOURCE,
+    HUGGINGFACE_SOURCE,
+    LABEL_SOURCE_NAMES,
+)
 from data.loader import load_labeled_corpus, load_training_example_dataset
 from diagnostics.targets import TARGET_NAMES
 from exceptions.configuration import InvalidConfigurationError
@@ -157,9 +162,10 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=[*LABEL_SOURCE_NAMES, _ALL_SOURCES_OPTION],
         help=(
             "Fonte(s) de rotulagem da etapa `labeling`: `huggingface` (modelo do Hugging Face, "
-            "todos os tweets), `gold_openai` (gpt-6-luna) e `gold_unb` "
+            "todos os tweets), `huggingface_cardiff` (segundo modelo do Hugging Face, só na "
+            "amostra dos gold sets), `gold_openai` (gpt-6-luna) e `gold_unb` "
             "(UnB-Llama-3.3-70B-Instruct) — gold sets via API, sobre uma amostra do corpus — "
-            "ou `all` (as três, em sequência)."
+            "ou `all` (as quatro, em sequência)."
         ),
     )
     parser.add_argument(
@@ -475,12 +481,20 @@ def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:
 
 
 def _build_huggingface_source(
-    labeling_config: dict[str, Any], settings: Settings
+    labeling_config: dict[str, Any],
+    settings: Settings,
+    source_name: str = HUGGINGFACE_SOURCE,
 ) -> LabelingSource:
-    """Monta a fonte ``huggingface`` (todos os tweets), carregada só quando executada."""
-    hf_config = labeling_config["huggingface"]
+    """Monta uma fonte do Hugging Face, carregada só quando executada.
+
+    ``huggingface`` rotula todos os tweets; ``huggingface_cardiff`` rotula só a amostra dos
+    gold sets (mesmos ``sample_size`` e ``random_state``), para a análise de consenso.
+    """
+    hf_config = labeling_config[source_name]
+    is_cardiff = source_name == HUGGINGFACE_CARDIFF_SOURCE
+    gold_config = labeling_config["gold_sets"]
     return LabelingSource(
-        name=HUGGINGFACE_SOURCE,
+        name=source_name,
         model_name=f"{hf_config['model']}@{hf_config['revision']}",
         # classificador encoder ajustado: não usa prompt nem amostragem (determinístico)
         prompt_name="nenhum",
@@ -496,6 +510,8 @@ def _build_huggingface_source(
             revision=hf_config["revision"],
             max_input_tokens=hf_config["max_input_tokens"],
         ),
+        sample_size=gold_config["sample_size"] if is_cardiff else None,
+        sample_seed=gold_config["random_state"],
     )
 
 
@@ -570,14 +586,18 @@ def _build_labeling_sources(
     Returns
     -------
     list[LabelingSource]
-        Fontes a executar, na ordem ``huggingface`` -> ``gold_openai`` -> ``gold_unb``.
+        Fontes a executar, na ordem ``huggingface`` -> ``huggingface_cardiff`` -> ``gold_openai``
+        -> ``gold_unb``.
     """
     requested = (
         LABEL_SOURCE_NAMES if args.label_source == _ALL_SOURCES_OPTION else (args.label_source,)
     )
     sources: list[LabelingSource] = []
-    if HUGGINGFACE_SOURCE in requested:
-        sources.append(_build_huggingface_source(labeling_config, settings))
+    sources.extend(
+        _build_huggingface_source(labeling_config, settings, name)
+        for name in (HUGGINGFACE_SOURCE, HUGGINGFACE_CARDIFF_SOURCE)
+        if name in requested
+    )
     sources.extend(
         _build_gold_source(name, labeling_config, args)
         for name in GOLD_SOURCE_NAMES
@@ -964,6 +984,42 @@ def _build_comparative_evaluation_stage_kwargs(
     }
 
 
+def _build_label_consensus_stage_kwargs(
+    paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
+) -> dict[str, Any]:
+    """Monta os argumentos de :func:`pipelines.label_consensus.run_label_consensus_stage`.
+
+    A etapa lê as bases rotuladas direto do disco; bootstrap e limiares vêm de
+    ``configs/evaluation.yaml -> label_consensus``.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    general_config : GeneralConfig
+        Configuração geral validada, não utilizada diretamente nesta etapa.
+    settings : Settings
+        Configurações sensíveis ao ambiente, não utilizadas diretamente nesta etapa.
+    args : argparse.Namespace
+        Argumentos de linha de comando (``--random-seed``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Argumentos nomeados para :func:`pipelines.label_consensus.run_label_consensus_stage`.
+    """
+    del general_config, settings
+    config = read_yaml(CONFIGS_DIR / CONFIG_FILE_NAMES["evaluation"])["label_consensus"]
+    return {
+        "paths": paths,
+        "output_subdir": config["output_subdir"],
+        "random_seed": args.random_seed if args.random_seed is not None else config["random_seed"],
+        "n_bootstrap": config["n_bootstrap"],
+        "confidence_level": config["confidence_level"],
+        "top_n_disputed": config["top_n_disputed"],
+    }
+
+
 def _build_hypothesaes_patterns_kwargs(
     paths: ProjectPaths, general_config: GeneralConfig, settings: Settings, args: argparse.Namespace
 ) -> dict[str, Any]:
@@ -1138,6 +1194,7 @@ _STAGE_KWARGS_BUILDERS: dict[
     "preprocessing": _build_preprocessing_stage_kwargs,
     "labeling": _build_labeling_stage_kwargs,
     "comparative_evaluation": _build_comparative_evaluation_stage_kwargs,
+    "label_consensus": _build_label_consensus_stage_kwargs,
     "hypotheses": _build_hypotheses_stage_kwargs,
     "features": _build_features_stage_kwargs,
     "training_classical": _build_training_classical_stage_kwargs,

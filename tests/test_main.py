@@ -16,6 +16,7 @@ from main import (
     _build_comparative_evaluation_stage_kwargs,
     _build_evaluate_stage_kwargs,
     _build_hypotheses_stage_kwargs,
+    _build_label_consensus_stage_kwargs,
     _build_labeling_stage_kwargs,
     _build_preprocessing_stage_kwargs,
     _build_report_stage_kwargs,
@@ -53,11 +54,12 @@ class TestBuildLabelingStageKwargs:
     """Testes de :func:`main._build_labeling_stage_kwargs`."""
 
     def test_builds_all_sources_by_default_in_order(self) -> None:
-        """Sem ``--label-source``, as três fontes são montadas: Hugging Face antes dos gold sets."""
+        """Sem ``--label-source``, as quatro fontes são montadas (Hugging Face antes dos gold)."""
         kwargs = _build_kwargs(_build_labeling_stage_kwargs, ["--stage", "labeling"])
 
         assert [source.name for source in kwargs["sources"]] == [
             "huggingface",
+            "huggingface_cardiff",
             "gold_openai",
             "gold_unb",
         ]
@@ -84,6 +86,13 @@ class TestBuildLabelingStageKwargs:
         assert sources["huggingface"].model_name.startswith("pysentimiento/bertweet-pt-sentiment@")
         assert sources["huggingface"].prompt_template == ""
         assert sources["huggingface"].sample_size is None
+        assert sources["huggingface_cardiff"].model_name.startswith(
+            "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual@"
+        )
+        assert sources["huggingface_cardiff"].prompt_template == ""
+        # mesma amostra dos gold sets: cobre exatamente os mesmos tweets
+        assert sources["huggingface_cardiff"].sample_size == sources["gold_openai"].sample_size
+        assert sources["huggingface_cardiff"].sample_seed == sources["gold_openai"].sample_seed
         assert sources["gold_openai"].model_name == "gpt-6-luna"
         assert sources["gold_openai"].reasoning_effort == "low"
         assert sources["gold_unb"].model_name == "UnB-Llama-3.3-70B-Instruct"
@@ -99,6 +108,26 @@ class TestBuildLabelingStageKwargs:
             _build_labeling_stage_kwargs, ["--stage", "labeling", "--label-source", "huggingface"]
         )
         assert callable(kwargs["sources"][0].open_classifier)
+
+
+class TestBuildLabelConsensusStageKwargs:
+    """Testes de :func:`main._build_label_consensus_stage_kwargs`."""
+
+    def test_reads_parameters_from_evaluation_config(self) -> None:
+        """Bootstrap e saída vêm de ``configs/evaluation.yaml -> label_consensus``."""
+        kwargs = _build_kwargs(_build_label_consensus_stage_kwargs, ["--stage", "label_consensus"])
+
+        assert kwargs["output_subdir"] == "consenso_rotulagem"
+        assert kwargs["n_bootstrap"] == 1000
+        assert kwargs["top_n_disputed"] == 50
+
+    def test_random_seed_flag_overrides_config(self) -> None:
+        """``--random-seed`` sobrescreve a semente do YAML."""
+        kwargs = _build_kwargs(
+            _build_label_consensus_stage_kwargs,
+            ["--stage", "label_consensus", "--random-seed", "7"],
+        )
+        assert kwargs["random_seed"] == 7
 
 
 class TestBuildComparativeEvaluationStageKwargs:

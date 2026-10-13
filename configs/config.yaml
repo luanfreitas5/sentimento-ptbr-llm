@@ -39,6 +39,7 @@ stages:
   - preprocessing
   - labeling
   - comparative_evaluation
+  - label_consensus
   - hypotheses
   - features
   - training_classical
