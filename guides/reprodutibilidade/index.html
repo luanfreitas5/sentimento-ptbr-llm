@@ -848,7 +848,7 @@
 <li><strong><code>.pre-commit-config.yaml</code></strong> e CI usam as mesmas ferramentas/versões declaradas em <code>pyproject.toml</code>, sem duplicação de configuração.</li>
 </ul>
 <h2 id="hash-de-dados">Hash de dados<a class="headerlink" href="#hash-de-dados" title="Permanent link">&para;</a></h2>
-<p>Cada dataset intermediário pode ser verificado com <code>src/utils/hashing.py</code> (SHA-256), permitindo detectar mudanças silenciosas de dados entre execuções. O catálogo de datasets (<code>src/data/catalog.py</code>) registra os hashes junto aos caminhos em <code>data/raw/catalog.json</code>.</p>
+<p>Cada dataset intermediário pode ser verificado com <code>src/utils/hashing.py</code> (SHA-256), permitindo detectar mudanças silenciosas de dados entre execuções. O catálogo de datasets (<code>src/data/catalog.py</code>) registra os hashes junto aos caminhos em <code>data/bronze/catalog.json</code>.</p>
 <h2 id="rastreamento-com-mlflow">Rastreamento com MLflow<a class="headerlink" href="#rastreamento-com-mlflow" title="Permanent link">&para;</a></h2>
 <p>Todo treino/avaliação com <code>track_with_mlflow=True</code> grava params, métricas e artefatos em <code>mlruns/</code> (<code>configs/config.yaml -&gt; experiment.tracking_uri</code>, sobrescrito por <code>SENTIMENTO_MLFLOW_TRACKING_URI</code> no <code>.env</code>). Cada execução é identificável por:</p>
 <ul>

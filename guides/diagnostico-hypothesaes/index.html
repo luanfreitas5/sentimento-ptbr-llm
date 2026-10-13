@@ -959,7 +959,7 @@ tweets, não há viés de seleção.</p>
 sempre ligado (só o <code>--dry-run</code> o desliga); as CLIs <code>python -m diagnostics.*</code> têm <code>--no-mlflow</code>.</p>
 <p>Para <code>pseudo_label</code>, informe <code>--model-column lab_huggingface --label negativo</code>. Para <code>gold_error</code>,
 passe <code>--corpus</code> com as predições sobre o gold no contrato (geradas por <code>diag-compare</code> em
-<code>data/interim/diagnostics/gold_disc_v1.parquet</code>).</p>
+<code>data/silver/diagnostics/gold_disc_v1.parquet</code>).</p>
 <h2 id="configuracao-e-segredos">Configuração e segredos<a class="headerlink" href="#configuracao-e-segredos" title="Permanent link">&para;</a></h2>
 <p>Tudo em <code>configs/diagnostics.yaml</code>, validado por Pydantic (<code>extra="forbid"</code>): uma chave
 desconhecida falha na inicialização. Segredos <strong>nunca</strong> ficam no YAML:</p>
@@ -1016,7 +1016,7 @@ antes de confiar na estimativa em dólares.</p>
 <li><strong>Modelo anotador</strong>: <code>llama3.2:1b</code> não segue o formato Yes/No (smoke test: 0 de 6 respostas
   parseáveis; ele repete o prompt). O fluxo aborta se mais de 20 % das respostas não forem
   parseáveis. Use um modelo maior (ex.: <code>gemma2:9b</code>) ou a OpenAI.</li>
-<li><strong>Gold sets</strong>: <code>data/external/</code> deve conter <code>tweetsentbr.parquet</code>/<code>repro.parquet</code>
+<li><strong>Gold sets</strong>: <code>data/bronze/external/</code> deve conter <code>tweetsentbr.parquet</code>/<code>repro.parquet</code>
   (<code>id</code>, <code>text</code>, <code>sentiment_label</code>). Confirme fonte e licença; não há download automático.</li>
 <li><strong>Nenhum tweet de <code>G_eval</code> entra na descoberta</strong>: o gold é dividido em <code>G_disc</code> (descoberta do
   alvo <code>gold_error</code> e rerun pós-v2) e <code>G_eval</code> (reporte v1 vs v2).</li>

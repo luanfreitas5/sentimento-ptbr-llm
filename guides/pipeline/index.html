@@ -888,21 +888,21 @@
 <td><code>ingest</code></td>
 <td><code>src/pipelines/ingestion.py</code></td>
 <td>função de coleta definida pelo usuário (<code>--scrape-func</code>)</td>
-<td><code>data/interim/tweets_coletados.parquet</code></td>
+<td><code>data/silver/tweets_coletados.parquet</code></td>
 </tr>
 <tr>
 <td><code>preprocessing</code></td>
 <td><code>preprocess</code></td>
 <td><code>src/pipelines/preprocessing.py</code></td>
-<td>lote de tweets brutos coletados por usuário, <code>data/raw/*.parquet</code> (ver <code>src/data/loader.py::load_raw_tweet_batch</code>)</td>
-<td><code>data/interim/corpus_normalizado.parquet</code></td>
+<td>lote de tweets brutos coletados por usuário, <code>data/bronze/*.parquet</code> (ver <code>src/data/loader.py::load_raw_tweet_batch</code>)</td>
+<td><code>data/silver/corpus_normalizado.parquet</code></td>
 </tr>
 <tr>
 <td><code>labeling</code></td>
 <td><code>label</code> (<code>label-hf</code> / <code>label-openai</code>)</td>
 <td><code>src/pipelines/labeling.py</code></td>
 <td>corpus normalizado</td>
-<td><code>data/processed/tweets_data_huggingface.parquet</code>, <code>tweets_data_openai.parquet</code> (+ <code>.meta.json</code>) e <code>corpus_rotulado.parquet</code></td>
+<td><code>data/gold/tweets_data_huggingface.parquet</code>, <code>tweets_data_openai.parquet</code> (+ <code>.meta.json</code>) e <code>corpus_rotulado.parquet</code></td>
 </tr>
 <tr>
 <td><code>comparative_evaluation</code></td>
@@ -1054,7 +1054,7 @@ ajustado e não recebe prompt:</p>
 <code>confidence_score</code> (confiança). O modelo, o prompt (hash), a temperatura e o hash do corpus de
 entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
 <ul>
-<li><strong>Retomada e deduplicação:</strong> cada lote é gravado em <code>data/interim/labeling_checkpoints/</code> (JSON
+<li><strong>Retomada e deduplicação:</strong> cada lote é gravado em <code>data/silver/labeling_checkpoints/</code> (JSON
   Lines). Ao reexecutar, tweets já rotulados não são reprocessados; o checkpoint é invalidado se
   modelo, prompt ou temperatura mudarem.</li>
 <li><strong>Falhas:</strong> erros de API (timeout, HTTP 429) são retentados com backoff exponencial; se sobrar
