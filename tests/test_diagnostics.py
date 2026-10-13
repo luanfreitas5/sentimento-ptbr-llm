@@ -605,7 +605,7 @@ def _write_gold(path: Path, n_rows: int = 40, label_column: str = "sentiment_lab
     pl.DataFrame(
         {
             "id": list(range(n_rows)),
-            "text": [f"oi @user{i} veja http://x.com/{i}" for i in range(n_rows)],
+            "text_normalized": [f"oi @user{i} veja http://x.com/{i}" for i in range(n_rows)],
             label_column: [labels[i % 4] for i in range(n_rows)],
         }
     ).write_parquet(path)
@@ -643,8 +643,8 @@ class TestLoadGoldSet:
         assert not any("@user" in text for text in gold["text_normalized"])
 
     def test_missing_file_gives_actionable_error(self, tmp_path: Path) -> None:
-        """Arquivo ausente orienta a colocar o gold em data/bronze/external/."""
-        with pytest.raises(DataNotFoundError, match="data/bronze/external"):
+        """Arquivo ausente orienta a gerar o gold com ``make label-gold-*``."""
+        with pytest.raises(DataNotFoundError, match="make label-gold"):
             load_gold_set(tmp_path / "nao_existe.parquet")
 
     def test_missing_column_raises(self, tmp_path: Path) -> None:
@@ -656,16 +656,33 @@ class TestLoadGoldSet:
     def test_unknown_label_raises(self, tmp_path: Path) -> None:
         """Rótulo desconhecido não é descartado em silêncio."""
         path = tmp_path / "g.parquet"
-        pl.DataFrame({"id": [1], "text": ["a"], "sentiment_label": ["misto"]}).write_parquet(path)
+        pl.DataFrame(
+            {"id": [1], "text_normalized": ["a"], "sentiment_label": ["misto"]}
+        ).write_parquet(path)
         with pytest.raises(DataValidationError, match="não reconhecidos"):
             load_gold_set(path)
 
     def test_all_blank_texts_raise_empty(self, tmp_path: Path) -> None:
         """Sem nenhum texto válido, o dataset é vazio."""
         path = tmp_path / "g.parquet"
-        pl.DataFrame({"id": [1], "text": ["   "], "sentiment_label": ["pos"]}).write_parquet(path)
+        pl.DataFrame(
+            {"id": [1], "text_normalized": ["   "], "sentiment_label": ["pos"]}
+        ).write_parquet(path)
         with pytest.raises(EmptyDatasetError):
             load_gold_set(path)
+
+    def test_undefined_labels_are_dropped(self, tmp_path: Path) -> None:
+        """Tweets ``indefinido`` (resposta inutilizável do LLM) não entram no gold."""
+        path = tmp_path / "g.parquet"
+        pl.DataFrame(
+            {
+                "id": [1, 2],
+                "text_normalized": ["a", "b"],
+                "sentiment_label": ["indefinido", "positivo"],
+            }
+        ).write_parquet(path)
+        gold = load_gold_set(path)
+        assert gold["id"].to_list() == ["2"]
 
     def test_max_tweets_subsamples(self, tmp_path: Path) -> None:
         """``max_tweets`` limita o tamanho mantendo todas as classes."""
@@ -1990,7 +2007,7 @@ class TestRegistration:
                 "--diagnostics-model-column", "lab_a",
                 "--diagnostics-label", "neutro",
                 "--diagnostics-corpus", "x.parquet",
-                "--diagnostics-gold", "repro",
+                "--diagnostics-gold", "gold_unb",
                 "--random-seed", "7",
             ]
         )  # fmt: skip
@@ -2005,7 +2022,7 @@ class TestRegistration:
         assert kwargs["model_column"] == "lab_a"
         assert kwargs["label"] == "neutro"
         assert kwargs["corpus_path"] == Path("x.parquet")
-        assert kwargs["gold"] == "repro"
+        assert kwargs["gold"] == "gold_unb"
         assert kwargs["dry_run"] is True
         assert kwargs["random_seed"] == 7
 
@@ -2072,12 +2089,12 @@ class TestRunDiagnosticsStage:
             return "RELATORIO"
 
         monkeypatch.setattr(comparison_module, "build_comparison_dry_run", _fake)
-        paths = _namespace(tweetsentbr_file=Path("a.parquet"), repro_file=Path("b.parquet"))
+        paths = _namespace(gold_openai_file=Path("a.parquet"), gold_unb_file=Path("b.parquet"))
         assert (
             run_diagnostics_stage(
                 paths,
                 step="comparison",
-                gold="repro",
+                gold="gold_unb",
                 models=["m1"],
                 dry_run=True,
             )
@@ -2158,7 +2175,7 @@ class TestRunDiagnosticsStage:
         }
 
     def test_comparison_step_runs_with_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Sem dry-run: gold ``tweetsentbr`` e o anotador do YAML como modelo padrão."""
+        """Sem dry-run: gold ``gold_openai`` e o anotador do YAML como modelo padrão."""
         seen: dict[str, Any] = {}
 
         def _fake_comparison(gold_file: Path, settings: Any, paths: Any, **kwargs: Any) -> str:
@@ -2166,7 +2183,7 @@ class TestRunDiagnosticsStage:
             return "comparado"
 
         monkeypatch.setattr(comparison_module, "run_prompt_comparison", _fake_comparison)
-        paths = _namespace(tweetsentbr_file=Path("a.parquet"), repro_file=Path("b.parquet"))
+        paths = _namespace(gold_openai_file=Path("a.parquet"), gold_unb_file=Path("b.parquet"))
         assert run_diagnostics_stage(paths, step="comparison", track=False) == "comparado"
         annotator = load_diagnostics_settings().llm.annotator_model
         assert seen == {
@@ -2176,10 +2193,10 @@ class TestRunDiagnosticsStage:
             "track": False,
         }
 
-    def test_comparison_dry_run_defaults_to_annotator_and_tweetsentbr(
+    def test_comparison_dry_run_defaults_to_annotator_and_gold_openai(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """No dry-run, sem ``gold``/``models``, vale o padrão do YAML e do gold TweetSentBR."""
+        """No dry-run, sem ``gold``/``models``, vale o padrão do YAML e do gold ``gold_openai``."""
         seen: dict[str, Any] = {}
 
         def _fake(gold_file: Path, settings: Any, models: list[str]) -> str:
@@ -2187,7 +2204,7 @@ class TestRunDiagnosticsStage:
             return "RELATORIO"
 
         monkeypatch.setattr(comparison_module, "build_comparison_dry_run", _fake)
-        paths = _namespace(tweetsentbr_file=Path("a.parquet"), repro_file=Path("b.parquet"))
+        paths = _namespace(gold_openai_file=Path("a.parquet"), gold_unb_file=Path("b.parquet"))
         run_diagnostics_stage(paths, step="comparison", dry_run=True)
         assert seen["gold_file"] == Path("a.parquet")
         assert seen["models"] == [load_diagnostics_settings().llm.annotator_model]
@@ -2235,7 +2252,7 @@ class TestRunDiagnosticsStage:
             return "RELATORIO"
 
         monkeypatch.setattr(comparison_module, "build_comparison_dry_run", _fake)
-        paths = _namespace(tweetsentbr_file=Path("a.parquet"), repro_file=Path("b.parquet"))
+        paths = _namespace(gold_openai_file=Path("a.parquet"), gold_unb_file=Path("b.parquet"))
         run_diagnostics_stage(paths, step="comparison", dry_run=True, config_file=config_file)
         run_diagnostics_stage(
             paths, step="comparison", dry_run=True, config_file=config_file, random_seed=0
@@ -2310,7 +2327,6 @@ class TestAdaptLabeledCorpus:
                 "text_normalized": ["[MENCAO] oi", "tchau"],
                 "confidence_score": [0.9, 0.3],
                 "sentiment_label_huggingface": ["positivo", "negativo"],
-                "sentiment_label_openai": [None, "neutro"],
             }
         )
         adapted = adapt_labeled_corpus(raw)
@@ -2319,7 +2335,6 @@ class TestAdaptLabeledCorpus:
             "text_normalized",
             "agreement_score",
             "lab_huggingface",
-            "lab_openai",
         ]
         assert adapted["id"].to_list() == ["1", "2"]
 
@@ -2331,7 +2346,6 @@ class TestAdaptLabeledCorpus:
                 "text_normalized": ["a"],
                 "confidence_score": [0.9],
                 "sentiment_label_huggingface": ["positivo"],
-                "sentiment_label_openai": ["positivo"],
                 "gold": ["positivo"],
             }
         )

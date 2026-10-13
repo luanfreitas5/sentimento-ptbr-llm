@@ -2,27 +2,25 @@
 # Implementa a Seção 4.3 do documento mestre (rotulagem por LLMs + diagnóstico
 # via HypotheSAEs e erro de reconstrução do autoencoder).
 
-# Rotulagem de TODOS os tweets por duas fontes independentes (src/pipelines/labeling.py),
-# gerando as bases `tweets_data_huggingface` e `tweets_data_openai` (mesmos tweets,
-# relacionados pelo `id`), comparadas depois pela etapa `comparative_evaluation`.
-# Ambas usam o mesmo prompt versionado em prompts/ (marcador {{TEXTO}}) e recebem o
-# texto já sanitizado (`text_normalized`: sem @menções/URLs — LGPD).
+# A etapa `labeling` (src/pipelines/labeling.py) gera três bases, relacionadas pelo `id`:
+#   * `tweets_data_huggingface`: TODOS os tweets, rotulados por modelo do Hugging Face
+#     (única fonte que alimenta as etapas seguintes: features, treino, hypothesaes_analysis);
+#   * `gold_openai` e `gold_UnB-Llama-3.3-70B-Instruct`: a MESMA amostra do corpus,
+#     rotulada por LLMs via API OpenAI-compatível, que fazem o papel de gold sets
+#     (referência) na etapa `comparative_evaluation`.
+# Os LLMs da API usam o mesmo prompt versionado em prompts/ (marcador {{TEXTO}}) e recebem
+# o texto já sanitizado (`text_normalized`: sem @menções/URLs — LGPD).
 
-# Fonte cujo rótulo vira `sentiment_label` em corpus_rotulado.parquet, consumido pelas
-# etapas seguintes (features, treino, hypothesaes_analysis). A outra base é preservada
-# nas colunas `sentiment_label_<fonte>`/`confidence_score_<fonte>`.
-downstream_source: "huggingface" # "huggingface" | "openai"
-
-# Prompt da fonte `openai` (nome em prompts/, sem a extensão .txt); a fonte `huggingface`
+# Prompt dos gold sets via API (nome em prompts/, sem a extensão .txt); a fonte `huggingface`
 # usa um classificador ajustado e não recebe prompt.
 prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
 
 # Classificador de sentimento do Hugging Face Hub (src/labeling/huggingface.py), via
 # transformers. BERTweet-pt ajustado (classes NEG/NEU/POS): é um encoder de ~135M de
-# parâmetros, roda em CPU ou em qualquer GPU, é determinístico e NÃO usa o `prompt_name`
-# (o prompt vale apenas para a fonte `openai`). A confiança é a probabilidade softmax da
-# classe escolhida. Para modelos de acesso restrito, defina SENTIMENTO_HUGGINGFACE_TOKEN
-# no .env. A memória da GPU é liberada a cada lote.
+# parâmetros, roda em CPU ou em qualquer GPU, é determinístico e NÃO usa o `prompt_name`.
+# A confiança é a probabilidade softmax da classe escolhida. Para modelos de acesso
+# restrito, defina SENTIMENTO_HUGGINGFACE_TOKEN no .env. A memória da GPU é liberada a
+# cada lote.
 huggingface:
   model: "pysentimiento/bertweet-pt-sentiment" # Hugging Face Hub (https://huggingface.co/pysentimiento/bertweet-pt-sentiment)
   revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
@@ -31,21 +29,20 @@ huggingface:
   batch_size: 64 # tweets por lote (e por gravação no checkpoint)
   max_input_tokens: 128 # limite do BERTweet-pt (o excedente é truncado)
 
-# LLM via API OpenAI-compatível (src/labeling/openai_labeler.py), autenticada por
-# OPENAI_BASE_URL/OPENAI_KEY no .env (ver .env.example; o endpoint da UnB é o padrão do
-# projeto), via Chat Completions. Proteção contra HTTP 429: limite de `requests_per_minute`
-# somado entre as threads, pausa global no 429 (respeitando Retry-After) e ritmo adaptativo.
+# Parâmetros comuns da chamada à API OpenAI-compatível (src/labeling/openai_labeler.py),
+# autenticada por OPENAI_BASE_URL/OPENAI_KEY no .env (ver .env.example), via Chat
+# Completions. Proteção contra HTTP 429: limite de `requests_per_minute` somado entre as
+# threads, pausa global no 429 (respeitando Retry-After) e ritmo adaptativo.
 # Resposta fora do formato ou texto vazio => sentiment_label "indefinido" com score 0.0.
 openai:
-  model: "UnB-Llama-3.3-70B-Instruct" # OpenAI-compatível (ver .env.example)
-  temperature: 0.0
+  temperature: 0.0 # ignorada quando o gold set define `reasoning_effort`
   max_tokens: 100 # a resposta é um JSON curto (rótulo + probabilidades)
   batch_size: 50 # tweets por lote (e por gravação no checkpoint)
   n_workers: 4 # requisições concorrentes dentro de um lote
   parallel_batches: 1 # lotes simultâneos (pool contínuo); total de threads = n_workers x parallel_batches
   # Modos rápidos (mudam o hash do checkpoint quando diferentes do padrão json + 1):
   response_mode: "json" # "json" (JSON completo) | "label_logprobs" (só o rótulo; confiança = softmax do 1º token; exige logprobs no endpoint)
-  tweets_per_request: 1 # >1 agrupa tweets numerados por requisição (valide no gold set antes de adotar)
+  tweets_per_request: 1 # >1 agrupa tweets numerados por requisição
   requests_per_minute: 120 # limite base, somado entre as threads (null desativa)
   request_timeout_seconds: 60
   max_retries: 3 # falhas de API (exceto 429)
@@ -54,13 +51,22 @@ openai:
 confidence:
   low_confidence_threshold: 0.5 # abaixo disso, candidato à validação humana
 
+# Gold sets: amostra do corpus normalizado rotulada por dois LLMs da API OpenAI-compatível.
+# A amostra é a mesma nos dois (mesma `random_state` e `sample_size`), então os gold sets
+# cobrem exatamente os mesmos tweets. Cada um é uma execução separada
+# (`--label-source gold_openai` / `gold_unb`): o endpoint vem de OPENAI_BASE_URL/OPENAI_KEY,
+# então troque o `.env` entre as execuções se os modelos estiverem em endpoints diferentes.
 gold_sets:
-  tweetsentbr:
-    enabled: true
-    path: "data/bronze/external/tweetsentbr.parquet"
-  repro:
-    enabled: true
-    path: "data/bronze/external/repro.parquet"
+  sample_size: 1000 # tweets da amostra (limitada ao tamanho do corpus)
+  random_state: 42
+  openai:
+    model: "gpt-6-luna"
+    reasoning_effort: "low" # modelo de raciocínio: sem temperature; usa max_completion_tokens
+    max_tokens: 2048 # inclui os tokens de raciocínio, por isso é maior que `openai.max_tokens`
+  unb:
+    model: "UnB-Llama-3.3-70B-Instruct"
+    reasoning_effort: null
+    max_tokens: null # null = usa `openai.max_tokens`
 
 validation:
   metric: "cohen_kappa"

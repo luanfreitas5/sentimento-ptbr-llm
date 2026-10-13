@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from config.paths import ProjectPaths
+from constants.labels import GOLD_SOURCE_NAMES
 from exceptions.data import DataValidationError
 
 if TYPE_CHECKING:
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 DiagnosticsStep = Literal["hypotheses", "validation", "comparison"]
 DIAGNOSTICS_STEPS: tuple[str, ...] = ("hypotheses", "validation", "comparison")
-DIAGNOSTICS_GOLD_CHOICES: tuple[str, ...] = ("tweetsentbr", "repro")
+DIAGNOSTICS_GOLD_CHOICES: tuple[str, ...] = GOLD_SOURCE_NAMES
 
 
 def _emit_report(report: str) -> str:
@@ -77,7 +78,7 @@ def _run_comparison_step(
     """Executa (ou estima, em ``dry_run``) a comparação de prompts v1 vs v2 no gold set."""
     from diagnostics.comparison import build_comparison_dry_run, run_prompt_comparison
 
-    gold_file = paths.tweetsentbr_file if gold == "tweetsentbr" else paths.repro_file
+    gold_file = paths.gold_openai_file if gold == "gold_openai" else paths.gold_unb_file
     chosen_models = list(models or [settings.llm.annotator_model])
     if dry_run:
         return _emit_report(build_comparison_dry_run(gold_file, settings, chosen_models))
@@ -134,7 +135,7 @@ def run_diagnostics_stage(
     model_column: str | None = None,
     label: str | None = None,
     corpus_path: Path | None = None,
-    gold: str = "tweetsentbr",
+    gold: str = GOLD_SOURCE_NAMES[0],
     models: Sequence[str] | None = None,
     dry_run: bool = False,
     track: bool = True,
@@ -160,8 +161,8 @@ def run_diagnostics_stage(
     corpus_path : Path | None, optional
         Parquet já no contrato de diagnóstico (obrigatório para ``gold_error``); por padrão
         adapta ``paths.labeled_corpus_file``, by default None.
-    gold : {"tweetsentbr", "repro"}, optional
-        Gold set do passo ``comparison``, by default "tweetsentbr".
+    gold : {"gold_openai", "gold_unb"}, optional
+        Gold set do passo ``comparison``, by default "gold_openai".
     models : Sequence[str] | None, optional
         Modelos classificadores do passo ``comparison``; por padrão o anotador do YAML,
         by default None.

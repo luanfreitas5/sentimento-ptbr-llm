@@ -2,9 +2,9 @@
 
 Garantem que os argumentos da CLI e os YAMLs de ``configs/`` chegam aos kwargs
 de cada etapa: ``--max-workers`` em ``preprocessing``/``labeling``, as duas
-fontes de rotulagem (Hugging Face e OpenAI) em ``labeling`` e os limiares da
+fontes de rotulagem (Hugging Face e gold sets) em ``labeling`` e os limiares da
 ``comparative_evaluation``. Não é um teste de integração completo da CLI: o
-modelo do Hugging Face e a API OpenAI nunca são acionados aqui.
+modelo do Hugging Face e a API dos gold sets nunca são acionados aqui.
 """
 
 import pytest
@@ -52,15 +52,19 @@ class TestBuildPreprocessingStageKwargs:
 class TestBuildLabelingStageKwargs:
     """Testes de :func:`main._build_labeling_stage_kwargs`."""
 
-    def test_builds_both_sources_by_default_in_order(self) -> None:
-        """Sem ``--label-source``, as duas fontes são montadas: Hugging Face antes da OpenAI."""
+    def test_builds_all_sources_by_default_in_order(self) -> None:
+        """Sem ``--label-source``, as três fontes são montadas: Hugging Face antes dos gold sets."""
         kwargs = _build_kwargs(_build_labeling_stage_kwargs, ["--stage", "labeling"])
 
-        assert [source.name for source in kwargs["sources"]] == ["huggingface", "openai"]
-        assert kwargs["downstream_source"] == "huggingface"
+        assert [source.name for source in kwargs["sources"]] == [
+            "huggingface",
+            "gold_openai",
+            "gold_unb",
+        ]
+        assert "downstream_source" not in kwargs
         assert kwargs["low_confidence_threshold"] == 0.5
 
-    @pytest.mark.parametrize("source_name", ["huggingface", "openai"])
+    @pytest.mark.parametrize("source_name", ["huggingface", "gold_openai", "gold_unb"])
     def test_label_source_selects_a_single_source(self, source_name: str) -> None:
         """``--label-source`` restringe a execução a uma única fonte."""
         kwargs = _build_kwargs(
@@ -69,7 +73,7 @@ class TestBuildLabelingStageKwargs:
         assert [source.name for source in kwargs["sources"]] == [source_name]
 
     def test_sources_use_models_and_prompt_from_config(self) -> None:
-        """Modelos e prompt vêm de ``configs/labeling.yaml``; só a fonte OpenAI usa o prompt."""
+        """Modelos e prompt vêm de ``configs/labeling.yaml``; só os gold sets usam o prompt."""
         sources = {
             source.name: source
             for source in _build_kwargs(_build_labeling_stage_kwargs, ["--stage", "labeling"])[
@@ -79,8 +83,15 @@ class TestBuildLabelingStageKwargs:
 
         assert sources["huggingface"].model_name.startswith("pysentimiento/bertweet-pt-sentiment@")
         assert sources["huggingface"].prompt_template == ""
-        assert sources["openai"].model_name == "UnB-Llama-3.3-70B-Instruct"
-        assert "{{TEXTO}}" in sources["openai"].prompt_template
+        assert sources["huggingface"].sample_size is None
+        assert sources["gold_openai"].model_name == "gpt-6-luna"
+        assert sources["gold_openai"].reasoning_effort == "low"
+        assert sources["gold_unb"].model_name == "UnB-Llama-3.3-70B-Instruct"
+        assert sources["gold_unb"].reasoning_effort is None
+        for gold_name in ("gold_openai", "gold_unb"):
+            assert "{{TEXTO}}" in sources[gold_name].prompt_template
+            assert sources[gold_name].sample_size == 1000
+        assert sources["gold_openai"].sample_seed == sources["gold_unb"].sample_seed
 
     def test_does_not_load_the_huggingface_model_while_building(self) -> None:
         """Montar a fonte não carrega o modelo: isso só ocorre ao abrir o classificador."""
@@ -99,7 +110,7 @@ class TestBuildComparativeEvaluationStageKwargs:
             _build_comparative_evaluation_stage_kwargs, ["--stage", "comparative_evaluation"]
         )
 
-        assert kwargs["output_subdir"] == "comparativo_hf_openai"
+        assert kwargs["output_subdir"] == "comparativo_hf"
         assert kwargs["high_confidence_threshold"] == 0.8
         assert kwargs["low_confidence_threshold"] == 0.5
         assert kwargs["n_bootstrap"] == 1000
@@ -235,7 +246,7 @@ class TestHypothesesStageKwargs:
         assert kwargs["mode"] == "disagreement"
         assert kwargs["skip"] is False
         assert kwargs["targets"] == ("disagreement", "uncertainty")
-        assert kwargs["output_subdir"] == "comparativo_hf_openai"
+        assert kwargs["output_subdir"] == "comparativo_hf"
         assert "patterns_kwargs" not in kwargs
         assert "diagnostics_kwargs" not in kwargs
 

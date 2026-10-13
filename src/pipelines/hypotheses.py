@@ -6,8 +6,8 @@ descreve padrões associados a um alvo derivado. Hipóteses sobre pseudo-rótulo
 descrevem o comportamento dos modelos, nunca a verdade; só o gold set mede
 acerto. Três modos, selecionados por ``mode``:
 
-* ``disagreement`` (padrão): alvos de discordância/incerteza entre as bases
-  rotuladas pelo Hugging Face e pela OpenAI
+* ``disagreement`` (padrão): alvos de discordância/incerteza entre o modelo do
+  Hugging Face e cada gold set (``gold_openai``/``gold_unb``)
   (:func:`diagnostics.model_disagreement.run_disagreement_hypotheses`);
 * ``patterns``: descoberta de padrões e candidatos a inconsistência de
   rotulagem nos rótulos de baixa confiança
@@ -26,10 +26,9 @@ from pathlib import Path
 from typing import Any
 
 from config.paths import ProjectPaths
-from evaluation.llm_comparison import build_comparison_frame
-from exceptions.data import DataValidationError
+from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.json import write_json
-from pipelines.comparative_evaluation import load_labeled_source
+from pipelines.comparative_evaluation import list_available_gold_names, load_comparison_frame
 from pipelines.diagnostics_analysis import run_diagnostics_stage
 from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
 
@@ -69,28 +68,39 @@ def _run_disagreement_mode(
     random_seed: int,
     track: bool,
 ) -> list[dict[str, Any]]:
-    """Gera hipóteses sobre a discordância/incerteza entre as duas bases rotuladas."""
+    """Gera hipóteses sobre a discordância/incerteza entre o Hugging Face e cada gold set."""
     from diagnostics.model_disagreement import run_disagreement_hypotheses
 
-    huggingface_base = load_labeled_source(paths.huggingface_labeled_file, "huggingface")
-    openai_base = load_labeled_source(paths.openai_labeled_file, "openai")
-    comparison_frame = build_comparison_frame(huggingface_base, openai_base)
-
-    output_dir = paths.reports_tables_dir / output_subdir
-    outcomes = run_disagreement_hypotheses(
-        comparison_frame,
-        paths,
-        output_dir=output_dir,
-        targets=targets,
-        top_tweets_per_hypothesis=top_tweets_per_hypothesis,
-        config_file=config_file,
-        random_seed=random_seed,
-        track=track,
-    )
-    summary = [_summarize_outcome(outcome) for outcome in outcomes]
-    write_json(summary, paths.reports_metrics_dir / f"hipoteses_{output_subdir}.json")
-    for item in summary:
-        logger.info("Hipóteses '%s': %s — %s.", item["target"], item["status"], item["detail"])
+    available = list_available_gold_names(paths)
+    if not available:
+        raise DataNotFoundError(
+            "nenhum gold set encontrado; gere-os com `make label-gold-openai` e/ou "
+            "`make label-gold-unb`"
+        )
+    summary: list[dict[str, Any]] = []
+    for gold_name in available:
+        gold_subdir = f"{output_subdir}_{gold_name}"
+        outcomes = run_disagreement_hypotheses(
+            load_comparison_frame(paths, gold_name),
+            paths,
+            output_dir=paths.reports_tables_dir / gold_subdir,
+            targets=targets,
+            top_tweets_per_hypothesis=top_tweets_per_hypothesis,
+            config_file=config_file,
+            random_seed=random_seed,
+            track=track,
+        )
+        gold_summary = [{"gold": gold_name, **_summarize_outcome(o)} for o in outcomes]
+        write_json(gold_summary, paths.reports_metrics_dir / f"hipoteses_{gold_subdir}.json")
+        for item in gold_summary:
+            logger.info(
+                "Hipóteses '%s' (%s): %s — %s.",
+                item["target"],
+                gold_name,
+                item["status"],
+                item["detail"],
+            )
+        summary.extend(gold_summary)
     return summary
 
 
@@ -99,7 +109,7 @@ def run_hypotheses_stage(
     *,
     mode: str = "disagreement",
     skip: bool = False,
-    output_subdir: str = "comparativo_hf_openai",
+    output_subdir: str = "comparativo_hf",
     targets: Sequence[str] = ("disagreement", "uncertainty"),
     top_tweets_per_hypothesis: int = 10,
     diagnostics_config_file: Path | None = None,
@@ -119,8 +129,8 @@ def run_hypotheses_stage(
     skip : bool, optional
         Se ``True``, não executa nada (útil em ``--stage all`` sem LLM/GPU), by default False.
     output_subdir : str, optional
-        Subpasta de ``reports/tables`` (modo ``disagreement``), igual à da etapa
-        ``comparative_evaluation``, by default "comparativo_hf_openai".
+        Prefixo das subpastas de ``reports/tables`` (modo ``disagreement``), igual ao da
+        etapa ``comparative_evaluation`` (uma subpasta por gold set), by default "comparativo_hf".
     targets : Sequence[str], optional
         ``disagreement`` e/ou ``uncertainty`` (modo ``disagreement``), by default os dois.
     top_tweets_per_hypothesis : int, optional
@@ -149,7 +159,7 @@ def run_hypotheses_stage(
     DataValidationError
         Se ``mode`` for desconhecido ou faltarem os argumentos do modo escolhido.
     DataNotFoundError
-        Se alguma base rotulada (modo ``disagreement``) ainda não foi gerada.
+        Se o Hugging Face ou nenhum gold set (modo ``disagreement``) foi gerado.
 
     Examples
     --------

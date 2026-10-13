@@ -69,9 +69,10 @@ evaluate:
   llm_max_test_samples: 500
 
 # Etapa `comparative_evaluation` (src/pipelines/comparative_evaluation.py): compara as
-# bases `tweets_data_huggingface` e `tweets_data_openai` pelo `id` do tweet.
+# a base `tweets_data_huggingface` com cada gold set (`gold_openai`, `gold_unb`) pelo `id`
+# do tweet, restrita à amostra do gold set.
 llm_comparison:
-  output_subdir: "comparativo_hf_openai" # subpasta em reports/tables, reports/figures e reports/metrics
+  output_subdir: "comparativo_hf" # prefixo; cada gold grava em <prefixo>_<gold> (reports/tables, figures, metrics)
   random_seed: 42
   n_bootstrap: 1000 # IC bootstrap de concordância e kappa
   confidence_level: 0.95
@@ -82,9 +83,9 @@ llm_comparison:
   examples_per_transition: 3 # exemplos por par de classes divergentes
 
 # Estágio `hypotheses` (src/pipelines/hypotheses.py, modo `disagreement`): HypotheSAEs sobre a
-# divergência/incerteza entre as duas bases (src/diagnostics/model_disagreement.py; usa
+# divergência/incerteza entre o Hugging Face e cada gold set (src/diagnostics/model_disagreement.py; usa
 # configs/diagnostics.yaml). Exige as dependências pesadas (`make install-hypothesaes`) e o LLM
-# configurado em diagnostics.yaml. Grava em reports/tables/<llm_comparison.output_subdir>/.
+# configurado em diagnostics.yaml. Grava em reports/tables/<llm_comparison.output_subdir>_<gold>/.
 hypotheses:
   targets: ["disagreement", "uncertainty"]
   top_tweets_per_hypothesis: 10 # tweets mais ativados por hipótese, exportados como evidência

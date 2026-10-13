@@ -1,7 +1,7 @@
 """Coleta de tweets via scraping paralelo e download de gold sets externos.
 
 A execução da coleta em si (chamadas de rede ao ``twscrape`` ou download
-HTTP dos gold sets TweetSentBR/RePro) é responsabilidade do chamador,
+HTTP de um dataset público) é responsabilidade do chamador,
 injetada como função — este módulo apenas orquestra a execução paralela
 (``src/parallel/scraping.py``) e a consolidação/persistência dos
 resultados. Isso mantém o módulo testável sem depender de rede ou de
@@ -88,14 +88,14 @@ def download_external_dataset(
     download_func: Callable[[], bytes],
     destination_path: Path,
 ) -> Path:
-    """Baixa um dataset externo (gold set) e o salva em disco.
+    """Baixa um dataset externo e o salva em disco.
 
     Parameters
     ----------
     download_func : Callable[[], bytes]
         Função que executa o download e retorna o conteúdo bruto do
         arquivo (ex.: um wrapper sobre uma requisição HTTP a um repositório
-        público do TweetSentBR/RePro).
+        público).
     destination_path : Path
         Caminho de destino (tipicamente em ``data/bronze/external``) para o
         arquivo baixado.

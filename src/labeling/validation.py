@@ -1,4 +1,4 @@
-"""Validação dos rótulos de consenso contra gold sets de referência (TweetSentBR/RePro).
+"""Validação dos rótulos de consenso contra gold sets de referência (gold sets).
 
 Implementa a seção ``validation`` de ``configs/labeling.yaml``: mede a
 concordância entre os rótulos produzidos pelo pipeline e os rótulos de
@@ -249,7 +249,7 @@ def evaluate_against_gold_set(
     label_column: str = "sentiment_label",
     minimum_kappa: float = 0.6,
 ) -> GoldSetValidationResult:
-    """Avalia os rótulos de consenso contra um gold set de referência (TweetSentBR/RePro).
+    """Avalia os rótulos de consenso contra um gold set de referência (gold sets).
 
     Limiar padrão reflete ``configs/labeling.yaml`` (``validation.minimum_agreement``).
 
@@ -259,7 +259,7 @@ def evaluate_against_gold_set(
         Rótulos produzidos pelo pipeline, contendo ``id_column`` e
         ``label_column``.
     gold : pl.DataFrame
-        Rótulos de referência (TweetSentBR/RePro), contendo ``id_column``
+        Rótulos de referência (gold sets), contendo ``id_column``
         e ``label_column``.
     id_column : str, optional
         Nome da coluna identificadora comum, by default "id".

@@ -4,7 +4,7 @@
   cascata (``src/labeling/automatic.py``), agregados em
   ``src/labeling/consensus.py``.
 * :class:`LabeledSourceSchema`: base de tweets rotulada por uma única fonte
-  (``tweets_data_huggingface`` / ``tweets_data_openai``), ver
+  (``tweets_data_huggingface`` / gold sets ``gold_openai``/``gold_unb``), ver
   ``src/pipelines/labeling.py``.
 """
 
@@ -34,7 +34,7 @@ class LabelingResultSchema(pa.DataFrameModel):
 
 
 class LabeledSourceSchema(pa.DataFrameModel):
-    """Contrato de uma base rotulada por uma única fonte (LLM do Hugging Face ou OpenAI).
+    """Contrato de uma base rotulada por uma única fonte (modelo do Hugging Face ou LLM via API).
 
     Colunas padronizadas do projeto: ``text`` é o texto original do tweet,
     ``text_normalized`` o texto após o pré-processamento (sem menções/URLs),

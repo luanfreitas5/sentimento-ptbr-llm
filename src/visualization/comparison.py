@@ -1,4 +1,4 @@
-"""Gráficos da comparação entre as bases do Hugging Face e da OpenAI.
+"""Gráficos da comparação entre o Hugging Face e um gold set (LLM via API OpenAI-compatível).
 
 Desenham as tabelas de :mod:`evaluation.llm_comparison` com a paleta do
 projeto (:mod:`visualization.theme`). Cada função devolve uma
@@ -17,7 +17,10 @@ from exceptions.data import EmptyDatasetError
 from visualization.theme import MODEL_COLOR_PALETTE, SENTIMENT_COLOR_PALETTE
 
 _HF, _OA = MODEL_NAMES
-_MODEL_DISPLAY_NAMES: dict[str, str] = {"huggingface": "LLM Hugging Face", "openai": "API OpenAI"}
+_MODEL_DISPLAY_NAMES: dict[str, str] = {
+    "huggingface": "LLM Hugging Face",
+    "openai": "Gold set (API)",
+}
 
 
 def plot_class_distribution_by_model(distribution: pl.DataFrame) -> Figure:
@@ -87,7 +90,7 @@ def plot_confidence_comparison(frame: pl.DataFrame) -> Figure:
     -------
     matplotlib.figure.Figure
         Figura com dois painéis: histogramas sobrepostos e mapa de densidade
-        (Hugging Face no eixo x, OpenAI no eixo y; a diagonal é a concordância de confiança).
+        (Hugging Face no eixo x, gold set no eixo y; a diagonal é a concordância de confiança).
 
     Raises
     ------
@@ -130,9 +133,9 @@ def plot_confidence_comparison(frame: pl.DataFrame) -> Figure:
         mincnt=1,
     )
     density_axis.plot([0, 1], [0, 1], linestyle="--", color="#555555", linewidth=1)
-    density_axis.set_title("Confiança por tweet: Hugging Face vs. OpenAI")
+    density_axis.set_title("Confiança por tweet: Hugging Face vs. gold set")
     density_axis.set_xlabel("Confiança — LLM Hugging Face")
-    density_axis.set_ylabel("Confiança — API OpenAI")
+    density_axis.set_ylabel("Confiança — gold set (API)")
     figure.colorbar(hexbin, ax=density_axis, label="Tweets")
     figure.tight_layout()
     return figure
@@ -193,7 +196,7 @@ def plot_agreement_by_text_length(length_analysis: pl.DataFrame) -> Figure:
 
 
 def plot_divergence_transitions(transitions: pl.DataFrame, *, top_n: int = 6) -> Figure:
-    """Barras horizontais com as principais migrações de classe (Hugging Face → OpenAI).
+    """Barras horizontais com as principais migrações de classe (Hugging Face → gold set).
 
     Parameters
     ----------
@@ -230,8 +233,8 @@ def plot_divergence_transitions(transitions: pl.DataFrame, *, top_n: int = 6) ->
     ]
     figure, axis = plt.subplots(figsize=(8, 4.5))
     axis.barh(names[::-1], top["n_tweets"].to_list()[::-1], color=MODEL_COLOR_PALETTE[_HF])
-    axis.set_title("Principais diferenças de classificação (Hugging Face → OpenAI)")
+    axis.set_title("Principais diferenças de classificação (Hugging Face → gold set)")
     axis.set_xlabel("Tweets divergentes")
-    axis.set_ylabel("Classe atribuída (Hugging Face → OpenAI)")
+    axis.set_ylabel("Classe atribuída (Hugging Face → gold set)")
     figure.tight_layout()
     return figure

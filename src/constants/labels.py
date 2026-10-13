@@ -21,6 +21,12 @@ SENTIMENT_CLASSES: tuple[str, ...] = (NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LA
 UNDEFINED_LABEL = "indefinido"
 UNDEFINED_SCORE = 0.0
 
+# Fontes de rotulagem: o modelo do Hugging Face (todos os tweets) e os gold sets rotulados por
+# LLMs via API (amostra do corpus; referência na avaliação comparativa).
+HUGGINGFACE_SOURCE = "huggingface"
+GOLD_SOURCE_NAMES: tuple[str, ...] = ("gold_openai", "gold_unb")
+LABEL_SOURCE_NAMES: tuple[str, ...] = (HUGGINGFACE_SOURCE, *GOLD_SOURCE_NAMES)
+
 LABEL_TO_ID: dict[str, int] = {label: index for index, label in enumerate(SENTIMENT_CLASSES)}
 ID_TO_LABEL: dict[int, str] = dict(enumerate(SENTIMENT_CLASSES))
 

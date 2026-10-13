@@ -6,12 +6,12 @@ random_seed: 42
 
 data:
   # Colunas de origem em data/gold/corpus_rotulado.parquet -> contrato de diagnóstico.
-  # O LLM do Hugging Face e a API OpenAI (etapa labeling) fazem o papel de "modelos".
+  # O modelo do Hugging Face (etapa labeling) faz o papel de "modelo". Os alvos disagreement/
+  # uncertainty (dois modelos) rodam pelo modo `disagreement` da etapa hypotheses (HF vs gold).
   text_column: text_normalized        # texto sanitizado (@menções/URLs removidos); nunca o bruto
   agreement_column: confidence_score
   model_columns:
     sentiment_label_huggingface: lab_huggingface
-    sentiment_label_openai: lab_openai
   output_dir: diagnostics             # subpasta de reports/interpretability/
 
 splits:
@@ -90,7 +90,7 @@ targets:
   disagreement: {}
   uncertainty: {}
   pseudo_label: {model_column: lab_huggingface, label: negativo}
-  gold_error: {model_column: lab_openai}
+  gold_error: {model_column: lab_huggingface}
 
 validation:
   corrected_pval_threshold: 0.1       # alfa antes de Bonferroni

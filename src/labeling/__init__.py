@@ -2,9 +2,10 @@
 
 Implementa a Fase 7 do plano de elaboração (``PLANO-ELABORACAO.md``) e a
 Seção 4.3 do documento mestre: classificação de todo o corpus por duas fontes
-independentes (classificador do Hugging Face e LLM via API OpenAI), com checkpoint e retomada,
+(classificador do Hugging Face em todo o corpus e gold sets de LLMs via API OpenAI-compatível
+em uma amostra), com checkpoint e retomada,
 sinalização de baixa confiança, amostragem e incorporação de validação
-humana e validação contra gold sets de referência (TweetSentBR/RePro).
+humana e validação contra gold sets de referência.
 
 Modules
 -------
@@ -14,7 +15,8 @@ huggingface
 openai_labeler
     Rotulagem via API OpenAI-compatível (Chat Completions), com limitador de taxa
     contra HTTP 429, timeout e retentativa; resposta inutilizável vira ``indefinido``
-    com score 0.0 (base ``tweets_data_openai``, ver ``configs/labeling.yaml -> openai``).
+    com score 0.0 (gold sets ``gold_openai``/``gold_unb``, ver
+    ``configs/labeling.yaml -> gold_sets``).
 rate_limiter
     Limitador de taxa compartilhado entre threads (intervalo mínimo, pausa global
     no 429 e ritmo adaptativo).

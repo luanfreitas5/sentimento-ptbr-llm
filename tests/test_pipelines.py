@@ -50,12 +50,11 @@ def pipeline_paths(tmp_path: Path) -> ProjectPaths:
         data_silver_dir=tmp_path / "data" / "silver",
         data_gold_dir=tmp_path / "data" / "gold",
         raw_tweets_file=tmp_path / "data" / "bronze" / "tweets.parquet",
-        tweetsentbr_file=tmp_path / "data" / "bronze" / "external" / "tweetsentbr.parquet",
-        repro_file=tmp_path / "data" / "bronze" / "external" / "repro.parquet",
         normalized_corpus_file=tmp_path / "data" / "silver" / "normalizado.parquet",
         labeled_corpus_file=tmp_path / "data" / "gold" / "rotulado.parquet",
         huggingface_labeled_file=tmp_path / "data" / "gold" / "tweets_hf.parquet",
-        openai_labeled_file=tmp_path / "data" / "gold" / "tweets_openai.parquet",
+        gold_openai_file=tmp_path / "data" / "gold" / "gold_openai.parquet",
+        gold_unb_file=tmp_path / "data" / "gold" / "gold_unb.parquet",
         labeling_checkpoints_dir=tmp_path / "data" / "silver" / "checkpoints",
         training_corpus_file=tmp_path / "data" / "gold" / "treino.parquet",
         validation_corpus_file=tmp_path / "data" / "gold" / "validacao.parquet",
@@ -94,21 +93,17 @@ def _fake_scrape_func(query: str) -> list[dict[str, str]]:
 class TestRunIngestionStage:
     """Testes de :func:`pipelines.ingestion.run_ingestion_stage`."""
 
-    def test_collects_tweets_downloads_gold_sets_and_builds_catalog(
-        self, pipeline_paths: ProjectPaths
-    ) -> None:
-        """Deve gravar o corpus bruto, baixar o gold set informado e montar o catálogo."""
+    def test_collects_tweets_and_builds_catalog(self, pipeline_paths: ProjectPaths) -> None:
+        """Deve gravar o corpus bruto e montar o catálogo."""
         raw_tweets_path = run_ingestion_stage(
             pipeline_paths,
             scrape_func=_fake_scrape_func,
             queries=["python", "django"],
-            external_download_funcs={"tweetsentbr": lambda: b"conteudo-gold-set"},
             max_workers=1,
         )
 
         assert raw_tweets_path == pipeline_paths.raw_tweets_file
         assert raw_tweets_path.is_file()
-        assert pipeline_paths.tweetsentbr_file.read_bytes() == b"conteudo-gold-set"
         assert (pipeline_paths.data_bronze_dir / "catalog.json").is_file()
 
         collected = read_dataset_file(raw_tweets_path)
@@ -226,15 +221,15 @@ class TestRunLabelingStage:
 
         written = run_labeling_stage(
             pipeline_paths,
-            [_build_source("huggingface"), _build_source("openai")],
+            [_build_source("huggingface"), _build_source("gold_unb")],
             select_for_human_validation=False,
             show_progress=False,
         )
 
         hf_base = read_dataset_file(written["huggingface"])
-        oa_base = read_dataset_file(written["openai"])
+        oa_base = read_dataset_file(written["gold_unb"])
         assert written["huggingface"] == pipeline_paths.huggingface_labeled_file
-        assert written["openai"] == pipeline_paths.openai_labeled_file
+        assert written["gold_unb"] == pipeline_paths.gold_unb_file
         for base in (hf_base, oa_base):
             assert base.columns == [
                 "id",
@@ -275,53 +270,84 @@ class TestRunLabelingStage:
 
         run_labeling_stage(
             pipeline_paths,
-            [_build_source("openai")],
+            [_build_source("gold_openai")],
             select_for_human_validation=False,
             show_progress=False,
         )
 
-        metadata = read_json(pipeline_paths.openai_labeled_file.with_suffix(".meta.json"))
-        assert metadata["model"] == "modelo-openai"
+        metadata = read_json(pipeline_paths.gold_openai_file.with_suffix(".meta.json"))
+        assert metadata["model"] == "modelo-gold_openai"
         assert metadata["prompt_name"] == "prompt_de_teste"
         assert metadata["n_tweets"] == 2
         assert len(metadata["normalized_corpus_sha256"]) == 64
 
-    def test_builds_downstream_corpus_from_the_configured_source(
+    def test_gold_source_labels_only_a_deterministic_sample_of_the_corpus(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """``sentiment_label`` vem da fonte de ``downstream_source``; as duas ficam preservadas."""
-        _write_normalized_corpus(pipeline_paths)
+        """Um gold set com ``sample_size`` rotula só a amostra, a mesma nos dois gold sets."""
+        ids = [str(index) for index in range(20)]
+        write_dataset(
+            pl.DataFrame({"id": ids, "text": ids, "text_normalized": ids}),
+            pipeline_paths.normalized_corpus_file,
+        )
 
-        def _always_neutral(texts: Sequence[str]) -> list[tuple[str, float] | None]:
-            return [("neutro", 0.6) for _ in texts]
+        def _gold(name: str) -> LabelingSource:
+            return LabelingSource(
+                name=name,
+                model_name=f"modelo-{name}",
+                prompt_name="prompt_de_teste",
+                prompt_template='Tweet: "{{TEXTO}}"',
+                temperature=0.0,
+                batch_size=8,
+                open_classifier=lambda: nullcontext(_keyword_classifier),
+                sample_size=5,
+                sample_seed=7,
+            )
+
+        run_labeling_stage(
+            pipeline_paths,
+            [_gold("gold_openai"), _gold("gold_unb")],
+            select_for_human_validation=False,
+            show_progress=False,
+        )
+
+        openai_ids = read_dataset_file(pipeline_paths.gold_openai_file)["id"].to_list()
+        unb_ids = read_dataset_file(pipeline_paths.gold_unb_file)["id"].to_list()
+        assert len(openai_ids) == 5
+        assert openai_ids == unb_ids
+        assert set(openai_ids) <= set(ids)
+
+    def test_builds_downstream_corpus_from_the_huggingface_base(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """``sentiment_label`` vem do Hugging Face; os gold sets não entram no corpus."""
+        _write_normalized_corpus(pipeline_paths)
 
         written = run_labeling_stage(
             pipeline_paths,
-            [_build_source("huggingface"), _build_source("openai", classifier=_always_neutral)],
-            downstream_source="openai",
+            [_build_source("huggingface"), _build_source("gold_unb")],
             select_for_human_validation=False,
             show_progress=False,
         )
 
         labeled_corpus = read_dataset_file(written["labeled_corpus"]).sort("id")
-        assert labeled_corpus["sentiment_label"].to_list() == ["neutro", "neutro"]
+        assert labeled_corpus["sentiment_label"].to_list() == ["positivo", "negativo"]
         assert labeled_corpus["sentiment_label_huggingface"].to_list() == ["positivo", "negativo"]
-        assert labeled_corpus["sentiment_label_openai"].to_list() == ["neutro", "neutro"]
+        assert "sentiment_label_gold_unb" not in labeled_corpus.columns
 
-    def test_skips_downstream_corpus_while_its_source_is_missing(
+    def test_skips_downstream_corpus_while_the_huggingface_base_is_missing(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Sem a base da fonte ``downstream_source``, o corpus das etapas seguintes não é gerado."""
+        """Sem a base do Hugging Face, o corpus das etapas seguintes não é gerado."""
         _write_normalized_corpus(pipeline_paths)
 
         written = run_labeling_stage(
             pipeline_paths,
-            [_build_source("openai")],
-            downstream_source="huggingface",
+            [_build_source("gold_openai")],
             show_progress=False,
         )
 
-        assert set(written) == {"openai"}
+        assert set(written) == {"gold_openai"}
         assert not pipeline_paths.labeled_corpus_file.exists()
 
     def test_resumes_from_checkpoint_without_relabeling_finished_tweets(
@@ -376,17 +402,12 @@ class TestRunLabelingStage:
             )
         assert not pipeline_paths.huggingface_labeled_file.exists()
 
-    def test_raises_for_unknown_downstream_source(self, pipeline_paths: ProjectPaths) -> None:
-        """Uma fonte de ``downstream_source`` desconhecida deve falhar com erro de configuração."""
+    def test_raises_for_unknown_source(self, pipeline_paths: ProjectPaths) -> None:
+        """Uma fonte de rotulagem desconhecida deve falhar com erro de configuração."""
         _write_normalized_corpus(pipeline_paths)
 
         with pytest.raises(InvalidConfigurationError):
-            run_labeling_stage(
-                pipeline_paths,
-                [_build_source()],
-                downstream_source="gemini",
-                show_progress=False,
-            )
+            run_labeling_stage(pipeline_paths, [_build_source("gemini")], show_progress=False)
 
     def test_applies_human_validation_labels_and_gold_set_without_raising(
         self, pipeline_paths: ProjectPaths
@@ -570,32 +591,41 @@ class TestRunTrainingDeepLearningStage:
 
 
 _LABEL_CYCLE_HF = ["positivo", "negativo", "neutro", "positivo", "negativo", "neutro"]
-_LABEL_CYCLE_OPENAI = ["positivo", "negativo", "positivo", "positivo", "neutro", "neutro"]
+_LABEL_CYCLE_GOLD = ["positivo", "negativo", "positivo", "positivo", "neutro", "neutro"]
+_N_EXTRA_HF_TWEETS = 10
+
+
+def _write_labeled_base(
+    path: Path, ids: list[str], cycle: list[str], confidence_shift: float
+) -> None:
+    """Grava uma base rotulada sintética com ciclo fixo de rótulos."""
+    texts = [" ".join(["palavra"] * (1 + int(tweet_id) % 9)) for tweet_id in ids]
+    write_dataset(
+        pl.DataFrame(
+            {
+                "id": ids,
+                "text": texts,
+                "text_normalized": texts,
+                "sentiment_label": [cycle[int(tweet_id) % 6] for tweet_id in ids],
+                "confidence_score": [
+                    round(
+                        min(1.0, max(0.0, 0.55 + 0.07 * (int(tweet_id) % 6) + confidence_shift)), 4
+                    )
+                    for tweet_id in ids
+                ],
+            }
+        ),
+        path,
+    )
 
 
 def _write_comparison_bases(paths: ProjectPaths, n_tweets: int = 60) -> None:
-    """Grava as duas bases rotuladas sintéticas (mesmos tweets; 4 de cada 6 concordam)."""
-    ids = [str(index) for index in range(n_tweets)]
-    texts = [" ".join(["palavra"] * (1 + index % 9)) for index in range(n_tweets)]
-    for path, cycle, confidence_shift in (
-        (paths.huggingface_labeled_file, _LABEL_CYCLE_HF, 0.0),
-        (paths.openai_labeled_file, _LABEL_CYCLE_OPENAI, -0.1),
-    ):
-        write_dataset(
-            pl.DataFrame(
-                {
-                    "id": ids,
-                    "text": texts,
-                    "text_normalized": texts,
-                    "sentiment_label": [cycle[index % 6] for index in range(n_tweets)],
-                    "confidence_score": [
-                        round(min(1.0, max(0.0, 0.55 + 0.07 * (index % 6) + confidence_shift)), 4)
-                        for index in range(n_tweets)
-                    ],
-                }
-            ),
-            path,
-        )
+    """Grava a base do HF (corpus inteiro) e os dois gold sets (amostra; 4 de 6 concordam)."""
+    gold_ids = [str(index) for index in range(n_tweets)]
+    hf_ids = [str(index) for index in range(n_tweets + _N_EXTRA_HF_TWEETS)]
+    _write_labeled_base(paths.huggingface_labeled_file, hf_ids, _LABEL_CYCLE_HF, 0.0)
+    _write_labeled_base(paths.gold_openai_file, gold_ids, _LABEL_CYCLE_GOLD, -0.1)
+    _write_labeled_base(paths.gold_unb_file, gold_ids, _LABEL_CYCLE_GOLD, -0.1)
 
 
 class TestRunComparativeEvaluationStage:
@@ -604,10 +634,10 @@ class TestRunComparativeEvaluationStage:
     def test_runs_full_analysis_and_writes_tables_figures_and_metrics(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Uma única chamada carrega, valida, compara e grava tabelas, gráficos e métricas."""
+        """Uma única chamada compara o HF com cada gold set e grava tabelas, gráficos e métricas."""
         _write_comparison_bases(pipeline_paths)
 
-        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30, n_length_bins=3)
+        results = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30, n_length_bins=3)
 
         expected_tables = {
             "distribuicao_classes",
@@ -621,26 +651,33 @@ class TestRunComparativeEvaluationStage:
             "transicoes_divergencia",
             "exemplos_transicoes",
         }
-        assert set(result.tables) == expected_tables
-        assert all(path.is_file() for path in result.tables.values())
-        assert result.metrics_path.is_file()
-        assert (
-            pipeline_paths.reports_tables_dir / "comparativo_hf_openai" / "resumo_comparativo.md"
-        ).is_file()
-        figure_names = {path.name for path in result.figures}
-        assert {"distribuicao_classes.png", "matriz_concordancia.svg"} <= figure_names
-        assert all(path.is_file() for path in result.figures)
+        assert set(results) == {"gold_openai", "gold_unb"}
+        for gold_name, result in results.items():
+            assert set(result.tables) == expected_tables
+            assert all(path.is_file() for path in result.tables.values())
+            assert result.metrics_path == (
+                pipeline_paths.reports_metrics_dir / f"comparativo_hf_{gold_name}.json"
+            )
+            assert result.metrics_path.is_file()
+            assert (
+                pipeline_paths.reports_tables_dir
+                / f"comparativo_hf_{gold_name}"
+                / "resumo_comparativo.md"
+            ).is_file()
+            figure_names = {path.name for path in result.figures}
+            assert {"distribuicao_classes.png", "matriz_concordancia.svg"} <= figure_names
+            assert all(path.is_file() for path in result.figures)
 
     def test_agreement_metrics_match_the_synthetic_bases(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Em 4 de cada 6 tweets os modelos concordam: concordância = 2/3 e divergência = 1/3."""
+        """Em 4 de cada 6 tweets os modelos concordam; o HF é restrito à amostra do gold set."""
         _write_comparison_bases(pipeline_paths)
 
-        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
+        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)["gold_unb"]
 
         agreement = result.summary["agreement"]
-        assert agreement["n_tweets"] == 60
+        assert agreement["n_tweets"] == 60  # os 10 tweets extras do HF ficam de fora
         assert agreement["agreement_rate"] == pytest.approx(2 / 3)
         assert agreement["divergence_rate"] == pytest.approx(1 / 3)
         lower, upper = agreement["agreement_rate_ci"]
@@ -648,35 +685,53 @@ class TestRunComparativeEvaluationStage:
         assert "hypotheses" not in result.summary
 
     def test_pairs_tweets_by_id_regardless_of_row_order(self, pipeline_paths: ProjectPaths) -> None:
-        """A comparação usa o ``id`` como chave: embaralhar a base OpenAI não muda o resultado."""
+        """A comparação usa o ``id`` como chave: embaralhar o gold set não muda o resultado."""
         _write_comparison_bases(pipeline_paths)
-        baseline = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30).summary[
-            "agreement"
-        ]["n_agree"]
-        shuffled = read_dataset_file(pipeline_paths.openai_labeled_file).reverse()
-        write_dataset(shuffled, pipeline_paths.openai_labeled_file)
+        baseline = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)["gold_unb"]
+        shuffled = read_dataset_file(pipeline_paths.gold_unb_file).reverse()
+        write_dataset(shuffled, pipeline_paths.gold_unb_file)
 
-        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
+        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)["gold_unb"]
 
-        assert result.summary["agreement"]["n_agree"] == baseline
+        assert result.summary["agreement"]["n_agree"] == baseline.summary["agreement"]["n_agree"]
 
-    def test_raises_with_guidance_when_a_base_is_missing(
+    def test_compares_only_the_gold_sets_that_exist(self, pipeline_paths: ProjectPaths) -> None:
+        """Um gold set ainda não gerado é dispensado com aviso; o outro é comparado."""
+        _write_comparison_bases(pipeline_paths)
+        pipeline_paths.gold_openai_file.unlink()
+
+        results = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
+
+        assert set(results) == {"gold_unb"}
+
+    def test_raises_with_guidance_when_no_gold_set_exists(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Sem uma das bases, falha com ``DataNotFoundError`` indicando o comando de rotulagem."""
+        """Sem nenhum gold set, falha com ``DataNotFoundError`` indicando o comando de rotulagem."""
         _write_comparison_bases(pipeline_paths)
-        pipeline_paths.openai_labeled_file.unlink()
+        pipeline_paths.gold_openai_file.unlink()
+        pipeline_paths.gold_unb_file.unlink()
 
-        with pytest.raises(DataNotFoundError, match="make label-openai"):
+        with pytest.raises(DataNotFoundError, match="make label-gold"):
             run_comparative_evaluation_stage(pipeline_paths)
 
-    def test_raises_when_bases_do_not_contain_the_same_tweets(
+    def test_raises_with_guidance_when_the_huggingface_base_is_missing(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Bases com conjuntos de ``id`` diferentes não são comparáveis: erro explícito."""
+        """Sem a base do Hugging Face, falha indicando ``make label-hf``."""
         _write_comparison_bases(pipeline_paths)
-        truncated = read_dataset_file(pipeline_paths.openai_labeled_file).head(50)
-        write_dataset(truncated, pipeline_paths.openai_labeled_file)
+        pipeline_paths.huggingface_labeled_file.unlink()
+
+        with pytest.raises(DataNotFoundError, match="make label-hf"):
+            run_comparative_evaluation_stage(pipeline_paths)
+
+    def test_raises_when_the_gold_sample_is_not_covered_by_the_huggingface_base(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Tweets do gold set ausentes no HF tornam as bases incomparáveis: erro explícito."""
+        _write_comparison_bases(pipeline_paths)
+        truncated = read_dataset_file(pipeline_paths.huggingface_labeled_file).head(50)
+        write_dataset(truncated, pipeline_paths.huggingface_labeled_file)
 
         with pytest.raises(DataValidationError, match="mesmos tweets"):
             run_comparative_evaluation_stage(pipeline_paths)
@@ -688,7 +743,7 @@ class TestRunHypothesesStage:
     def test_disagreement_mode_runs_hypothesaes_on_the_joined_bases(
         self, pipeline_paths: ProjectPaths, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """As bases são unidas por ``id``, o HypotheSAEs recebe o quadro e o resumo é gravado."""
+        """HF e gold set são unidos por ``id``; HypotheSAEs recebe o quadro e o resumo é gravado."""
         from diagnostics import model_disagreement
         from pipelines.hypotheses import run_hypotheses_stage
 
@@ -696,7 +751,7 @@ class TestRunHypothesesStage:
         captured: dict[str, Any] = {}
 
         def _fake_run_hypotheses(frame: pl.DataFrame, paths: ProjectPaths, **kwargs: Any) -> list:
-            captured["n_tweets"] = frame.height
+            captured.setdefault("n_tweets", []).append(frame.height)
             captured["targets"] = kwargs["targets"]
             return [
                 model_disagreement.HypothesisTargetOutcome(
@@ -708,10 +763,11 @@ class TestRunHypothesesStage:
 
         summary = run_hypotheses_stage(pipeline_paths, targets=("disagreement",))
 
-        assert captured == {"n_tweets": 60, "targets": ("disagreement",)}
+        assert captured == {"n_tweets": [60, 60], "targets": ("disagreement",)}
+        assert [item["gold"] for item in summary] == ["gold_openai", "gold_unb"]
         assert summary[0]["status"] == "gate_reprovado"
         written = read_json(
-            pipeline_paths.reports_metrics_dir / "hipoteses_comparativo_hf_openai.json"
+            pipeline_paths.reports_metrics_dir / "hipoteses_comparativo_hf_gold_unb.json"
         )
         assert written[0]["target"] == "disagreement"
 

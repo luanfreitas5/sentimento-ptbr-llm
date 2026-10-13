@@ -39,7 +39,7 @@ _CARD_INTENDED_USE: dict[str, str] = {
 _LIMITATIONS = (
     "- Os rótulos de treino e teste vêm de rotuladores automáticos (LLMs); as métricas medem "
     "a concordância com esse pseudo-gold, não o acerto sobre a verdade humana. Só um gold set "
-    "(TweetSentBR/RePro) ou amostra rotulada por humanos mede acerto.",
+    "(rotulado por LLM) ou amostra rotulada por humanos mede acerto.",
     "- Intervalos de confiança por bootstrap sobre o conjunto de teste; diferenças entre modelos "
     "só devem ser afirmadas quando o McNemar (com correção de Holm) for significativo.",
     "- Nenhum atributo sensível é definido neste domínio; a auditoria de fairness não se aplica.",

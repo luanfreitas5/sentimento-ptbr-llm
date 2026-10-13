@@ -16,7 +16,7 @@ Nada aqui altera o pipeline de rotulagem; `make all` continua igual.
 
 !!! warning "Limites de interpretação"
     Hipóteses sobre pseudo-rótulo descrevem o comportamento do modelo, nunca a verdade. Somente o
-    gold set (TweetSentBR/RePro) ou uma amostra rotulada por humanos mede acerto. Uma hipótese
+    gold set ou uma amostra rotulada por humanos mede acerto. Uma hipótese
     sobre discordância diz *onde* os modelos divergem, não *qual* rótulo está certo: as regras do
     prompt v2 exigem revisão humana.
 
@@ -27,12 +27,12 @@ mais colunas `lab_<modelo>` e, opcionalmente, `gold_label`. `diagnostics.targets
 mapeia o corpus rotulado (`sentiment_label_huggingface` → `lab_huggingface`,
 `sentiment_label_openai` → `lab_openai`, `confidence_score` → `agreement_score`). Só as colunas do
 contrato passam: `user_id` e o texto bruto são descartados (LGPD). A etapa `comparative_evaluation`
-monta o mesmo contrato direto das duas bases (`agreement_score` = menor confiança) — ver
+monta o mesmo contrato direto do Hugging Face e de cada gold set (`agreement_score` = menor confiança) — ver
 [o guia do pipeline](pipeline.md).
 
 !!! note "Alvo `disagreement`"
-    O alvo só usa tweets rotulados por **todos** os modelos; como as duas bases cobrem todos os
-    tweets, não há viés de seleção.
+    O alvo só usa tweets rotulados por **todos** os modelos, ou seja, a amostra do gold set
+    (aleatória e igual nos dois gold sets), então não há viés de seleção.
 
 ## Fluxo
 
@@ -72,7 +72,7 @@ make install-hypothesaes                    # torch + sentence-transformers + op
 make diag-dry-run TARGET=disagreement       # estima chamadas/custo, sem rede
 make diag-hypotheses TARGET=disagreement    # gate + hipóteses (+ MLflow)
 make diag-validate TARGET=disagreement      # Bonferroni + reports/tables/para_rotular.csv
-make diag-compare GOLD=tweetsentbr          # v1 vs v2 no gold
+make diag-compare GOLD=gold_unb          # v1 vs v2 no gold
 ```
 
 Equivalente sem `make`: `PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --dry-run`.
@@ -83,7 +83,7 @@ Também há o estágio `diagnostics` no orquestrador (`src/main.py`), que dispen
 ```bash
 uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-target disagreement --dry-run
 uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step validation --diagnostics-target disagreement
-uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step comparison --diagnostics-gold tweetsentbr
+uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step comparison --diagnostics-gold gold_unb
 make diagnostics STEP=validation TARGET=disagreement DRY_RUN=--dry-run
 ```
 
@@ -133,8 +133,8 @@ antes de confiar na estimativa em dólares.
 - **Modelo anotador**: `llama3.2:1b` não segue o formato Yes/No (smoke test: 0 de 6 respostas
   parseáveis; ele repete o prompt). O fluxo aborta se mais de 20 % das respostas não forem
   parseáveis. Use um modelo maior (ex.: `gemma2:9b`) ou a OpenAI.
-- **Gold sets**: `data/bronze/external/` deve conter `tweetsentbr.parquet`/`repro.parquet`
-  (`id`, `text`, `sentiment_label`). Confirme fonte e licença; não há download automático.
+- **Gold sets**: `data/gold/` deve conter `gold_gpt-6-luna.parquet`/`gold_UnB-Llama-3.3-70B-Instruct.parquet`,
+  gerados por `make label-gold-openai` / `make label-gold-unb` (rótulos de LLM, não de humanos).
 - **Nenhum tweet de `G_eval` entra na descoberta**: o gold é dividido em `G_disc` (descoberta do
   alvo `gold_error` e rerun pós-v2) e `G_eval` (reporte v1 vs v2).
 - **`prompts/v2.md`**: o carregador de prompts do pipeline de rotulagem só lê `.txt`; a comparação

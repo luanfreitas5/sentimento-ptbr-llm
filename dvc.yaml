@@ -45,7 +45,8 @@ stages:
       - configs/labeling.yaml:
     outs:
       - data/gold/tweets_data_huggingface.parquet
-      - data/gold/tweets_data_openai.parquet
+      - data/gold/gold_gpt-6-luna.parquet
+      - data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet
       - data/gold/corpus_rotulado.parquet
 
   comparative_evaluation:
@@ -55,19 +56,26 @@ stages:
       - src/evaluation/llm_comparison.py
       - src/visualization/comparison.py
       - data/gold/tweets_data_huggingface.parquet
-      - data/gold/tweets_data_openai.parquet
+      - data/gold/gold_gpt-6-luna.parquet
+      - data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet
     params:
       - configs/evaluation.yaml:
           - llm_comparison
     outs:
-      - reports/metrics/comparativo_hf_openai.json:
+      - reports/metrics/comparativo_hf_gold_openai.json:
           cache: false
-      - reports/tables/comparativo_hf_openai:
+      - reports/metrics/comparativo_hf_gold_unb.json:
           cache: false
-      - reports/figures/comparativo_hf_openai:
+      - reports/tables/comparativo_hf_gold_openai:
+          cache: false
+      - reports/tables/comparativo_hf_gold_unb:
+          cache: false
+      - reports/figures/comparativo_hf_gold_openai:
+          cache: false
+      - reports/figures/comparativo_hf_gold_unb:
           cache: false
 
-  # Modo padrão (`disagreement`): HypotheSAEs sobre a discordância/incerteza entre as bases.
+  # Modo padrão (`disagreement`): HypotheSAEs sobre a discordância/incerteza entre o Hugging Face e cada gold set.
   # Os modos `patterns` e `diagnostics` são opt-in (`--hypotheses-mode`) e ficam fora do DAG.
   hypotheses:
     cmd: uv run python src/main.py --stage hypotheses
@@ -75,13 +83,16 @@ stages:
       - src/pipelines/hypotheses.py
       - src/diagnostics
       - data/gold/tweets_data_huggingface.parquet
-      - data/gold/tweets_data_openai.parquet
+      - data/gold/gold_gpt-6-luna.parquet
+      - data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet
     params:
       - configs/evaluation.yaml:
           - hypotheses
       - configs/diagnostics.yaml:
     outs:
-      - reports/metrics/hipoteses_comparativo_hf_openai.json:
+      - reports/metrics/hipoteses_comparativo_hf_gold_openai.json:
+          cache: false
+      - reports/metrics/hipoteses_comparativo_hf_gold_unb.json:
           cache: false
 
   features:

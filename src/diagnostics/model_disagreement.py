@@ -1,11 +1,11 @@
 """HypotheSAEs sobre a divergência e a incerteza entre os dois rotuladores.
 
-Aplica a camada de diagnóstico (:mod:`diagnostics`) às bases
-``tweets_data_huggingface`` e ``tweets_data_openai`` já unidas por ``id``
+Aplica a camada de diagnóstico (:mod:`diagnostics`) à base
+``tweets_data_huggingface`` e a um gold set (``gold_openai``/``gold_unb``) já unidos por ``id``
 (:func:`evaluation.llm_comparison.build_comparison_frame`), para gerar
 hipóteses em linguagem natural sobre **o que dificulta a rotulagem**:
 
-* alvo ``disagreement``: o LLM do Hugging Face e a API OpenAI atribuem classes
+* alvo ``disagreement``: o modelo do Hugging Face e o gold set (LLM via API) atribuem classes
   diferentes ao tweet (``lab_huggingface != lab_openai``);
 * alvo ``uncertainty``: ``1 - agreement_score``, com ``agreement_score`` igual à
   **menor** das duas confianças (o tweet é incerto se ao menos um modelo hesita).

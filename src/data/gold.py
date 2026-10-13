@@ -1,9 +1,9 @@
-"""Loaders de gold sets (TweetSentBR, RePro) e divisão descoberta/avaliação.
+"""Loaders dos gold sets (``gold_openai``/``gold_unb``) e divisão descoberta/avaliação.
 
-Os arquivos NÃO são baixados aqui: fonte e licença de cada gold set devem ser
-confirmadas por quem executa, e o arquivo colocado em ``data/bronze/external/``
-(``paths.tweetsentbr_file``/``paths.repro_file``). O contrato esperado é uma
-tabela com identificador, texto e rótulo de sentimento.
+Os gold sets são gerados pela etapa ``labeling`` (amostra do corpus rotulada por LLMs via
+API; ``paths.gold_openai_file``/``paths.gold_unb_file``). O contrato esperado é uma
+tabela com identificador, texto e rótulo de sentimento; tweets de rótulo ``indefinido``
+(resposta inutilizável do LLM) são descartados.
 
 O texto é sanitizado (URLs e @menções substituídas por tokens) antes de
 qualquer uso com embeddings ou LLM, conforme a política de LGPD do projeto.
@@ -19,7 +19,13 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from constants.labels import NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL, SENTIMENT_CLASSES
+from constants.labels import (
+    NEGATIVE_LABEL,
+    NEUTRAL_LABEL,
+    POSITIVE_LABEL,
+    SENTIMENT_CLASSES,
+    UNDEFINED_LABEL,
+)
 from data.loader import read_dataset_file
 from exceptions.data import DataNotFoundError, DataValidationError, EmptyDatasetError
 from preprocessing.text import normalize_mentions, normalize_urls
@@ -87,7 +93,7 @@ def sanitize_tweet_text(text: str) -> str:
 def load_gold_set(
     file_path: Path,
     *,
-    text_column: str = "text",
+    text_column: str = "text_normalized",
     label_column: str = "sentiment_label",
     id_column: str = "id",
     max_tweets: int | None = None,
@@ -98,7 +104,7 @@ def load_gold_set(
     Parameters
     ----------
     file_path : Path
-        Parquet ou CSV do gold set (ex.: ``paths.tweetsentbr_file``).
+        Parquet ou CSV do gold set (ex.: ``paths.gold_unb_file``).
     text_column, label_column, id_column : str, optional
         Nomes das colunas de origem.
     max_tweets : int | None, optional
@@ -114,7 +120,7 @@ def load_gold_set(
     Raises
     ------
     DataNotFoundError
-        Se o arquivo não existir (mensagem orienta a colocá-lo em ``data/bronze/external/``).
+        Se o arquivo não existir (mensagem orienta a gerá-lo com ``make label-gold-*``).
     DataValidationError
         Se faltarem colunas ou houver rótulos não reconhecidos.
     EmptyDatasetError
@@ -122,17 +128,19 @@ def load_gold_set(
 
     Examples
     --------
-    >>> load_gold_set(Path("data/bronze/external/tweetsentbr.parquet"))  # doctest: +SKIP
+    >>> load_gold_set(Path("data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet"))  # doctest: +SKIP
     """
     if not file_path.is_file():
         raise DataNotFoundError(
-            f"{file_path} — coloque o gold set em data/bronze/external/ (confirme fonte e licença)"
+            f"{file_path} — gere o gold set com `make label-gold-openai` ou `make label-gold-unb`"
         )
     raw = read_dataset_file(file_path)
     missing = [c for c in (text_column, label_column, id_column) if c not in raw.columns]
     if missing:
         raise DataValidationError(schema_name="GoldSet", detail=f"colunas ausentes: {missing}")
 
+    if label_column in raw.columns:
+        raw = raw.filter(pl.col(label_column) != UNDEFINED_LABEL)
     gold = raw.select(
         pl.col(id_column).cast(pl.String).alias("id"),
         pl.col(text_column)

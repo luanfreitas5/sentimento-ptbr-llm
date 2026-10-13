@@ -1,6 +1,6 @@
-"""Rotulagem de sentimento via API OpenAI-compatível (base ``tweets_data_openai``).
+"""Rotulagem de sentimento via API OpenAI-compatível (gold sets ``gold_openai``/``gold_unb``).
 
-Implementa a seção ``openai`` de ``configs/labeling.yaml``: cada tweet é
+Implementa as seções ``openai`` e ``gold_sets`` de ``configs/labeling.yaml``: cada tweet é
 classificado por um LLM acessado pelo cliente único do projeto
 (:func:`hypothesaes.llm_api.generate_chat_completion`, autenticado via
 ``OPENAI_BASE_URL``/``OPENAI_KEY`` do ``.env``), com o prompt versionado em
@@ -227,6 +227,7 @@ def _classify_single_text(
     request_timeout_seconds: float,
     allowed_labels: Sequence[str],
     response_mode: str = RESPONSE_MODE_JSON,
+    reasoning_effort: str | None = None,
 ) -> LabelPrediction | None:
     """Classifica um tweet, com retentativas em caso de erro da API.
 
@@ -256,6 +257,9 @@ def _classify_single_text(
     response_mode : str, optional
         ``json`` (resposta em JSON, padrão) ou ``label_logprobs`` (só o rótulo, com a
         confiança vinda dos logprobs do primeiro token).
+    reasoning_effort : str | None, optional
+        Esforço de raciocínio de modelos de raciocínio (ex.: ``"low"``); ignorado no modo
+        ``label_logprobs``, by default None.
 
     Returns
     -------
@@ -297,6 +301,7 @@ def _classify_single_text(
             temperature=temperature,
             max_tokens=max_tokens,
             timeout=request_timeout_seconds,
+            reasoning_effort=reasoning_effort,
         )
 
     response = _request_with_retries(
@@ -334,6 +339,7 @@ def _classify_tweet_group(
     request_timeout_seconds: float,
     allowed_labels: Sequence[str],
     fallback: Callable[[str], LabelPrediction | None],
+    reasoning_effort: str | None = None,
 ) -> list[LabelPrediction | None]:
     """Classifica vários tweets em uma única requisição (modo multi-tweet).
 
@@ -363,6 +369,8 @@ def _classify_tweet_group(
         Classes de sentimento aceitas.
     fallback : Callable[[str], tuple[str, float] | None]
         Classificador de um tweet, usado nos itens que a resposta não trouxe.
+    reasoning_effort : str | None, optional
+        Esforço de raciocínio de modelos de raciocínio (ex.: ``"low"``), by default None.
 
     Returns
     -------
@@ -397,6 +405,7 @@ def _classify_tweet_group(
             temperature=temperature,
             max_tokens=_TOKENS_PER_MULTI_ITEM * len(texts) + 16,
             timeout=request_timeout_seconds,
+            reasoning_effort=reasoning_effort,
         )
 
     raw_response = _request_with_retries(
@@ -436,8 +445,9 @@ def create_openai_batch_classifier(
     allowed_labels: Sequence[str] = SENTIMENT_CLASSES,
     response_mode: str = RESPONSE_MODE_JSON,
     tweets_per_request: int = 1,
+    reasoning_effort: str | None = None,
 ) -> BatchClassifier:
-    """Cria o classificador de lotes da base ``tweets_data_openai``.
+    """Cria o classificador de lotes dos gold sets (``gold_openai``/``gold_unb``).
 
     Textos repetidos (dentro do lote e entre lotes) são enviados à API uma única vez:
     o resultado fica em cache na vida do classificador.
@@ -447,7 +457,7 @@ def create_openai_batch_classifier(
     prompt_template : str
         Template do prompt (marcador ``{{TEXTO}}``).
     model : str
-        Modelo da API OpenAI-compatível (``configs/labeling.yaml -> openai.model``).
+        Modelo da API OpenAI-compatível (``configs/labeling.yaml -> gold_sets.<gold>.model``).
     temperature : float, optional
         Temperatura de amostragem, by default 0.0.
     max_tokens : int, optional
@@ -474,6 +484,10 @@ def create_openai_batch_classifier(
         Tweets por requisição. Com valor maior que 1, cada requisição classifica um grupo
         de tweets numerados e devolve uma lista JSON; itens ausentes são reclassificados
         um a um, by default 1.
+    reasoning_effort : str | None, optional
+        Esforço de raciocínio de modelos de raciocínio (ex.: ``"low"``); omite a temperatura e
+        envia o limite de saída como ``max_completion_tokens`` (que inclui o raciocínio), by
+        default None.
 
     Returns
     -------
@@ -529,6 +543,7 @@ def create_openai_batch_classifier(
             request_timeout_seconds=request_timeout_seconds,
             allowed_labels=allowed_labels,
             response_mode=response_mode,
+            reasoning_effort=reasoning_effort,
         )
 
     def classify_group(group: Sequence[str]) -> list[LabelPrediction | None]:
@@ -557,6 +572,7 @@ def create_openai_batch_classifier(
             request_timeout_seconds=request_timeout_seconds,
             allowed_labels=allowed_labels,
             fallback=classify_one,
+            reasoning_effort=reasoning_effort,
         )
 
     def classify_batch(texts: Sequence[str]) -> list[LabelPrediction | None]:

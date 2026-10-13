@@ -1,14 +1,17 @@
-"""Rotulagem de sentimento do corpus normalizado em duas bases independentes.
+"""Rotulagem de sentimento do corpus normalizado: modelo do Hugging Face e gold sets.
 
-Implementa o estágio ``labeling`` de ``configs/config.yaml -> stages``:
-classifica **todos** os tweets do corpus normalizado com dois LLMs
-independentes — um do Hugging Face (``src/labeling/huggingface.py``) e outro
-via API OpenAI-compatível (``src/labeling/openai_labeler.py``) — e grava uma
-base por fonte, com os mesmos tweets e o mesmo ``id``, prontas para a
-comparação da etapa ``comparative_evaluation``:
+Implementa o estágio ``labeling`` de ``configs/config.yaml -> stages`` com três
+fontes (:data:`constants.labels.LABEL_SOURCE_NAMES`):
 
-* ``tweets_data_huggingface`` (``paths.huggingface_labeled_file``);
-* ``tweets_data_openai`` (``paths.openai_labeled_file``).
+* ``huggingface`` (``src/labeling/huggingface.py``): classifica **todos** os
+  tweets do corpus com um modelo do Hugging Face e grava
+  ``tweets_data_huggingface`` (``paths.huggingface_labeled_file``), a única base
+  que alimenta as etapas seguintes;
+* ``gold_openai`` e ``gold_unb`` (``src/labeling/openai_labeler.py``): rotulam a
+  **mesma amostra** do corpus (``configs/labeling.yaml -> gold_sets``) via API
+  OpenAI-compatível — ``gpt-6-luna`` e ``UnB-Llama-3.3-70B-Instruct`` — e gravam os
+  gold sets ``paths.gold_openai_file``/``paths.gold_unb_file``, usados como
+  referência pela etapa ``comparative_evaluation``.
 
 Cada base contém ``id``, ``text`` (texto original), ``text_normalized``
 (texto após o pré-processamento), ``sentiment_label`` (classe atribuída pelo
@@ -20,10 +23,7 @@ A rotulagem é incremental e retomável (``src/labeling/incremental.py``):
 tweets já rotulados são lidos do checkpoint, e uma falha deixa o progresso
 salvo. Depois de rotular, o estágio grava o corpus consumido pelas etapas
 seguintes (``features``, ``hypothesaes_analysis``;
-``paths.labeled_corpus_file``): ``sentiment_label``/``confidence_score`` vêm
-da fonte ``downstream_source``, e as colunas
-``sentiment_label_<fonte>``/``confidence_score_<fonte>`` preservam o rótulo
-de cada base disponível.
+``paths.labeled_corpus_file``), com o rótulo do modelo do Hugging Face.
 """
 
 import logging
@@ -36,7 +36,7 @@ from pathlib import Path
 import polars as pl
 
 from config.paths import ProjectPaths
-from constants.labels import UNDEFINED_LABEL
+from constants.labels import HUGGINGFACE_SOURCE, LABEL_SOURCE_NAMES, UNDEFINED_LABEL
 from data.loader import read_dataset_file
 from data.writer import write_dataset, write_labeled_corpus
 from exceptions.configuration import InvalidConfigurationError
@@ -52,8 +52,6 @@ from utils.hashing import calculate_file_hash, calculate_text_hash
 
 logger = logging.getLogger(__name__)
 
-LABEL_SOURCE_NAMES: tuple[str, ...] = ("huggingface", "openai")
-
 _HUMAN_VALIDATION_SAMPLE_FILE_NAME = "human_validation_sample.csv"
 
 
@@ -64,7 +62,7 @@ class LabelingSource:
     Parameters
     ----------
     name : str
-        ``huggingface`` ou ``openai`` (um de :data:`LABEL_SOURCE_NAMES`).
+        ``huggingface``, ``gold_openai`` ou ``gold_unb`` (um de :data:`LABEL_SOURCE_NAMES`).
     model_name : str
         Modelo usado, registrado nos metadados da base.
     prompt_name : str
@@ -80,6 +78,15 @@ class LabelingSource:
     open_classifier : Callable[[], AbstractContextManager[BatchClassifier]]
         Abre o classificador dentro de um ``with`` (o do Hugging Face carrega o
         modelo na entrada e libera a GPU na saída).
+    n_parallel_batches : int, optional
+        Lotes classificados simultaneamente, by default 1.
+    sample_size : int | None, optional
+        Se informado, rotula só uma amostra de até este tamanho do corpus (gold sets);
+        ``None`` rotula todo o corpus, by default None.
+    sample_seed : int, optional
+        Semente da amostra, by default 42.
+    reasoning_effort : str | None, optional
+        Esforço de raciocínio do modelo (registrado nos metadados), by default None.
     """
 
     name: str
@@ -90,6 +97,9 @@ class LabelingSource:
     batch_size: int
     open_classifier: Callable[[], AbstractContextManager[BatchClassifier]]
     n_parallel_batches: int = 1
+    sample_size: int | None = None
+    sample_seed: int = 42
+    reasoning_effort: str | None = None
 
 
 def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
@@ -100,12 +110,13 @@ def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
     paths : ProjectPaths
         Caminhos resolvidos do projeto.
     source_name : str
-        ``huggingface`` ou ``openai``.
+        ``huggingface``, ``gold_openai`` ou ``gold_unb``.
 
     Returns
     -------
     Path
-        ``paths.huggingface_labeled_file`` ou ``paths.openai_labeled_file``.
+        ``paths.huggingface_labeled_file``, ``paths.gold_openai_file`` ou
+        ``paths.gold_unb_file``.
 
     Raises
     ------
@@ -114,16 +125,51 @@ def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
 
     Examples
     --------
-    >>> resolve_labeled_source_path(paths, "openai").name  # doctest: +SKIP
-    'tweets_data_openai.parquet'
+    >>> resolve_labeled_source_path(paths, "gold_unb").name  # doctest: +SKIP
+    'gold_UnB-Llama-3.3-70B-Instruct.parquet'
     """
-    if source_name == "huggingface":
-        return paths.huggingface_labeled_file
-    if source_name == "openai":
-        return paths.openai_labeled_file
+    known_paths = {
+        HUGGINGFACE_SOURCE: paths.huggingface_labeled_file,
+        "gold_openai": paths.gold_openai_file,
+        "gold_unb": paths.gold_unb_file,
+    }
+    if source_name in known_paths:
+        return known_paths[source_name]
     raise InvalidConfigurationError(
         f"fonte de rotulagem desconhecida: '{source_name}'. Válidas: {list(LABEL_SOURCE_NAMES)}"
     )
+
+
+def select_gold_sample(
+    normalized_corpus: pl.DataFrame, *, sample_size: int, random_seed: int
+) -> pl.DataFrame:
+    """Seleciona a amostra do corpus rotulada pelos gold sets.
+
+    A amostra é determinística (ordena por ``id`` antes de sortear), logo os dois gold sets
+    cobrem exatamente os mesmos tweets.
+
+    Parameters
+    ----------
+    normalized_corpus : pl.DataFrame
+        Corpus normalizado.
+    sample_size : int
+        Tamanho da amostra; limitado ao tamanho do corpus.
+    random_seed : int
+        Semente do sorteio.
+
+    Returns
+    -------
+    pl.DataFrame
+        Amostra ordenada por ``id``.
+
+    Examples
+    --------
+    >>> select_gold_sample(pl.DataFrame({"id": ["2", "1"]}), sample_size=1, random_seed=0).height
+    1
+    """
+    ordered = normalized_corpus.with_columns(pl.col("id").cast(pl.String)).sort("id")
+    n_rows = min(sample_size, ordered.height)
+    return ordered.sample(n=n_rows, seed=random_seed).sort("id")
 
 
 def _build_metadata_path(labeled_source_path: Path) -> Path:
@@ -142,6 +188,8 @@ def _write_source_metadata(
             "prompt_name": source.prompt_name,
             "prompt_sha256": calculate_text_hash(source.prompt_template),
             "temperature": source.temperature,
+            "reasoning_effort": source.reasoning_effort,
+            "sample_size": source.sample_size,
             "n_tweets": n_tweets,
             "normalized_corpus_sha256": normalized_corpus_hash,
             "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -158,7 +206,7 @@ def label_source(
     text_column: str = "text_normalized",
     show_progress: bool = True,
 ) -> Path:
-    """Rotula todo o corpus com uma fonte e grava a base ``tweets_data_<fonte>``.
+    """Rotula o corpus (ou a amostra dos gold sets) com uma fonte e grava a base.
 
     Parameters
     ----------
@@ -190,6 +238,16 @@ def label_source(
     >>> label_source(paths, source, normalized_corpus)  # doctest: +SKIP
     """
     output_path = resolve_labeled_source_path(paths, source.name)
+    if source.sample_size is not None:
+        normalized_corpus = select_gold_sample(
+            normalized_corpus, sample_size=source.sample_size, random_seed=source.sample_seed
+        )
+        logger.info(
+            "Gold set '%s': amostra de %d tweet(s) (semente %d).",
+            source.name,
+            normalized_corpus.height,
+            source.sample_seed,
+        )
     checkpoint_path = build_checkpoint_path(
         paths.labeling_checkpoints_dir,
         source.name,
@@ -226,13 +284,13 @@ def label_source(
 
 
 def build_labeled_corpus(
-    normalized_corpus: pl.DataFrame, paths: ProjectPaths, downstream_source: str
+    normalized_corpus: pl.DataFrame, paths: ProjectPaths
 ) -> pl.DataFrame | None:
-    """Monta o corpus rotulado das etapas seguintes a partir das bases disponíveis.
+    """Monta o corpus rotulado das etapas seguintes a partir da base do Hugging Face.
 
-    ``sentiment_label``/``confidence_score`` vêm da base ``downstream_source``; as
-    colunas ``sentiment_label_<fonte>``/``confidence_score_<fonte>`` preservam o
-    rótulo de cada base já gravada.
+    ``sentiment_label``/``confidence_score`` vêm de ``tweets_data_huggingface``; as
+    colunas ``sentiment_label_huggingface``/``confidence_score_huggingface`` repetem esse
+    rótulo para o contrato da camada de diagnóstico. Tweets ``indefinido`` ficam de fora.
 
     Parameters
     ----------
@@ -240,46 +298,34 @@ def build_labeled_corpus(
         Corpus normalizado original.
     paths : ProjectPaths
         Caminhos resolvidos do projeto.
-    downstream_source : str
-        Fonte cujo rótulo vira ``sentiment_label`` (um de :data:`LABEL_SOURCE_NAMES`).
 
     Returns
     -------
     pl.DataFrame | None
-        Corpus rotulado, ou ``None`` se a base de ``downstream_source`` ainda não existir.
-
-    Raises
-    ------
-    InvalidConfigurationError
-        Se ``downstream_source`` não for uma fonte conhecida.
+        Corpus rotulado, ou ``None`` se a base do Hugging Face ainda não existir.
 
     Examples
     --------
-    >>> build_labeled_corpus(normalized_corpus, paths, "huggingface")  # doctest: +SKIP
+    >>> build_labeled_corpus(normalized_corpus, paths)  # doctest: +SKIP
     """
-    resolve_labeled_source_path(paths, downstream_source)  # valida o nome
-    labeled_corpus = normalized_corpus.with_columns(pl.col("id").cast(pl.String))
-    downstream_path = resolve_labeled_source_path(paths, downstream_source)
-    if not downstream_path.is_file():
+    source_path = paths.huggingface_labeled_file
+    if not source_path.is_file():
         return None
 
-    for source_name in LABEL_SOURCE_NAMES:
-        source_path = resolve_labeled_source_path(paths, source_name)
-        if not source_path.is_file():
-            continue
-        # "indefinido" não é classe de sentimento: vira nulo no corpus das etapas seguintes
-        source_labels = read_dataset_file(source_path).select(
-            "id",
-            pl.when(pl.col("sentiment_label") != UNDEFINED_LABEL)
-            .then(pl.col("sentiment_label"))
-            .alias(f"sentiment_label_{source_name}"),
-            pl.col("confidence_score").alias(f"confidence_score_{source_name}"),
-        )
-        labeled_corpus = labeled_corpus.join(source_labels, on="id", how="left")
-
+    # "indefinido" não é classe de sentimento: vira nulo no corpus das etapas seguintes
+    source_labels = read_dataset_file(source_path).select(
+        "id",
+        pl.when(pl.col("sentiment_label") != UNDEFINED_LABEL)
+        .then(pl.col("sentiment_label"))
+        .alias("sentiment_label"),
+        pl.col("confidence_score"),
+    )
+    labeled_corpus = normalized_corpus.with_columns(pl.col("id").cast(pl.String)).join(
+        source_labels, on="id", how="left"
+    )
     labeled_corpus = labeled_corpus.with_columns(
-        pl.col(f"sentiment_label_{downstream_source}").alias("sentiment_label"),
-        pl.col(f"confidence_score_{downstream_source}").alias("confidence_score"),
+        pl.col("sentiment_label").alias(f"sentiment_label_{HUGGINGFACE_SOURCE}"),
+        pl.col("confidence_score").alias(f"confidence_score_{HUGGINGFACE_SOURCE}"),
     )
     defined_corpus = labeled_corpus.filter(pl.col("sentiment_label").is_not_null())
     n_undefined = labeled_corpus.height - defined_corpus.height
@@ -287,7 +333,7 @@ def build_labeled_corpus(
         logger.warning(
             "%d tweet(s) com sentimento indefinido na base '%s' ficaram fora do corpus rotulado.",
             n_undefined,
-            downstream_source,
+            HUGGINGFACE_SOURCE,
         )
     return defined_corpus
 
@@ -359,7 +405,6 @@ def run_labeling_stage(
     paths: ProjectPaths,
     sources: Sequence[LabelingSource],
     *,
-    downstream_source: str = "huggingface",
     text_column: str = "text_normalized",
     select_for_human_validation: bool = True,
     human_validation_sample_size: int = 500,
@@ -376,10 +421,7 @@ def run_labeling_stage(
     paths : ProjectPaths
         Caminhos resolvidos do projeto (``configs/paths.yaml``).
     sources : Sequence[LabelingSource]
-        Fontes a rotular nesta execução (uma ou as duas de :data:`LABEL_SOURCE_NAMES`).
-    downstream_source : str, optional
-        Fonte cujo rótulo alimenta ``features``/``hypothesaes_analysis``
-        (``configs/labeling.yaml -> downstream_source``), by default "huggingface".
+        Fontes a rotular nesta execução (qualquer subconjunto de :data:`LABEL_SOURCE_NAMES`).
     text_column : str, optional
         Coluna do texto enviado ao LLM, by default "text_normalized".
     select_for_human_validation : bool, optional
@@ -402,8 +444,8 @@ def run_labeling_stage(
     Returns
     -------
     dict[str, Path]
-        Arquivos gravados: uma chave por fonte rotulada e, quando a base de
-        ``downstream_source`` existe, ``"labeled_corpus"``.
+        Arquivos gravados: uma chave por fonte rotulada e, quando a base do Hugging Face
+        existe, ``"labeled_corpus"``.
 
     Raises
     ------
@@ -414,11 +456,11 @@ def run_labeling_stage(
     DataValidationError
         Se alguma base ou o corpus final violar o contrato de dados.
     InvalidConfigurationError
-        Se uma fonte (ou ``downstream_source``) for desconhecida.
+        Se uma fonte for desconhecida.
 
     Examples
     --------
-    >>> run_labeling_stage(paths, [huggingface_source, openai_source])  # doctest: +SKIP
+    >>> run_labeling_stage(paths, [huggingface_source, gold_unb_source])  # doctest: +SKIP
     """
     normalized_corpus = read_dataset_file(paths.normalized_corpus_file)
 
@@ -428,12 +470,12 @@ def run_labeling_stage(
             paths, source, normalized_corpus, text_column=text_column, show_progress=show_progress
         )
 
-    labeled_corpus = build_labeled_corpus(normalized_corpus, paths, downstream_source)
+    labeled_corpus = build_labeled_corpus(normalized_corpus, paths)
     if labeled_corpus is None:
         logger.warning(
             "Base '%s' ainda não existe: o corpus rotulado das etapas seguintes não foi gerado. "
-            "Rotule essa fonte para gerá-lo.",
-            downstream_source,
+            "Rotule essa fonte para gerá-la.",
+            HUGGINGFACE_SOURCE,
         )
         return written
 
@@ -451,8 +493,8 @@ def run_labeling_stage(
     write_labeled_corpus(labeled_corpus, paths.labeled_corpus_file)
     written["labeled_corpus"] = paths.labeled_corpus_file
     logger.info(
-        "Etapa de rotulagem concluída: %d tweet(s); corpus das etapas seguintes usa '%s'.",
+        "Etapa de rotulagem concluída: %d tweet(s) no corpus das etapas seguintes ('%s').",
         labeled_corpus.height,
-        downstream_source,
+        HUGGINGFACE_SOURCE,
     )
     return written

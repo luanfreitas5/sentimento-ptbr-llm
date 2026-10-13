@@ -185,7 +185,7 @@ def run_incremental_labeling(
         Tweets por lote; cada lote é gravado no checkpoint ao terminar.
     n_parallel_batches : int, optional
         Lotes classificados simultaneamente, by default 1 (sequencial). Use mais de 1 só
-        com classificadores seguros para chamadas concorrentes (ex.: o da API OpenAI);
+        com classificadores seguros para chamadas concorrentes (ex.: o dos gold sets via API);
         o do Hugging Face usa a GPU e deve ficar em 1.
     id_column : str, optional
         Coluna identificadora, by default "id".

@@ -25,7 +25,7 @@ O projeto instala apenas as dependências de runtime "leves" por padrão. Extras
 
 | Extra | Instala | Quando precisa |
 |---|---|---|
-| `labeling` | PyTorch, Transformers, Accelerate, cliente OpenAI | Estágio `labeling` (LLM do Hugging Face e API OpenAI) |
+| `labeling` | PyTorch, Transformers, Accelerate, cliente OpenAI | Estágio `labeling` (modelo do Hugging Face e gold sets via API OpenAI-compatível) |
 | `hypothesaes` | PyTorch, Transformers, Ollama, sentence-transformers, OpenAI | Análise HypotheSAEs e hipóteses da `comparative_evaluation` |
 | `collect` | twscrape | Estágio `ingestion` (coleta de tweets) |
 | `nlp` | spaCy + modelo `pt_core_news_sm`, nltk + corpus `stopwords` | Lematização e stopwords em pt-BR no pré-processamento (com fallback por regex/lista curada se ausentes) |

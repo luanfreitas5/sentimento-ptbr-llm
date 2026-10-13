@@ -10,12 +10,12 @@ pipeline.
 Modules
 -------
 ingestion
-    Coleta de tweets e datasets externos, com catalogação de rastreabilidade.
+    Coleta de tweets, com catalogação de rastreabilidade.
 preprocessing
     Normalização e limpeza do corpus bruto de tweets.
 labeling
-    Rotulagem de todos os tweets por dois LLMs independentes (Hugging Face e
-    OpenAI), gerando as bases ``tweets_data_huggingface``/``tweets_data_openai``.
+    Rotulagem de todos os tweets pelo modelo do Hugging Face e de uma amostra por
+    dois LLMs via API (gold sets ``gold_openai``/``gold_unb``).
 features
     Split estratificado e extração de features do corpus rotulado.
 training_classical
@@ -27,11 +27,11 @@ training_transformer
 training_llm
     Preparo (few-shot) e validação dos LLMs open-source via Ollama.
 comparative_evaluation
-    Avaliação comparativa (concordância, confiança e divergências) entre as
-    duas bases rotuladas.
+    Avaliação comparativa (concordância, confiança e divergências) entre o
+    Hugging Face e cada gold set.
 hypotheses
-    Geração de hipóteses com o HypotheSAEs (discordância/incerteza entre as
-    bases, padrões de baixa confiança e camada de diagnóstico).
+    Geração de hipóteses com o HypotheSAEs (discordância/incerteza entre o
+    Hugging Face e os gold sets, padrões de baixa confiança e camada de diagnóstico).
 evaluate
     Avaliação no teste (métricas com IC, McNemar) e ablação do pipeline.
 report

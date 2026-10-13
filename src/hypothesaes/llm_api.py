@@ -697,6 +697,7 @@ def generate_chat_completion(
     temperature: float = 0.0,
     max_tokens: int | None = None,
     timeout: float | None = None,
+    reasoning_effort: str | None = None,
 ) -> str:
     """Gera uma resposta via Chat Completions, sem retentativas (uma única requisição).
 
@@ -718,6 +719,10 @@ def generate_chat_completion(
         Máximo de tokens gerados; ``None`` usa o padrão do servidor, by default None.
     timeout : float | None, optional
         Timeout da requisição, em segundos, by default None.
+    reasoning_effort : str | None, optional
+        Esforço de raciocínio de modelos de raciocínio (ex.: ``"low"``). Quando informado,
+        ``temperature`` é omitida e o limite de saída vai em ``max_completion_tokens`` (que
+        inclui os tokens de raciocínio), como exigem esses modelos, by default None.
 
     Returns
     -------
@@ -739,14 +744,19 @@ def generate_chat_completion(
     """
     client = create_client(max_retries=0)
     request_kwargs: dict[str, Any] = {}
-    if max_tokens is not None:
-        request_kwargs["max_tokens"] = max_tokens
+    if reasoning_effort is not None:
+        request_kwargs["reasoning_effort"] = reasoning_effort
+        if max_tokens is not None:
+            request_kwargs["max_completion_tokens"] = max_tokens
+    else:
+        request_kwargs["temperature"] = temperature
+        if max_tokens is not None:
+            request_kwargs["max_tokens"] = max_tokens
     if timeout is not None:
         request_kwargs["timeout"] = timeout
     response = client.chat.completions.create(
         model=MODEL_ABBREVIATION_TO_ID.get(model, model),
         messages=messages,
-        temperature=temperature,
         **request_kwargs,
     )
     return response.choices[0].message.content or ""

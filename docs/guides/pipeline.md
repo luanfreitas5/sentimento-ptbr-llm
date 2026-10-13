@@ -15,9 +15,9 @@ O acoplamento entre estágios é o sistema de arquivos (Parquet em `data/`, chec
 |---|---|---|---|---|
 | `ingestion` | `ingest` | `src/pipelines/ingestion.py` | função de coleta definida pelo usuário (`--scrape-func`) | `data/silver/tweets_coletados.parquet` |
 | `preprocessing` | `preprocess` | `src/pipelines/preprocessing.py` | lote de tweets brutos coletados por usuário, `data/bronze/*.parquet` (ver `src/data/loader.py::load_raw_tweet_batch`) | `data/silver/corpus_normalizado.parquet` |
-| `labeling` | `label` (`label-hf` / `label-openai`) | `src/pipelines/labeling.py` | corpus normalizado | `data/gold/tweets_data_huggingface.parquet`, `tweets_data_openai.parquet` (+ `.meta.json`) e `corpus_rotulado.parquet` |
-| `comparative_evaluation` | `compare` | `src/pipelines/comparative_evaluation.py` | as duas bases rotuladas | tabelas em `reports/tables/comparativo_hf_openai/`, gráficos em `reports/figures/comparativo_hf_openai/`, resumo em `reports/metrics/comparativo_hf_openai.json` |
-| `hypotheses` | `hypotheses` | `src/pipelines/hypotheses.py` | as duas bases rotuladas (modo `disagreement`), corpus rotulado (`patterns`) | hipóteses do HypotheSAEs em `reports/tables/comparativo_hf_openai/` e `reports/metrics/hipoteses_*.json` (ver [Hipóteses](#hipoteses-hypothesaes)) |
+| `labeling` | `label` (`label-hf` / `label-gold-openai` / `label-gold-unb`) | `src/pipelines/labeling.py` | corpus normalizado | `data/gold/tweets_data_huggingface.parquet`, gold sets `gold_gpt-6-luna.parquet` e `gold_UnB-Llama-3.3-70B-Instruct.parquet` (+ `.meta.json`) e `corpus_rotulado.parquet` |
+| `comparative_evaluation` | `compare` | `src/pipelines/comparative_evaluation.py` | base do Hugging Face + gold sets | tabelas em `reports/tables/comparativo_hf_<gold>/`, gráficos em `reports/figures/comparativo_hf_<gold>/`, resumo em `reports/metrics/comparativo_hf_<gold>.json` (`<gold>` = `gold_openai` ou `gold_unb`) |
+| `hypotheses` | `hypotheses` | `src/pipelines/hypotheses.py` | base do Hugging Face + gold sets (modo `disagreement`), corpus rotulado (`patterns`) | hipóteses do HypotheSAEs em `reports/tables/comparativo_hf_<gold>/` e `reports/metrics/hipoteses_*.json` (ver [Hipóteses](#hipoteses-hypothesaes)) |
 | `features` | `features` | `src/pipelines/features.py` | corpus rotulado | splits treino/validação/teste, features TF-IDF e o vetorizador ajustado no treino (`models/checkpoints/tfidf_vectorizer.joblib`) |
 | `training_classical` | `classical` | `src/pipelines/training_classical.py` | splits + vetorizador | Baseline (`dummy`) + ML tradicional (NB, LR, SVM, RF, XGBoost) em `models/checkpoints/*.joblib` |
 | `training_deep_learning` | `deep` | `src/pipelines/training_deep_learning.py` | splits | LSTM e CNN em `models/checkpoints/*.pt` |
@@ -59,22 +59,24 @@ escritos à mão e não contêm texto de tweets.
 
 O estágio `hypotheses` reúne toda a geração de hipóteses. O modo (`--hypotheses-mode`, ou
 `make hypotheses MODE=...`) escolhe a análise: `disagreement` (padrão: discordância e
-incerteza entre as bases HF × OpenAI), `patterns` (padrões e inconsistências nos rótulos de
+incerteza entre o Hugging Face e cada gold set), `patterns` (padrões e inconsistências nos rótulos de
 baixa confiança; `make patterns`) e `diagnostics` (gate de sanidade, validação e comparação
 de prompts; `make diagnostics`, ver [diagnóstico](diagnostico-hypothesaes.md)).
 `--skip-hypotheses` dispensa a etapa em `make all`.
 
-## Rotulagem: duas bases independentes
+## Rotulagem: modelo do Hugging Face e gold sets
 
-O estágio `labeling` classifica **todos** os tweets do corpus normalizado com duas fontes, sobre o
-texto já sanitizado (`text_normalized`, sem menções/URLs). A fonte OpenAI usa o prompt de
-`prompts/` (`configs/labeling.yaml -> prompt_name`); a fonte Hugging Face é um classificador
-ajustado e não recebe prompt:
+O estágio `labeling` produz três bases, sobre o texto já sanitizado (`text_normalized`, sem
+menções/URLs). O modelo do Hugging Face rotula **todos** os tweets; os dois gold sets rotulam a
+**mesma amostra** do corpus (`configs/labeling.yaml -> gold_sets.sample_size`, mesma semente) via
+API OpenAI-compatível, com o prompt de `prompts/` (`configs/labeling.yaml -> prompt_name`). O
+classificador do Hugging Face é ajustado e não recebe prompt:
 
 | Base | Fonte | Configuração |
 |---|---|---|
 | `tweets_data_huggingface` | classificador local via `transformers` (`src/labeling/huggingface.py`) | `configs/labeling.yaml -> huggingface` |
-| `tweets_data_openai` | API OpenAI-compatível (`src/labeling/openai_labeler.py`) | `configs/labeling.yaml -> openai`; `OPENAI_BASE_URL`/`OPENAI_KEY` no `.env` |
+| `gold_gpt-6-luna` (`gold_openai`) | `gpt-6-luna`, `reasoning_effort: low` (`src/labeling/openai_labeler.py`) | `configs/labeling.yaml -> gold_sets.openai`; `OPENAI_BASE_URL`/`OPENAI_KEY` no `.env` |
+| `gold_UnB-Llama-3.3-70B-Instruct` (`gold_unb`) | `UnB-Llama-3.3-70B-Instruct` (`src/labeling/openai_labeler.py`) | `configs/labeling.yaml -> gold_sets.unb`; `OPENAI_BASE_URL`/`OPENAI_KEY` no `.env` |
 
 Colunas (contrato `schemas.labeling.LabeledSourceSchema`): `id`, `text` (texto original),
 `text_normalized` (após o pré-processamento), `sentiment_label` (classe atribuída) e
@@ -86,7 +88,7 @@ entrada ficam em `<base>.meta.json`, ao lado da base.
   modelo, prompt ou temperatura mudarem.
 - **Falhas:** erros de API (timeout, HTTP 429) são retentados com backoff exponencial; se sobrar
   tweet sem rótulo válido, a etapa levanta `IncompleteLabelingError` e a base **não** é gravada
-  (as duas bases sempre têm exatamente os mesmos tweets). Rode de novo para reprocessar só os pendentes.
+  (cada base sempre cobre todos os tweets do seu escopo: corpus inteiro ou a amostra). Rode de novo para reprocessar só os pendentes.
 - **HTTP 429:** limitador de taxa compartilhado (`openai.requests_per_minute`): ao receber 429, todas
   as threads pausam pelo `Retry-After` do servidor e o ritmo cai até voltar ao normal após uma
   sequência de sucessos (`src/labeling/rate_limiter.py`).
@@ -99,28 +101,34 @@ entrada ficam em `<base>.meta.json`, ao lado da base.
   parâmetros; classes NEG/NEU/POS mapeadas para negativo/neutro/positivo). É um classificador
   ajustado, não um LLM gerativo: não usa prompt, é determinístico e a confiança é a probabilidade
   softmax da classe. Roda em CPU ou GPU pequena. Fixe `huggingface.revision` num SHA.
-- **Corpus das etapas seguintes:** `configs/labeling.yaml -> downstream_source` escolhe qual base
-  vira `sentiment_label` em `corpus_rotulado.parquet` (consumido por `features` e
-  `hypothesaes_analysis`); as duas ficam em `sentiment_label_<fonte>`/`confidence_score_<fonte>`.
+- **Corpus das etapas seguintes:** o rótulo do modelo do Hugging Face vira `sentiment_label` em
+  `corpus_rotulado.parquet` (consumido por `features` e `hypothesaes_analysis`). Os gold sets não
+  entram no treino: servem de referência na `comparative_evaluation`.
+- **Endpoints:** os dois gold sets usam `OPENAI_BASE_URL`/`OPENAI_KEY`; se os modelos estiverem em
+  endpoints diferentes, rode `make label-gold-openai` e `make label-gold-unb` separadamente,
+  trocando o `.env` entre as execuções.
 
 ```bash
-make label-hf   # GPU local
-make label-openai        # API
+make label-hf            # modelo do Hugging Face, todos os tweets
+make label-gold-openai   # gold set gpt-6-luna (API)
+make label-gold-unb      # gold set UnB-Llama-3.3-70B-Instruct (API)
 ```
 
 ## Avaliação comparativa (`comparative_evaluation`)
 
 Executa diretamente, sem argumentos manuais (`make compare`): carrega e
-valida as duas bases, une-as pelo `id`, calcula as métricas, grava tabelas e gráficos, analisa as
-divergências e, por fim, aplica o HypotheSAEs. Limiares e opções em
+valida a base do Hugging Face e cada gold set já gerado, une-os pelo `id` (o Hugging Face é restrito à
+amostra do gold set), calcula as métricas, grava tabelas e gráficos e analisa as divergências, uma
+vez por gold set. Limiares e opções em
 `configs/evaluation.yaml -> llm_comparison`; `EXTRA_ARGS=--skip-hypotheses` dispensa o HypotheSAEs.
 
-Sem gold set, mede-se **concordância entre os modelos** (não acerto).
+Os gold sets são rotulados por LLMs (não por humanos): mede-se a **concordância com esses LLMs**, não o
+acerto absoluto.
 
-| Análise | Saída (em `reports/tables/comparativo_hf_openai/`) |
+| Análise | Saída (em `reports/tables/comparativo_hf_<gold>/`) |
 |---|---|
 | Distribuição das classes | `distribuicao_classes.csv` |
-| Concordância/divergência (IC bootstrap), Kappa simples e ponderado, Stuart-Maxwell | `reports/metrics/comparativo_hf_openai.json`, `resumo_comparativo.md` |
+| Concordância/divergência (IC bootstrap), Kappa simples e ponderado, Stuart-Maxwell | `reports/metrics/comparativo_hf_<gold>.json`, `resumo_comparativo.md` |
 | Matriz de concordância | `matriz_concordancia.csv` |
 | Confiança (descritivas, Spearman, Wilcoxon pareado) | `confianca_por_modelo.csv` |
 | Maiores divergências (polaridade oposta e ambos confiantes) | `maiores_divergencias.csv` |
@@ -129,13 +137,14 @@ Sem gold set, mede-se **concordância entre os modelos** (não acerto).
 | Casos ambíguos | `casos_ambiguos.csv`, `resumo_ambiguidade.csv` |
 | Diferenças de classificação | `transicoes_divergencia.csv`, `exemplos_transicoes.csv` |
 
-Gráficos (PNG 300 dpi + SVG) em `reports/figures/comparativo_hf_openai/`. As tabelas com texto usam
+Gráficos (PNG 300 dpi + SVG) em `reports/figures/comparativo_hf_<gold>/`. As tabelas com texto usam
 apenas o texto normalizado.
 
 ### HypotheSAEs sobre a divergência
 
 `src/diagnostics/model_disagreement.py` aplica o HypotheSAEs a dois alvos: `disagreement`
-(`lab_huggingface != lab_openai`) e `uncertainty` (`1 - min(confiança_HF, confiança_OpenAI)`).
+(`lab_huggingface != lab_openai`, onde `lab_openai` é o rótulo do gold set) e `uncertainty`
+(`1 - min(confiança_HF, confiança_gold)`), uma execução por gold set.
 Entrada: texto normalizado + alvo. Processamento: embeddings BERTimbau → SAE (treinado uma vez) →
 gate de sanidade → neurônios → hipóteses interpretadas por LLM (`configs/diagnostics.yaml`).
 Se o gate reprovar um alvo, isso é registrado como resultado (`gate_reprovado`) — os embeddings

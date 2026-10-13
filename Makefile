@@ -196,16 +196,19 @@ ingest:  ## [1] Coleta de dados (requer SCRAPE_FUNC=modulo:funcao QUERIES="q1 q2
 preprocess:  ## [2] Pré-processa (limpa e normaliza) o corpus bruto
 	$(RUN) --stage preprocessing
 
-label:  ## [3] Rotula TODOS os tweets com as duas fontes: tweets_data_huggingface e tweets_data_openai (requer: make install-labeling)
+label:  ## [3] Rotula com as três fontes: tweets_data_huggingface (todos) + gold_openai e gold_unb (amostra) (requer: make install-labeling)
 	$(RUN) --stage labeling --label-source all
 
-label-hf:  ## [3] Rotula com o LLM local do Hugging Face (base tweets_data_huggingface; retoma do checkpoint)
+label-hf:  ## [3] Rotula TODOS os tweets com o modelo do Hugging Face (base tweets_data_huggingface; retoma do checkpoint)
 	$(RUN) --stage labeling --label-source huggingface
 
-label-openai:  ## [3] Rotula via API OpenAI (base tweets_data_openai; requer OPENAI_KEY no .env; retoma do checkpoint)
-	$(RUN) --stage labeling --label-source openai
+label-gold-openai:  ## [3] Gold set da amostra via API com gpt-6-luna, effort low (requer OPENAI_BASE_URL/OPENAI_KEY no .env; retoma do checkpoint)
+	$(RUN) --stage labeling --label-source gold_openai
 
-compare:  ## [4] Compara as bases Hugging Face x OpenAI (concordância, Kappa, divergências; tabelas e gráficos)
+label-gold-unb:  ## [3] Gold set da amostra via API com UnB-Llama-3.3-70B-Instruct (requer OPENAI_BASE_URL/OPENAI_KEY no .env; retoma do checkpoint)
+	$(RUN) --stage labeling --label-source gold_unb
+
+compare:  ## [4] Compara o Hugging Face com cada gold set (concordância, Kappa, divergências; tabelas e gráficos)
 	$(RUN) --stage comparative_evaluation
 
 hypotheses:  ## [5] Gera as hipóteses HypotheSAEs (requer: make install-hypothesaes; MODE=disagreement|patterns|diagnostics)
@@ -239,7 +242,7 @@ all:  ## Executa o workflow completo, na ordem configurada em configs/config.yam
 # 'diagnostics' vive em src/, que não está no sys.path do venv: exporta PYTHONPATH=src.
 DIAG := PYTHONPATH=src uv run python -m diagnostics
 TARGET ?= disagreement
-GOLD ?= tweetsentbr
+GOLD ?= gold_openai
 
 patterns:  ## Hipóteses sobre padrões/inconsistências nos rótulos de baixa confiança (HypotheSAEs, modo patterns)
 	$(RUN) --stage hypotheses --hypotheses-mode patterns
@@ -259,7 +262,7 @@ diag-hypotheses:  ## Gate de sanidade + hipóteses HypotheSAEs para o alvo (TARG
 diag-validate:  ## Valida as hipóteses no holdout (Bonferroni) e gera reports/tables/para_rotular.csv
 	$(DIAG).validation --target $(TARGET)
 
-diag-compare:  ## Compara os prompts v1 e v2 no gold (GOLD=tweetsentbr|repro)
+diag-compare:  ## Compara os prompts v1 e v2 no gold (GOLD=gold_openai|gold_unb)
 	$(DIAG).comparison --gold $(GOLD)
 
 # --- Serviços auxiliares ----------------------------------------------------

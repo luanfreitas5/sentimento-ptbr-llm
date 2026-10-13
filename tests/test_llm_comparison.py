@@ -500,11 +500,12 @@ class TestModelDisagreementHypotheses:
 
 
 def test_project_paths_expose_the_new_labeling_locations() -> None:
-    """``ProjectPaths`` resolve as duas bases e o diretório de checkpoints a partir do YAML."""
+    """``ProjectPaths`` resolve a base do HF, os gold sets e os checkpoints a partir do YAML."""
     from config.paths import load_project_paths
 
     paths: ProjectPaths = load_project_paths()
 
     assert paths.huggingface_labeled_file.name == "tweets_data_huggingface.parquet"
-    assert paths.openai_labeled_file.name == "tweets_data_openai.parquet"
+    assert paths.gold_openai_file.name == "gold_gpt-6-luna.parquet"
+    assert paths.gold_unb_file.name == "gold_UnB-Llama-3.3-70B-Instruct.parquet"
     assert paths.labeling_checkpoints_dir.name == "labeling_checkpoints"

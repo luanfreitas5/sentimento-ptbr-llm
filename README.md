@@ -68,7 +68,7 @@ sentimento-ptbr-llm/
 │   ├── model_params.yaml
 │   └── paths.yaml
 ├── data/                       # medallion: bronze/ (imutável, inclui external/) → silver/ → gold/ (fora do Git; ver dvc.yaml)
-│   ├── bronze/                 # dados como recebidos (tweets por usuário, external/ com TweetSentBR/RePro, catalog.json)
+│   ├── bronze/                 # dados como recebidos (tweets por usuário, catalog.json)
 │   ├── silver/                 # limpos, tipados e validados (corpus normalizado, checkpoints)
 │   └── gold/                   # prontos para modelagem (corpus rotulado, treino/validação/teste, features)
 ├── docs/                       # Documentação técnica (MkDocs Material + mkdocstrings)
@@ -192,10 +192,11 @@ O pipeline é orquestrado por estágios via `src/main.py --stage <nome>` (ver `c
 ```bash
 make ingest SCRAPE_FUNC=parallel.scraping:collect_tweets QUERIES="palavra1 palavra2"
 make preprocess
-make label               # as duas bases: tweets_data_huggingface e tweets_data_openai
-make label-hf   # só o LLM local do Hugging Face (GPU)
-make label-openai        # só a API OpenAI (OPENAI_KEY no .env)
-make compare             # compara as duas bases: concordância, Kappa, divergências, tabelas e gráficos
+make label               # as três bases: tweets_data_huggingface + gold sets (gpt-6-luna e UnB-Llama)
+make label-hf            # só o modelo do Hugging Face (todos os tweets)
+make label-gold-openai   # só o gold set gpt-6-luna (API; OPENAI_KEY no .env)
+make label-gold-unb      # só o gold set UnB-Llama-3.3-70B-Instruct (API)
+make compare             # compara o Hugging Face com cada gold set: concordância, Kappa, divergências
 make hypotheses          # hipóteses do HypotheSAEs (MODE=disagreement|patterns|diagnostics)
 make features            # split + TF-IDF
 make classical           # Baseline (dummy) + ML tradicional

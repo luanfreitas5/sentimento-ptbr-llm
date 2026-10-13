@@ -46,12 +46,15 @@ class ProjectPaths:
     ----------
     data_bronze_dir, data_external_dir, data_silver_dir, data_gold_dir : Path
         Diretórios das etapas de dados (ver CLAUDE.md, "Project Structure").
-    raw_tweets_file, tweetsentbr_file, repro_file : Path
-        Arquivos de dados de entrada (coleta própria e gold sets externos).
+    raw_tweets_file : Path
+        Arquivo de dados de entrada (coleta própria).
     normalized_corpus_file, labeled_corpus_file : Path
         Arquivos intermediário normalizado e final rotulado.
-    huggingface_labeled_file, openai_labeled_file : Path
-        Bases ``tweets_data_huggingface``/``tweets_data_openai`` (uma por fonte de rotulagem).
+    huggingface_labeled_file : Path
+        Base ``tweets_data_huggingface`` (todos os tweets, rotulados pelo modelo do Hugging Face).
+    gold_openai_file, gold_unb_file : Path
+        Gold sets (amostra do corpus rotulada por LLMs via API: ``gpt-6-luna`` e
+        ``UnB-Llama-3.3-70B-Instruct``).
     labeling_checkpoints_dir : Path
         Diretório dos checkpoints de retomada da rotulagem por LLM.
     training_corpus_file, validation_corpus_file, test_corpus_file : Path
@@ -76,12 +79,11 @@ class ProjectPaths:
     data_gold_dir: Path
 
     raw_tweets_file: Path
-    tweetsentbr_file: Path
-    repro_file: Path
     normalized_corpus_file: Path
     labeled_corpus_file: Path
     huggingface_labeled_file: Path
-    openai_labeled_file: Path
+    gold_openai_file: Path
+    gold_unb_file: Path
     labeling_checkpoints_dir: Path
     training_corpus_file: Path
     validation_corpus_file: Path
@@ -140,14 +142,13 @@ def load_project_paths(config_file_path: Path = DEFAULT_PATHS_CONFIG_FILE) -> Pr
         data_silver_dir=resolve_project_path(dados["data"]["silver"]),
         data_gold_dir=resolve_project_path(dados["data"]["gold"]),
         raw_tweets_file=resolve_project_path(dados["data_files"]["raw_tweets"]),
-        tweetsentbr_file=resolve_project_path(dados["data_files"]["tweetsentbr"]),
-        repro_file=resolve_project_path(dados["data_files"]["repro"]),
         normalized_corpus_file=resolve_project_path(dados["data_files"]["corpus_normalizado"]),
         labeled_corpus_file=resolve_project_path(dados["data_files"]["corpus_rotulado"]),
         huggingface_labeled_file=resolve_project_path(
             dados["data_files"]["tweets_data_huggingface"]
         ),
-        openai_labeled_file=resolve_project_path(dados["data_files"]["tweets_data_openai"]),
+        gold_openai_file=resolve_project_path(dados["data_files"]["gold_openai"]),
+        gold_unb_file=resolve_project_path(dados["data_files"]["gold_unb"]),
         labeling_checkpoints_dir=resolve_project_path(dados["labeling"]["checkpoints"]),
         training_corpus_file=resolve_project_path(dados["data_files"]["corpus_treino"]),
         validation_corpus_file=resolve_project_path(dados["data_files"]["corpus_validacao"]),

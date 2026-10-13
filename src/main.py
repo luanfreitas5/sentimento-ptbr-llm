@@ -41,6 +41,7 @@ from config.environment import configure_environment_variables, configure_reprod
 from config.logging import configure_logging
 from config.paths import CONFIGS_DIR, ProjectPaths, load_project_paths
 from config.settings import GeneralConfig, Settings, create_settings, load_general_config
+from constants.labels import GOLD_SOURCE_NAMES, HUGGINGFACE_SOURCE, LABEL_SOURCE_NAMES
 from data.loader import load_labeled_corpus, load_training_example_dataset
 from diagnostics.targets import TARGET_NAMES
 from exceptions.configuration import InvalidConfigurationError
@@ -53,7 +54,7 @@ from models.persistence import load_classifier
 from pipelines.diagnostics_analysis import DIAGNOSTICS_GOLD_CHOICES, DIAGNOSTICS_STEPS
 from pipelines.features import TFIDF_VECTORIZER_FILE_NAME
 from pipelines.hypotheses import HYPOTHESES_MODES
-from pipelines.labeling import LABEL_SOURCE_NAMES, LabelingSource
+from pipelines.labeling import LabelingSource
 from pipelines.training_classical import DEFAULT_CLASSICAL_MODEL_NAMES
 from pipelines.training_deep_learning import DEFAULT_DEEP_LEARNING_MODEL_NAMES
 from pipelines.training_llm import DEFAULT_LLM_MODEL_NAMES
@@ -132,7 +133,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "Número máximo de threads/processos paralelos (etapas "
             "`ingestion`/`preprocessing`/`hypotheses`; na etapa `labeling`, "
-            "sobrescreve `configs/labeling.yaml -> openai.n_workers`)."
+            "sobrescreve `configs/labeling.yaml -> openai.n_workers`, dos gold sets)."
         ),
     )
     parser.add_argument(
@@ -155,8 +156,10 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=_ALL_SOURCES_OPTION,
         choices=[*LABEL_SOURCE_NAMES, _ALL_SOURCES_OPTION],
         help=(
-            "Fonte(s) de rotulagem da etapa `labeling`: `huggingface` (LLM local), "
-            "`openai` (API) ou `all` (as duas bases, em sequência)."
+            "Fonte(s) de rotulagem da etapa `labeling`: `huggingface` (modelo do Hugging Face, "
+            "todos os tweets), `gold_openai` (gpt-6-luna) e `gold_unb` "
+            "(UnB-Llama-3.3-70B-Instruct) — gold sets via API, sobre uma amostra do corpus — "
+            "ou `all` (as três, em sequência)."
         ),
     )
     parser.add_argument(
@@ -185,8 +188,8 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="disagreement",
         choices=HYPOTHESES_MODES,
         help=(
-            "Modo da etapa `hypotheses`: `disagreement` (discordância/incerteza entre as bases "
-            "Hugging Face e OpenAI), `patterns` (padrões e inconsistências nos rótulos de baixa "
+            "Modo da etapa `hypotheses`: `disagreement` (discordância/incerteza entre o Hugging "
+            "Face e cada gold set), `patterns` (padrões e inconsistências nos rótulos de baixa "
             "confiança) ou `diagnostics` (gate de sanidade, validação e comparação de prompts; "
             "ver `--diagnostics-*`)."
         ),
@@ -259,7 +262,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--diagnostics-gold",
-        default="tweetsentbr",
+        default=GOLD_SOURCE_NAMES[0],
         choices=DIAGNOSTICS_GOLD_CHOICES,
         help="Gold set do passo `comparison` (etapa `hypotheses`, modo `diagnostics`).",
     )
@@ -471,13 +474,89 @@ def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:
     return provider
 
 
+def _build_huggingface_source(
+    labeling_config: dict[str, Any], settings: Settings
+) -> LabelingSource:
+    """Monta a fonte ``huggingface`` (todos os tweets), carregada só quando executada."""
+    hf_config = labeling_config["huggingface"]
+    return LabelingSource(
+        name=HUGGINGFACE_SOURCE,
+        model_name=f"{hf_config['model']}@{hf_config['revision']}",
+        # classificador encoder ajustado: não usa prompt nem amostragem (determinístico)
+        prompt_name="nenhum",
+        prompt_template="",
+        temperature=0.0,
+        batch_size=hf_config["batch_size"],
+        open_classifier=partial(
+            open_huggingface_classifier,
+            model_name=hf_config["model"],
+            device=hf_config["device"],
+            dtype=hf_config["dtype"],
+            token=settings.huggingface_token,
+            revision=hf_config["revision"],
+            max_input_tokens=hf_config["max_input_tokens"],
+        ),
+    )
+
+
+def _build_gold_source(
+    source_name: str, labeling_config: dict[str, Any], args: argparse.Namespace
+) -> LabelingSource:
+    """Monta um gold set (``gold_openai``/``gold_unb``): amostra do corpus rotulada via API."""
+    oa_config = labeling_config["openai"]
+    gold_config = labeling_config["gold_sets"]
+    model_config = gold_config[source_name.removeprefix("gold_")]
+    prompt_name = labeling_config["prompt_name"]
+    prompt_template = load_prompt_template(prompt_name)
+    response_mode = oa_config.get("response_mode", "json")
+    tweets_per_request = oa_config.get("tweets_per_request", 1)
+    reasoning_effort = model_config.get("reasoning_effort")
+    # Os modos rápidos e o esforço de raciocínio mudam a resposta: entram no hash do
+    # checkpoint (o padrão `json` + 1 tweet/requisição sem raciocínio não altera o hash).
+    fingerprint_suffix = ""
+    if (response_mode, tweets_per_request) != ("json", 1):
+        fingerprint_suffix += (
+            f"\n#response_mode={response_mode};tweets_per_request={tweets_per_request}"
+        )
+    if reasoning_effort is not None:
+        fingerprint_suffix += f"\n#reasoning_effort={reasoning_effort}"
+    max_tokens = model_config.get("max_tokens") or oa_config["max_tokens"]
+    classifier = create_openai_batch_classifier(
+        prompt_template,
+        model=model_config["model"],
+        temperature=oa_config["temperature"],
+        max_tokens=max_tokens,
+        max_retries=oa_config["max_retries"],
+        max_rate_limit_retries=oa_config["max_rate_limit_retries"],
+        n_workers=args.max_workers or oa_config["n_workers"],
+        requests_per_minute=oa_config["requests_per_minute"],
+        request_timeout_seconds=oa_config["request_timeout_seconds"],
+        response_mode=response_mode,
+        tweets_per_request=tweets_per_request,
+        reasoning_effort=reasoning_effort,
+    )
+    return LabelingSource(
+        name=source_name,
+        model_name=model_config["model"],
+        prompt_name=prompt_name,
+        prompt_template=prompt_template + fingerprint_suffix,
+        temperature=oa_config["temperature"],
+        batch_size=oa_config["batch_size"],
+        open_classifier=lambda: nullcontext(classifier),
+        n_parallel_batches=oa_config.get("parallel_batches", 1),
+        sample_size=gold_config["sample_size"],
+        sample_seed=gold_config["random_state"],
+        reasoning_effort=reasoning_effort,
+    )
+
+
 def _build_labeling_sources(
     labeling_config: dict[str, Any], settings: Settings, args: argparse.Namespace
 ) -> list[LabelingSource]:
     """Monta as fontes de rotulagem pedidas em ``--label-source``.
 
     O modelo do Hugging Face só é carregado quando a fonte é executada (e a GPU é liberada ao
-    fim dela); o cliente OpenAI usa a chave de ``OPENAI_KEY`` (``.env``), lida sob demanda.
+    fim dela); o cliente da API usa a chave de ``OPENAI_KEY`` (``.env``), lida sob demanda.
 
     Parameters
     ----------
@@ -491,74 +570,19 @@ def _build_labeling_sources(
     Returns
     -------
     list[LabelingSource]
-        Fontes a executar, na ordem ``huggingface`` -> ``openai``.
+        Fontes a executar, na ordem ``huggingface`` -> ``gold_openai`` -> ``gold_unb``.
     """
     requested = (
         LABEL_SOURCE_NAMES if args.label_source == _ALL_SOURCES_OPTION else (args.label_source,)
     )
-    prompt_name = labeling_config["prompt_name"]
-    prompt_template = load_prompt_template(prompt_name)
     sources: list[LabelingSource] = []
-
-    if "huggingface" in requested:
-        hf_config = labeling_config["huggingface"]
-        sources.append(
-            LabelingSource(
-                name="huggingface",
-                model_name=f"{hf_config['model']}@{hf_config['revision']}",
-                # classificador encoder ajustado: não usa prompt nem amostragem (determinístico)
-                prompt_name="nenhum",
-                prompt_template="",
-                temperature=0.0,
-                batch_size=hf_config["batch_size"],
-                open_classifier=partial(
-                    open_huggingface_classifier,
-                    model_name=hf_config["model"],
-                    device=hf_config["device"],
-                    dtype=hf_config["dtype"],
-                    token=settings.huggingface_token,
-                    revision=hf_config["revision"],
-                    max_input_tokens=hf_config["max_input_tokens"],
-                ),
-            )
-        )
-
-    if "openai" in requested:
-        oa_config = labeling_config["openai"]
-        response_mode = oa_config.get("response_mode", "json")
-        tweets_per_request = oa_config.get("tweets_per_request", 1)
-        # Os modos rápidos mudam o formato da resposta: entram no hash do checkpoint
-        # (o padrão `json` + 1 tweet/requisição não altera o hash, preservando checkpoints).
-        fingerprint_suffix = (
-            f"\n#response_mode={response_mode};tweets_per_request={tweets_per_request}"
-            if (response_mode, tweets_per_request) != ("json", 1)
-            else ""
-        )
-        classifier = create_openai_batch_classifier(
-            prompt_template,
-            model=oa_config["model"],
-            temperature=oa_config["temperature"],
-            max_tokens=oa_config["max_tokens"],
-            max_retries=oa_config["max_retries"],
-            max_rate_limit_retries=oa_config["max_rate_limit_retries"],
-            n_workers=args.max_workers or oa_config["n_workers"],
-            requests_per_minute=oa_config["requests_per_minute"],
-            request_timeout_seconds=oa_config["request_timeout_seconds"],
-            response_mode=response_mode,
-            tweets_per_request=tweets_per_request,
-        )
-        sources.append(
-            LabelingSource(
-                name="openai",
-                model_name=oa_config["model"],
-                prompt_name=prompt_name,
-                prompt_template=prompt_template + fingerprint_suffix,
-                temperature=oa_config["temperature"],
-                batch_size=oa_config["batch_size"],
-                open_classifier=lambda: nullcontext(classifier),
-                n_parallel_batches=oa_config.get("parallel_batches", 1),
-            )
-        )
+    if HUGGINGFACE_SOURCE in requested:
+        sources.append(_build_huggingface_source(labeling_config, settings))
+    sources.extend(
+        _build_gold_source(name, labeling_config, args)
+        for name in GOLD_SOURCE_NAMES
+        if name in requested
+    )
     return sources
 
 
@@ -588,7 +612,6 @@ def _build_labeling_stage_kwargs(
     return {
         "paths": paths,
         "sources": _build_labeling_sources(labeling_config, settings, args),
-        "downstream_source": labeling_config["downstream_source"],
         "human_validation_sample_size": labeling_config["human_validation"]["sample_size"],
         "low_confidence_threshold": labeling_config["confidence"]["low_confidence_threshold"],
         "minimum_kappa": labeling_config["validation"]["minimum_agreement"],
@@ -904,7 +927,7 @@ def _build_comparative_evaluation_stage_kwargs(
     """Monta os argumentos de
     :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`.
 
-    A etapa lê as bases ``tweets_data_huggingface``/``tweets_data_openai`` direto do disco e
+    A etapa lê ``tweets_data_huggingface`` e os gold sets direto do disco e
     não exige nenhum argumento manual: limiares e bootstrap vêm de
     ``configs/evaluation.yaml -> llm_comparison``.
 
@@ -951,7 +974,7 @@ def _build_hypothesaes_patterns_kwargs(
     por padrão) é resolvido exclusivamente via ``OPENAI_BASE_URL``/
     ``OPENAI_KEY`` (``.env`` — ver ``.env.example``), lidas em tempo de
     chamada por ``hypothesaes.llm_api.create_client``: este é o único
-    estágio do projeto (além da re-rotulagem via LLM da etapa ``labeling``)
+    estágio do projeto (além da rotulagem dos gold sets da etapa ``labeling``)
     que depende desse cliente.
 
     Parameters

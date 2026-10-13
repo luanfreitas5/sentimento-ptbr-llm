@@ -14,7 +14,7 @@ downloader
 loader
     Carregamento de datasets (CSV/Parquet) com validação de schema.
 gold
-    Loaders de gold sets (TweetSentBR, RePro) com sanitização e divisão
+    Loaders dos gold sets (``gold_openai``/``gold_unb``) com sanitização e divisão
     descoberta/avaliação (:func:`gold.load_gold_set`,
     :func:`gold.split_gold_discovery_eval`).
 splitter

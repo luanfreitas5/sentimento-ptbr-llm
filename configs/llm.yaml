@@ -3,7 +3,7 @@
 # via src/hypothesaes/llm_api.py::generate_completion.
 #
 # A rotulagem dos tweets NÃO usa esta seção: os dois rotuladores (LLM do
-# Hugging Face e API OpenAI) são configurados em configs/labeling.yaml.
+# Hugging Face e gold sets via API) são configurados em configs/labeling.yaml.
 #
 # "openai": endpoint OpenAI-compatível via OPENAI_BASE_URL/OPENAI_KEY
 #           (.env) — inclui a API oficial da OpenAI e servidores

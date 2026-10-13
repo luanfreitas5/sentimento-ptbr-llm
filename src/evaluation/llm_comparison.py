@@ -1,4 +1,4 @@
-"""Comparação entre as bases rotuladas pelo LLM do Hugging Face e pela API OpenAI.
+"""Comparação entre a base do Hugging Face e um gold set rotulado por LLM via API.
 
 Funções puras sobre o DataFrame unificado por ``id`` (ver
 :func:`build_comparison_frame`), sem E/S nem gráficos: cada uma devolve uma
@@ -6,9 +6,10 @@ tabela (ou um dicionário de métricas) que a etapa ``comparative_evaluation``
 (``src/pipelines/comparative_evaluation.py``) grava em disco e que
 ``src/visualization/comparison.py`` desenha.
 
-Como não há verdade de referência, a comparação mede **concordância** e
-descreve o comportamento de cada modelo — nunca "acerto". Toda métrica de
-concordância é reportada com intervalo de confiança (bootstrap por tweet).
+O gold set é rotulado por um LLM (não por humanos) e a coluna ``openai`` do
+quadro unificado o representa (``gold_openai`` ou ``gold_unb``): a comparação mede
+**concordância** e descreve o comportamento de cada modelo — nunca "acerto" absoluto.
+Toda métrica de concordância é reportada com intervalo de confiança (bootstrap por tweet).
 
 Colunas do DataFrame unificado: ``id``, ``text_normalized``,
 ``label_huggingface``/``confidence_huggingface``,
@@ -52,7 +53,7 @@ def build_comparison_frame(huggingface: pl.DataFrame, openai: pl.DataFrame) -> p
     huggingface : pl.DataFrame
         Base ``tweets_data_huggingface`` (contrato :class:`schemas.labeling.LabeledSourceSchema`).
     openai : pl.DataFrame
-        Base ``tweets_data_openai`` (mesmo contrato).
+        Gold set (``gold_openai``/``gold_unb``; mesmo contrato).
 
     Returns
     -------

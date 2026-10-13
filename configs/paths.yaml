@@ -16,14 +16,13 @@ data_files:
   # incompatível (id/text/data_source/data_collected) e colidiria com esse
   # glob, quebrando `--stage all` com um ShapeError do polars.
   raw_tweets: "data/silver/tweets_coletados.parquet"
-  tweetsentbr: "data/bronze/external/tweetsentbr.parquet"
-  repro: "data/bronze/external/repro.parquet"
   corpus_normalizado: "data/silver/corpus_normalizado.parquet"
   corpus_rotulado: "data/gold/corpus_rotulado.parquet"
-  # Bases independentes de rotulagem (uma por fonte), mesmos tweets nas duas:
-  # comparadas pela etapa `comparative_evaluation` via `id`.
+  # Base rotulada pelo modelo do Hugging Face (todos os tweets) e gold sets rotulados por
+  # LLMs via API (amostra do corpus), comparados na etapa `comparative_evaluation` via `id`.
   tweets_data_huggingface: "data/gold/tweets_data_huggingface.parquet"
-  tweets_data_openai: "data/gold/tweets_data_openai.parquet"
+  gold_openai: "data/gold/gold_gpt-6-luna.parquet"
+  gold_unb: "data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet"
   corpus_treino: "data/gold/treino.parquet"
   corpus_validacao: "data/gold/validacao.parquet"
   corpus_teste: "data/gold/teste.parquet"

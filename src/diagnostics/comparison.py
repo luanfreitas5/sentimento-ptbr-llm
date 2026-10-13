@@ -17,7 +17,7 @@ Também mede se as hipóteses de discordância **enfraquecem** após o v2
 
 Uso::
 
-    PYTHONPATH=src python -m diagnostics.comparison --gold tweetsentbr --dry-run
+    PYTHONPATH=src python -m diagnostics.comparison --gold gold_unb --dry-run
 """
 
 import argparse
@@ -38,6 +38,7 @@ import polars as pl
 from config.environment import configure_environment_variables
 from config.logging import configure_logging
 from config.paths import ProjectPaths, load_project_paths, resolve_project_path
+from constants.labels import GOLD_SOURCE_NAMES
 from data.gold import load_gold_set, split_gold_discovery_eval
 from diagnostics.cost import (
     estimate_classification_cost,
@@ -578,7 +579,7 @@ def build_comparison_dry_run(
     Parameters
     ----------
     gold_file : Path
-        Gold set (ex.: ``paths.tweetsentbr_file``).
+        Gold set (ex.: ``paths.gold_unb_file``).
     settings : DiagnosticsSettings
         Configuração validada.
     models : Sequence[str]
@@ -617,7 +618,7 @@ def run_prompt_comparison(
     Parameters
     ----------
     gold_file : Path
-        Gold set (ex.: ``paths.tweetsentbr_file``).
+        Gold set (ex.: ``paths.gold_unb_file``).
     settings : DiagnosticsSettings
         Configuração validada.
     paths : ProjectPaths
@@ -753,14 +754,14 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     Examples
     --------
-    >>> parse_arguments(["--gold", "repro"]).gold
-    'repro'
+    >>> parse_arguments(["--gold", "gold_openai"]).gold
+    'gold_openai'
     """
     parser = argparse.ArgumentParser(
         prog="python -m diagnostics.comparison",
         description="Compara os prompts v1 e v2 no gold set (McNemar, Wilcoxon, IC bootstrap).",
     )
-    parser.add_argument("--gold", required=True, choices=("tweetsentbr", "repro"))
+    parser.add_argument("--gold", required=True, choices=GOLD_SOURCE_NAMES)
     parser.add_argument("--models", nargs="+", help="Modelos classificadores.")
     parser.add_argument("--config", type=Path, default=DEFAULT_DIAGNOSTICS_CONFIG_FILE)
     parser.add_argument("--dry-run", action="store_true")
@@ -783,7 +784,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Examples
     --------
-    >>> main(["--gold", "tweetsentbr", "--dry-run"])  # doctest: +SKIP
+    >>> main(["--gold", "gold_unb", "--dry-run"])  # doctest: +SKIP
     0
     """
     args = parse_arguments(argv)
@@ -791,7 +792,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_logging()
     settings = load_diagnostics_settings(args.config)
     paths = load_project_paths()
-    gold_file = paths.tweetsentbr_file if args.gold == "tweetsentbr" else paths.repro_file
+    gold_file = paths.gold_openai_file if args.gold == "gold_openai" else paths.gold_unb_file
     models = args.models or [settings.llm.annotator_model]
     if args.dry_run:
         print(build_comparison_dry_run(gold_file, settings, models))

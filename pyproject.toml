@@ -144,7 +144,7 @@ labeling = [
     "torch>=2.11.0",                     # backend de tensores para Transformers/DL
     "transformers>=4.56",             # LLMs do Hugging Face (argumento `dtype` de from_pretrained)
     "accelerate>=1.15.0",               # carrega o modelo direto na GPU (device_map)
-    "openai>=3.8.0",                  # cliente OpenAI-compatível (base tweets_data_openai)
+    "openai>=3.8.0",                  # cliente OpenAI-compatível (gold sets gold_openai/gold_unb)
 ]
 
 # Recomendado para os estágios `hypothesaes` e a análise HypotheSAEs
