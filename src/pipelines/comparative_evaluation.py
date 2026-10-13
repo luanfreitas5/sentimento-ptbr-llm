@@ -157,8 +157,10 @@ def load_comparison_frame(paths: ProjectPaths, gold_name: str) -> pl.DataFrame:
     """
     gold_base = load_labeled_source(resolve_gold_path(paths, gold_name), gold_name)
     hf_base = load_labeled_source(paths.huggingface_labeled_file, HUGGINGFACE_SOURCE)
-    hf_sample = hf_base.filter(pl.col("id").is_in(gold_base["id"].to_list()))
-    return build_comparison_frame(hf_sample, gold_base)
+    return build_comparison_frame(
+        hf_base.filter(pl.col("id").is_in(gold_base["id"].to_list())),
+        gold_base,
+    )
 
 
 def _write_tables(tables: dict[str, pl.DataFrame], directory: Path) -> dict[str, Path]:

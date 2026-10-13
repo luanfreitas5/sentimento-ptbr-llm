@@ -90,7 +90,7 @@ def _run_disagreement_mode(
             random_seed=random_seed,
             track=track,
         )
-        gold_summary = [{"gold": gold_name, **_summarize_outcome(o)} for o in outcomes]
+        gold_summary = [{"gold": gold_name} | _summarize_outcome(o) for o in outcomes]
         write_json(gold_summary, paths.reports_metrics_dir / f"hipoteses_{gold_subdir}.json")
         for item in gold_summary:
             logger.info(
