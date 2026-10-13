@@ -33,7 +33,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 from exceptions.configuration import MissingEnvironmentVariableError
-from exceptions.model import ModelError, UnsupportedModelError
+from exceptions.model import ModelError, TruncatedResponseError, UnsupportedModelError
 
 logger = logging.getLogger(__name__)
 
@@ -735,6 +735,9 @@ def generate_chat_completion(
         Se a biblioteca ``openai`` não estiver instalada.
     MissingEnvironmentVariableError
         Se ``OPENAI_KEY`` for necessária e não estiver definida.
+    TruncatedResponseError
+        Se a resposta for cortada pelo limite de tokens (``finish_reason == "length"``);
+        o chamador decide se retenta com um limite maior.
 
     Examples
     --------
@@ -759,7 +762,10 @@ def generate_chat_completion(
         messages=messages,
         **request_kwargs,
     )
-    return response.choices[0].message.content or ""
+    choice = response.choices[0]
+    if choice.finish_reason == "length":
+        raise TruncatedResponseError(max_tokens)
+    return choice.message.content or ""
 
 
 def generate_chat_completion_first_token_logprobs(

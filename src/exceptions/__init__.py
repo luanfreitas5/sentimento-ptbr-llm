@@ -30,6 +30,7 @@ from exceptions.model import (
     ModelError,
     ModelNotFittedError,
     ModelPersistenceError,
+    TruncatedResponseError,
     UnsupportedModelError,
 )
 from exceptions.pipeline import (
@@ -59,6 +60,7 @@ __all__: list[str] = [
     "PipelineStageError",
     "ProjectError",
     "SanityGateFailedError",
+    "TruncatedResponseError",
     "UnknownPipelineStageError",
     "UnsupportedModelError",
 ]

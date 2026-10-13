@@ -61,3 +61,22 @@ class UnsupportedModelError(ModelError):
             f"Modelo '{model_name}' não suportado. Modelos disponíveis: {available_models}",
             context={"model_name": model_name},
         )
+
+
+class TruncatedResponseError(ModelError):
+    """Levantada quando a resposta do LLM é cortada pelo limite de tokens de saída.
+
+    Em modelos de raciocínio, o raciocínio pode consumir todo o teto de
+    ``max_completion_tokens`` e a resposta vem vazia (``finish_reason == "length"``).
+
+    Parameters
+    ----------
+    max_tokens : int | None
+        Limite de tokens de saída da requisição truncada.
+    """
+
+    def __init__(self, max_tokens: int | None) -> None:
+        super().__init__(
+            f"Resposta do LLM truncada no limite de {max_tokens} tokens de saída",
+            context={"max_tokens": max_tokens},
+        )

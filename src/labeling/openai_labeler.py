@@ -21,6 +21,9 @@ Robustez frente à API:
 * resposta do LLM inutilizável (texto livre, JSON inválido, rótulo desconhecido)
   ou texto vazio não derruba a execução: o tweet recebe o rótulo ``indefinido``
   com score ``0.0``;
+* resposta truncada pelo limite de tokens (``finish_reason == "length"``, típico de modelos
+  de raciocínio cujo raciocínio consome o teto) é retentada na hora com o limite dobrado,
+  contando como tentativa em ``max_retries``; nunca vira ``indefinido``;
 * um tweet que esgota as retentativas de API devolve ``None`` (ver
   :mod:`labeling.incremental`): não é gravado no checkpoint e é retentado na
   próxima execução, sem derrubar os demais do lote.
@@ -35,6 +38,7 @@ from typing import TypeVar
 
 from constants.labels import SENTIMENT_CLASSES, UNDEFINED_LABEL, UNDEFINED_SCORE
 from exceptions.base import ProjectError
+from exceptions.model import TruncatedResponseError
 from hypothesaes.llm_api import (
     generate_chat_completion,
     generate_chat_completion_first_token_logprobs,
@@ -151,34 +155,40 @@ def _calculate_api_error_wait(exception: Exception, attempt: int, max_retries: i
 
 
 def _request_with_retries(
-    send: Callable[[], _T],
+    send: Callable[[int | None], _T],
     *,
     max_retries: int,
     max_rate_limit_retries: int,
     rate_limiter: RateLimiter,
+    max_tokens: int | None = None,
 ) -> _T | None:
     """Envia uma requisição com limitador de taxa e retentativas.
 
     Erros 429 têm orçamento próprio de retentativas: a espera respeita o
     ``Retry-After`` do servidor e vale para todas as threads (via
     ``rate_limiter``). Demais erros usam backoff exponencial com jitter e
-    ``max_retries``.
+    ``max_retries``. Uma resposta truncada (:class:`TruncatedResponseError`) é
+    retentada imediatamente, sem espera (o problema é o limite de tokens, não a
+    carga da API), com ``max_tokens`` dobrado; cada truncamento conta em ``max_retries``.
 
     Parameters
     ----------
-    send : Callable[[], _T]
-        Executa uma requisição e devolve seu resultado (nunca ``None``).
+    send : Callable[[int | None], _T]
+        Executa uma requisição com o limite de tokens recebido e devolve seu
+        resultado (nunca ``None``).
     max_retries : int
         Máximo de tentativas em falhas de API (exceto 429).
     max_rate_limit_retries : int
         Máximo de retentativas após respostas 429.
     rate_limiter : RateLimiter
         Limitador de taxa compartilhado entre as threads.
+    max_tokens : int | None, optional
+        Limite inicial de tokens de saída, dobrado a cada truncamento, by default None.
 
     Returns
     -------
     _T | None
-        Resultado de ``send``; ``None`` se a API falhar em todas as tentativas.
+        Resultado de ``send``; ``None`` se a API falhar (ou truncar) em todas as tentativas.
 
     Raises
     ------
@@ -187,11 +197,30 @@ def _request_with_retries(
     """
     attempt = 0
     rate_limit_attempt = 0
+    current_max_tokens = max_tokens
 
     while True:
         rate_limiter.acquire()
         try:
-            result = send()
+            result = send(current_max_tokens)
+        except TruncatedResponseError as exception:
+            attempt += 1
+            if attempt >= max_retries:
+                logger.error(  # noqa: TRY400
+                    "Resposta truncada em todas as %d tentativas; tweet fica pendente: %s",
+                    max_retries,
+                    exception,
+                )
+                return None
+            if current_max_tokens is not None:
+                current_max_tokens *= 2
+            logger.warning(
+                "Resposta truncada (tentativa %d/%d); retentando com teto de %s tokens.",
+                attempt,
+                max_retries,
+                current_max_tokens,
+            )
+            continue
         except ProjectError:
             raise
         except Exception as exception:
@@ -275,7 +304,7 @@ def _classify_single_text(
     if not text.strip():
         return UNDEFINED_LABEL, UNDEFINED_SCORE
 
-    send: Callable[[], str | tuple[str, dict[str, float]]]
+    send: Callable[[int | None], str | tuple[str, dict[str, float]]]
     if response_mode == RESPONSE_MODE_LABEL_LOGPROBS:
         label_only_messages = [
             {
@@ -286,7 +315,7 @@ def _classify_single_text(
             }
         ]
 
-        send = lambda: generate_chat_completion_first_token_logprobs(  # noqa: E731
+        send = lambda _max_tokens: generate_chat_completion_first_token_logprobs(  # noqa: E731
             label_only_messages,
             model=model,
             max_tokens=_LABEL_ONLY_MAX_TOKENS,
@@ -295,11 +324,11 @@ def _classify_single_text(
 
     else:
         json_messages = [{"role": "user", "content": build_labeling_prompt(prompt_template, text)}]
-        send = lambda: generate_chat_completion(  # noqa: E731
+        send = lambda current_max_tokens: generate_chat_completion(  # noqa: E731
             json_messages,
             model=model,
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_tokens=current_max_tokens,
             timeout=request_timeout_seconds,
             reasoning_effort=reasoning_effort,
         )
@@ -309,6 +338,7 @@ def _classify_single_text(
         max_retries=max_retries,
         max_rate_limit_retries=max_rate_limit_retries,
         rate_limiter=rate_limiter,
+        max_tokens=max_tokens,
     )
     if response is None:
         return None
@@ -391,8 +421,13 @@ def _classify_tweet_group(
         }
     ]
 
-    def send() -> str:
+    def send(current_max_tokens: int | None) -> str:
         """Envia o grupo de tweets em uma única requisição.
+
+        Parameters
+        ----------
+        current_max_tokens : int | None
+            Limite de tokens de saída desta tentativa (dobra a cada truncamento).
 
         Returns
         -------
@@ -403,7 +438,7 @@ def _classify_tweet_group(
             messages,
             model=model,
             temperature=temperature,
-            max_tokens=_TOKENS_PER_MULTI_ITEM * len(texts) + 16,
+            max_tokens=current_max_tokens,
             timeout=request_timeout_seconds,
             reasoning_effort=reasoning_effort,
         )
@@ -413,6 +448,7 @@ def _classify_tweet_group(
         max_retries=max_retries,
         max_rate_limit_retries=max_rate_limit_retries,
         rate_limiter=rate_limiter,
+        max_tokens=_TOKENS_PER_MULTI_ITEM * len(texts) + 16,
     )
     if raw_response is None:
         return [None] * len(texts)
