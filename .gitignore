@@ -28,10 +28,9 @@ env/
 # .secrets.baseline é commitado (usado pelo detect-secrets) — não ignorar.
 
 # --- Dados (versionados por DVC) -------------------------------------------
-data/raw/*
-data/external/*
-data/interim/*
-data/processed/*
+data/bronze/*
+data/silver/*
+data/gold/*
 # Mantém a estrutura de pastas e os ponteiros do DVC:
 !data/**/.gitkeep
 !data/**/*.dvc

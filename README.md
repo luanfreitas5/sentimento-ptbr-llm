@@ -67,11 +67,10 @@ sentimento-ptbr-llm/
 │   ├── logging.yaml
 │   ├── model_params.yaml
 │   └── paths.yaml
-├── data/                       # raw/ (nunca modificar) → interim/ → processed/ (fora do Git; ver dvc.yaml)
-│   ├── external/
-│   ├── interim/
-│   ├── processed/
-│   └── raw/
+├── data/                       # medallion: bronze/ (imutável, inclui external/) → silver/ → gold/ (fora do Git; ver dvc.yaml)
+│   ├── bronze/                 # dados como recebidos (tweets por usuário, external/ com TweetSentBR/RePro, catalog.json)
+│   ├── silver/                 # limpos, tipados e validados (corpus normalizado, checkpoints)
+│   └── gold/                   # prontos para modelagem (corpus rotulado, treino/validação/teste, features)
 ├── docs/                       # Documentação técnica (MkDocs Material + mkdocstrings)
 │   ├── assets/
 │   ├── guides/

@@ -674,7 +674,7 @@ def run_prompt_comparison(
             )
             write_parquet(
                 _contract_frame(g_disc, disc_preds, _per_tweet_agreement(disc_preds)),
-                paths.data_interim_dir / "diagnostics" / f"gold_disc_{version}.parquet",
+                paths.data_silver_dir / "diagnostics" / f"gold_disc_{version}.parquet",
             )
         result = pl.DataFrame(
             [

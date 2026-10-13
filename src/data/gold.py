@@ -1,7 +1,7 @@
 """Loaders de gold sets (TweetSentBR, RePro) e divisão descoberta/avaliação.
 
 Os arquivos NÃO são baixados aqui: fonte e licença de cada gold set devem ser
-confirmadas por quem executa, e o arquivo colocado em ``data/external/``
+confirmadas por quem executa, e o arquivo colocado em ``data/bronze/external/``
 (``paths.tweetsentbr_file``/``paths.repro_file``). O contrato esperado é uma
 tabela com identificador, texto e rótulo de sentimento.
 
@@ -114,7 +114,7 @@ def load_gold_set(
     Raises
     ------
     DataNotFoundError
-        Se o arquivo não existir (mensagem orienta a colocá-lo em ``data/external/``).
+        Se o arquivo não existir (mensagem orienta a colocá-lo em ``data/bronze/external/``).
     DataValidationError
         Se faltarem colunas ou houver rótulos não reconhecidos.
     EmptyDatasetError
@@ -122,11 +122,11 @@ def load_gold_set(
 
     Examples
     --------
-    >>> load_gold_set(Path("data/external/tweetsentbr.parquet"))  # doctest: +SKIP
+    >>> load_gold_set(Path("data/bronze/external/tweetsentbr.parquet"))  # doctest: +SKIP
     """
     if not file_path.is_file():
         raise DataNotFoundError(
-            f"{file_path} — coloque o gold set em data/external/ (confirme fonte e licença)"
+            f"{file_path} — coloque o gold set em data/bronze/external/ (confirme fonte e licença)"
         )
     raw = read_dataset_file(file_path)
     missing = [c for c in (text_column, label_column, id_column) if c not in raw.columns]

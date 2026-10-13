@@ -643,8 +643,8 @@ class TestLoadGoldSet:
         assert not any("@user" in text for text in gold["text_normalized"])
 
     def test_missing_file_gives_actionable_error(self, tmp_path: Path) -> None:
-        """Arquivo ausente orienta a colocar o gold em data/external/."""
-        with pytest.raises(DataNotFoundError, match="data/external"):
+        """Arquivo ausente orienta a colocar o gold em data/bronze/external/."""
+        with pytest.raises(DataNotFoundError, match="data/bronze/external"):
             load_gold_set(tmp_path / "nao_existe.parquet")
 
     def test_missing_column_raises(self, tmp_path: Path) -> None:
@@ -2721,7 +2721,7 @@ def _fake_paths(tmp_path: Path) -> Any:
     return SimpleNamespace(
         reports_interpretability_dir=tmp_path / "interp",
         reports_tables_dir=tmp_path / "tables",
-        data_interim_dir=tmp_path / "interim",
+        data_silver_dir=tmp_path / "silver",
     )
 
 
@@ -2782,5 +2782,5 @@ class TestRunValidationStage:
         assert outcome.sample_path is not None
         header = outcome.sample_path.read_text(encoding="utf-8").splitlines()[0].split(",")
         assert "id" not in header
-        assert (paths.data_interim_dir / "diagnostics" / "para_rotular_chave.parquet").is_file()
+        assert (paths.data_silver_dir / "diagnostics" / "para_rotular_chave.parquet").is_file()
         assert (discovery_dir / "disagreement_validacao.csv").is_file()

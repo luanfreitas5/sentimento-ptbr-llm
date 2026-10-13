@@ -2,7 +2,7 @@
 
 Os schemas usam ``pandera.polars`` como contrato de dados versionado (ver
 CLAUDE.md, "Data Contracts"): validam tipos, nulidade, unicidade e valores
-aceitos nas fronteiras entre as etapas ``raw -> interim -> processed``.
+aceitos nas fronteiras entre as etapas ``bronze -> silver -> gold``.
 """
 
 from datetime import datetime
@@ -18,7 +18,7 @@ from exceptions.data import DataValidationError
 
 
 class RawTweetSchema(pa.DataFrameModel):
-    """Contrato de dados para tweets brutos coletados por usuário (``data/raw``).
+    """Contrato de dados para tweets brutos coletados por usuário (``data/bronze``).
 
     Reflete as colunas reais dos arquivos Parquet coletados via
     ``twscrape`` (um arquivo por usuário). ``source_query``/``source_group``
@@ -49,7 +49,7 @@ class RawTweetSchema(pa.DataFrameModel):
 
 
 class LabeledCorpusSchema(pa.DataFrameModel):
-    """Contrato de dados para o corpus rotulado, pronto para modelagem (``data/processed``)."""
+    """Contrato de dados para o corpus rotulado, pronto para modelagem (``data/gold``)."""
 
     id: Series[str] = pa.Field(unique=True)
     text: Series[str]

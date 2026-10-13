@@ -97,7 +97,7 @@ def download_external_dataset(
         arquivo (ex.: um wrapper sobre uma requisição HTTP a um repositório
         público do TweetSentBR/RePro).
     destination_path : Path
-        Caminho de destino (tipicamente em ``data/external``) para o
+        Caminho de destino (tipicamente em ``data/bronze/external``) para o
         arquivo baixado.
 
     Returns
@@ -109,7 +109,7 @@ def download_external_dataset(
     Examples
     --------
     >>> download_external_dataset(
-    ...     lambda: b"conteudo", Path("data/external/exemplo.bin")
+    ...     lambda: b"conteudo", Path("data/bronze/external/exemplo.bin")
     ... )  # doctest: +SKIP
     """
     destination_path.parent.mkdir(parents=True, exist_ok=True)

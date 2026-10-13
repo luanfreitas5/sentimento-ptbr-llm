@@ -72,7 +72,7 @@ def run_features_stage(
 
     Esta etapa não paraleliza o cálculo do TF-IDF: ele já é vetorizado em
     C via ``scikit-learn`` (rápido mesmo para grandes lotes) e não lê
-    ``data/raw`` em nenhum momento — o ganho de paralelismo para grandes
+    ``data/bronze`` em nenhum momento — o ganho de paralelismo para grandes
     volumes de tweets de usuários acontece a montante, no carregamento do
     lote bruto e na normalização/rotulagem por linha (ver
     ``pipelines.preprocessing.run_preprocessing_stage`` e
@@ -142,7 +142,7 @@ def run_features_stage(
     tfidf_features = compute_tfidf_features(
         training_split, text_column=text_column, **(tfidf_overrides or {})
     )
-    tfidf_features_path = paths.data_processed_dir / _TFIDF_FEATURES_FILE_NAME
+    tfidf_features_path = paths.data_gold_dir / _TFIDF_FEATURES_FILE_NAME
     write_dataset(tfidf_features, tfidf_features_path)
 
     vectorizer = LexicalTfidfVectorizer(**(tfidf_overrides or {})).fit(

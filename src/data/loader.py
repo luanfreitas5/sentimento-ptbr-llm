@@ -50,7 +50,7 @@ def read_dataset_file(file_path: Path) -> pl.DataFrame:
 
     Examples
     --------
-    >>> read_dataset_file(Path("data/processed/exemplo.parquet"))  # doctest: +SKIP
+    >>> read_dataset_file(Path("data/gold/exemplo.parquet"))  # doctest: +SKIP
     """
     suffix = file_path.suffix.lower()
     if suffix in _PARQUET_SUFFIXES:
@@ -69,7 +69,7 @@ def load_raw_tweet_batch(
     """Carrega, concatena e valida o lote de tweets brutos coletados por usuário.
 
     Lê em paralelo todos os arquivos ``*.parquet`` do diretório informado
-    (um por usuário coletado — ver ``data/raw/``), isolando a falha de
+    (um por usuário coletado — ver ``data/bronze/``), isolando a falha de
     leitura de um arquivo corrompido sem abortar os demais (ver
     :func:`parallel.data_loading.run_parallel_parquet_loading`). A
     validação contra :class:`schemas.dataset.RawTweetSchema` ocorre uma
@@ -80,7 +80,7 @@ def load_raw_tweet_batch(
     Parameters
     ----------
     directory : Path
-        Diretório contendo os arquivos Parquet brutos (``paths.data_raw_dir``).
+        Diretório contendo os arquivos Parquet brutos (``paths.data_bronze_dir``).
     max_workers : int | None, optional
         Repassado a :func:`parallel.data_loading.run_parallel_parquet_loading`,
         by default None (o executor escolhe automaticamente).
@@ -108,7 +108,7 @@ def load_raw_tweet_batch(
 
     Examples
     --------
-    >>> load_raw_tweet_batch(Path("data/raw"))  # doctest: +SKIP
+    >>> load_raw_tweet_batch(Path("data/bronze"))  # doctest: +SKIP
     """
     file_paths = sorted(directory.glob("*.parquet"))
     validate_not_empty_collection(file_paths, collection_name=str(directory))
@@ -156,7 +156,7 @@ def load_labeled_corpus(file_path: Path) -> pl.DataFrame:
     Parameters
     ----------
     file_path : Path
-        Caminho do arquivo em ``data/processed``.
+        Caminho do arquivo em ``data/gold``.
 
     Returns
     -------
@@ -172,7 +172,7 @@ def load_labeled_corpus(file_path: Path) -> pl.DataFrame:
 
     Examples
     --------
-    >>> load_labeled_corpus(Path("data/processed/corpus_rotulado.parquet"))  # doctest: +SKIP
+    >>> load_labeled_corpus(Path("data/gold/corpus_rotulado.parquet"))  # doctest: +SKIP
     """
     validated_corpus = validate_labeled_corpus(read_dataset_file(file_path))
     logger.info("Corpus rotulado carregado: %s (%d linhas)", file_path, validated_corpus.height)
@@ -185,7 +185,7 @@ def load_training_example_dataset(file_path: Path) -> pl.DataFrame:
     Parameters
     ----------
     file_path : Path
-        Caminho do arquivo (ex.: ``data/processed/treino.parquet``).
+        Caminho do arquivo (ex.: ``data/gold/treino.parquet``).
 
     Returns
     -------
@@ -201,7 +201,7 @@ def load_training_example_dataset(file_path: Path) -> pl.DataFrame:
 
     Examples
     --------
-    >>> load_training_example_dataset(Path("data/processed/treino.parquet"))  # doctest: +SKIP
+    >>> load_training_example_dataset(Path("data/gold/treino.parquet"))  # doctest: +SKIP
     """
     validated_df = validate_training_example(read_dataset_file(file_path))
     logger.info(

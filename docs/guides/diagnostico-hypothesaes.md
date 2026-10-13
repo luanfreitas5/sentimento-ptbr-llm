@@ -93,7 +93,7 @@ sempre ligado (só o `--dry-run` o desliga); as CLIs `python -m diagnostics.*` t
 
 Para `pseudo_label`, informe `--model-column lab_huggingface --label negativo`. Para `gold_error`,
 passe `--corpus` com as predições sobre o gold no contrato (geradas por `diag-compare` em
-`data/interim/diagnostics/gold_disc_v1.parquet`).
+`data/silver/diagnostics/gold_disc_v1.parquet`).
 
 ## Configuração e segredos
 
@@ -133,7 +133,7 @@ antes de confiar na estimativa em dólares.
 - **Modelo anotador**: `llama3.2:1b` não segue o formato Yes/No (smoke test: 0 de 6 respostas
   parseáveis; ele repete o prompt). O fluxo aborta se mais de 20 % das respostas não forem
   parseáveis. Use um modelo maior (ex.: `gemma2:9b`) ou a OpenAI.
-- **Gold sets**: `data/external/` deve conter `tweetsentbr.parquet`/`repro.parquet`
+- **Gold sets**: `data/bronze/external/` deve conter `tweetsentbr.parquet`/`repro.parquet`
   (`id`, `text`, `sentiment_label`). Confirme fonte e licença; não há download automático.
 - **Nenhum tweet de `G_eval` entra na descoberta**: o gold é dividido em `G_disc` (descoberta do
   alvo `gold_error` e rerun pós-v2) e `G_eval` (reporte v1 vs v2).

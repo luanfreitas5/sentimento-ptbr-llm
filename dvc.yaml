@@ -22,17 +22,17 @@ stages:
       - src/pipelines/ingestion.py
       - src/data/downloader.py
     outs:
-      - data/raw/tweets_coletados.parquet
-      - data/raw/catalog.json
+      - data/silver/tweets_coletados.parquet
+      - data/bronze/catalog.json
 
   preprocessing:
     cmd: uv run python src/main.py --stage preprocessing
     deps:
       - src/pipelines/preprocessing.py
       - src/preprocessing
-      - data/raw/tweets_coletados.parquet
+      - data/silver/tweets_coletados.parquet
     outs:
-      - data/interim/corpus_normalizado.parquet
+      - data/silver/corpus_normalizado.parquet
 
   labeling:
     cmd: uv run python src/main.py --stage labeling --label-source all
@@ -40,13 +40,13 @@ stages:
       - src/pipelines/labeling.py
       - src/labeling
       - prompts
-      - data/interim/corpus_normalizado.parquet
+      - data/silver/corpus_normalizado.parquet
     params:
       - configs/labeling.yaml:
     outs:
-      - data/processed/tweets_data_huggingface.parquet
-      - data/processed/tweets_data_openai.parquet
-      - data/processed/corpus_rotulado.parquet
+      - data/gold/tweets_data_huggingface.parquet
+      - data/gold/tweets_data_openai.parquet
+      - data/gold/corpus_rotulado.parquet
 
   comparative_evaluation:
     cmd: uv run python src/main.py --stage comparative_evaluation
@@ -54,8 +54,8 @@ stages:
       - src/pipelines/comparative_evaluation.py
       - src/evaluation/llm_comparison.py
       - src/visualization/comparison.py
-      - data/processed/tweets_data_huggingface.parquet
-      - data/processed/tweets_data_openai.parquet
+      - data/gold/tweets_data_huggingface.parquet
+      - data/gold/tweets_data_openai.parquet
     params:
       - configs/evaluation.yaml:
           - llm_comparison
@@ -74,8 +74,8 @@ stages:
     deps:
       - src/pipelines/hypotheses.py
       - src/diagnostics
-      - data/processed/tweets_data_huggingface.parquet
-      - data/processed/tweets_data_openai.parquet
+      - data/gold/tweets_data_huggingface.parquet
+      - data/gold/tweets_data_openai.parquet
     params:
       - configs/evaluation.yaml:
           - hypotheses
@@ -89,17 +89,17 @@ stages:
     deps:
       - src/pipelines/features.py
       - src/features
-      - data/processed/corpus_rotulado.parquet
+      - data/gold/corpus_rotulado.parquet
     params:
       - configs/config.yaml:
           - data_split
       - configs/model_params.yaml:
           - embeddings
     outs:
-      - data/processed/treino.parquet
-      - data/processed/validacao.parquet
-      - data/processed/teste.parquet
-      - data/processed/tfidf_features.parquet
+      - data/gold/treino.parquet
+      - data/gold/validacao.parquet
+      - data/gold/teste.parquet
+      - data/gold/tfidf_features.parquet
       - models/checkpoints/tfidf_vectorizer.joblib:
           persist: true
 
@@ -109,8 +109,8 @@ stages:
       - src/pipelines/training_classical.py
       - src/models
       - src/training
-      - data/processed/treino.parquet
-      - data/processed/validacao.parquet
+      - data/gold/treino.parquet
+      - data/gold/validacao.parquet
       - models/checkpoints/tfidf_vectorizer.joblib
     params:
       - configs/model_params.yaml:
@@ -135,8 +135,8 @@ stages:
       - src/pipelines/training_deep_learning.py
       - src/models
       - src/training
-      - data/processed/treino.parquet
-      - data/processed/validacao.parquet
+      - data/gold/treino.parquet
+      - data/gold/validacao.parquet
     params:
       - configs/model_params.yaml:
           - deep_learning
@@ -153,8 +153,8 @@ stages:
       - src/pipelines/training_deep_learning.py
       - src/models
       - src/training
-      - data/processed/treino.parquet
-      - data/processed/validacao.parquet
+      - data/gold/treino.parquet
+      - data/gold/validacao.parquet
     params:
       - configs/model_params.yaml:
           - transformers
@@ -171,8 +171,8 @@ stages:
     deps:
       - src/pipelines/training_llm.py
       - src/models/llm.py
-      - data/processed/treino.parquet
-      - data/processed/validacao.parquet
+      - data/gold/treino.parquet
+      - data/gold/validacao.parquet
     params:
       - configs/model_params.yaml:
           - llm
@@ -187,9 +187,9 @@ stages:
     deps:
       - src/pipelines/evaluate.py
       - src/evaluation
-      - data/processed/treino.parquet
-      - data/processed/validacao.parquet
-      - data/processed/teste.parquet
+      - data/gold/treino.parquet
+      - data/gold/validacao.parquet
+      - data/gold/teste.parquet
       - models/checkpoints
     params:
       - configs/evaluation.yaml:

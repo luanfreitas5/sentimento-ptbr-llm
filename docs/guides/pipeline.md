@@ -13,9 +13,9 @@ O acoplamento entre estágios é o sistema de arquivos (Parquet em `data/`, chec
 
 | Estágio | Atalho `make` | Módulo | Entrada | Saída |
 |---|---|---|---|---|
-| `ingestion` | `ingest` | `src/pipelines/ingestion.py` | função de coleta definida pelo usuário (`--scrape-func`) | `data/interim/tweets_coletados.parquet` |
-| `preprocessing` | `preprocess` | `src/pipelines/preprocessing.py` | lote de tweets brutos coletados por usuário, `data/raw/*.parquet` (ver `src/data/loader.py::load_raw_tweet_batch`) | `data/interim/corpus_normalizado.parquet` |
-| `labeling` | `label` (`label-hf` / `label-openai`) | `src/pipelines/labeling.py` | corpus normalizado | `data/processed/tweets_data_huggingface.parquet`, `tweets_data_openai.parquet` (+ `.meta.json`) e `corpus_rotulado.parquet` |
+| `ingestion` | `ingest` | `src/pipelines/ingestion.py` | função de coleta definida pelo usuário (`--scrape-func`) | `data/silver/tweets_coletados.parquet` |
+| `preprocessing` | `preprocess` | `src/pipelines/preprocessing.py` | lote de tweets brutos coletados por usuário, `data/bronze/*.parquet` (ver `src/data/loader.py::load_raw_tweet_batch`) | `data/silver/corpus_normalizado.parquet` |
+| `labeling` | `label` (`label-hf` / `label-openai`) | `src/pipelines/labeling.py` | corpus normalizado | `data/gold/tweets_data_huggingface.parquet`, `tweets_data_openai.parquet` (+ `.meta.json`) e `corpus_rotulado.parquet` |
 | `comparative_evaluation` | `compare` | `src/pipelines/comparative_evaluation.py` | as duas bases rotuladas | tabelas em `reports/tables/comparativo_hf_openai/`, gráficos em `reports/figures/comparativo_hf_openai/`, resumo em `reports/metrics/comparativo_hf_openai.json` |
 | `hypotheses` | `hypotheses` | `src/pipelines/hypotheses.py` | as duas bases rotuladas (modo `disagreement`), corpus rotulado (`patterns`) | hipóteses do HypotheSAEs em `reports/tables/comparativo_hf_openai/` e `reports/metrics/hipoteses_*.json` (ver [Hipóteses](#hipoteses-hypothesaes)) |
 | `features` | `features` | `src/pipelines/features.py` | corpus rotulado | splits treino/validação/teste, features TF-IDF e o vetorizador ajustado no treino (`models/checkpoints/tfidf_vectorizer.joblib`) |
@@ -81,7 +81,7 @@ Colunas (contrato `schemas.labeling.LabeledSourceSchema`): `id`, `text` (texto o
 `confidence_score` (confiança). O modelo, o prompt (hash), a temperatura e o hash do corpus de
 entrada ficam em `<base>.meta.json`, ao lado da base.
 
-- **Retomada e deduplicação:** cada lote é gravado em `data/interim/labeling_checkpoints/` (JSON
+- **Retomada e deduplicação:** cada lote é gravado em `data/silver/labeling_checkpoints/` (JSON
   Lines). Ao reexecutar, tweets já rotulados não são reprocessados; o checkpoint é invalidado se
   modelo, prompt ou temperatura mudarem.
 - **Falhas:** erros de API (timeout, HTTP 429) são retentados com backoff exponencial; se sobrar

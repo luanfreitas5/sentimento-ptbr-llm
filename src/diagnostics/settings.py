@@ -103,7 +103,7 @@ class LLMSettings(_Strict):
     )  # None = sem teto (AIMD reage ao 429)
     max_rate_limit_retries: int = Field(ge=0, default=8)  # orçamento próprio para HTTP 429
     temperature: float = Field(ge=0, default=0.0)
-    cache_dir: str = "data/interim/diagnostics/llm_cache"
+    cache_dir: str = "data/silver/diagnostics/llm_cache"
     max_annotation_failure_rate: float = Field(ge=0, le=1, default=0.2)
 
     @property

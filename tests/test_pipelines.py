@@ -45,21 +45,21 @@ def pipeline_paths(tmp_path: Path) -> ProjectPaths:
     """Constrói um :class:`ProjectPaths` isolado em diretório temporário,
     para testes de pipeline."""
     return ProjectPaths(
-        data_raw_dir=tmp_path / "data" / "raw",
-        data_external_dir=tmp_path / "data" / "external",
-        data_interim_dir=tmp_path / "data" / "interim",
-        data_processed_dir=tmp_path / "data" / "processed",
-        raw_tweets_file=tmp_path / "data" / "raw" / "tweets.parquet",
-        tweetsentbr_file=tmp_path / "data" / "external" / "tweetsentbr.parquet",
-        repro_file=tmp_path / "data" / "external" / "repro.parquet",
-        normalized_corpus_file=tmp_path / "data" / "interim" / "normalizado.parquet",
-        labeled_corpus_file=tmp_path / "data" / "processed" / "rotulado.parquet",
-        huggingface_labeled_file=tmp_path / "data" / "processed" / "tweets_hf.parquet",
-        openai_labeled_file=tmp_path / "data" / "processed" / "tweets_openai.parquet",
-        labeling_checkpoints_dir=tmp_path / "data" / "interim" / "checkpoints",
-        training_corpus_file=tmp_path / "data" / "processed" / "treino.parquet",
-        validation_corpus_file=tmp_path / "data" / "processed" / "validacao.parquet",
-        test_corpus_file=tmp_path / "data" / "processed" / "teste.parquet",
+        data_bronze_dir=tmp_path / "data" / "bronze",
+        data_external_dir=tmp_path / "data" / "bronze" / "external",
+        data_silver_dir=tmp_path / "data" / "silver",
+        data_gold_dir=tmp_path / "data" / "gold",
+        raw_tweets_file=tmp_path / "data" / "bronze" / "tweets.parquet",
+        tweetsentbr_file=tmp_path / "data" / "bronze" / "external" / "tweetsentbr.parquet",
+        repro_file=tmp_path / "data" / "bronze" / "external" / "repro.parquet",
+        normalized_corpus_file=tmp_path / "data" / "silver" / "normalizado.parquet",
+        labeled_corpus_file=tmp_path / "data" / "gold" / "rotulado.parquet",
+        huggingface_labeled_file=tmp_path / "data" / "gold" / "tweets_hf.parquet",
+        openai_labeled_file=tmp_path / "data" / "gold" / "tweets_openai.parquet",
+        labeling_checkpoints_dir=tmp_path / "data" / "silver" / "checkpoints",
+        training_corpus_file=tmp_path / "data" / "gold" / "treino.parquet",
+        validation_corpus_file=tmp_path / "data" / "gold" / "validacao.parquet",
+        test_corpus_file=tmp_path / "data" / "gold" / "teste.parquet",
         models_checkpoints_dir=tmp_path / "models" / "checkpoints",
         models_artifacts_dir=tmp_path / "models" / "artifacts",
         models_registry_dir=tmp_path / "models" / "registry",
@@ -109,7 +109,7 @@ class TestRunIngestionStage:
         assert raw_tweets_path == pipeline_paths.raw_tweets_file
         assert raw_tweets_path.is_file()
         assert pipeline_paths.tweetsentbr_file.read_bytes() == b"conteudo-gold-set"
-        assert (pipeline_paths.data_raw_dir / "catalog.json").is_file()
+        assert (pipeline_paths.data_bronze_dir / "catalog.json").is_file()
 
         collected = read_dataset_file(raw_tweets_path)
         assert collected.height == 2
@@ -126,7 +126,7 @@ class TestRunPreprocessingStage:
     def test_loads_raw_batch_and_writes_normalized_corpus(
         self, pipeline_paths: ProjectPaths
     ) -> None:
-        """Deve carregar o lote bruto de data/raw/ e gravar o corpus normalizado correspondente."""
+        """Deve carregar o lote bruto de data/bronze/ e gravar o corpus normalizado."""
         raw_batch = pl.DataFrame(
             {
                 "tweet_id": ["1", "2"],
@@ -144,7 +144,7 @@ class TestRunPreprocessingStage:
                 "source_group": ["teste", "teste"],
             }
         )
-        write_dataset(raw_batch, pipeline_paths.data_raw_dir / "usuario_teste.parquet")
+        write_dataset(raw_batch, pipeline_paths.data_bronze_dir / "usuario_teste.parquet")
 
         normalized_path = run_preprocessing_stage(
             pipeline_paths, show_progress=False, apply_inclusion_filters=False
@@ -174,7 +174,7 @@ class TestRunPreprocessingStage:
                 "source_group": ["teste", "teste"],
             }
         )
-        write_dataset(raw_batch, pipeline_paths.data_raw_dir / "usuario_teste.parquet")
+        write_dataset(raw_batch, pipeline_paths.data_bronze_dir / "usuario_teste.parquet")
 
         run_preprocessing_stage(pipeline_paths, show_progress=False, apply_inclusion_filters=False)
 

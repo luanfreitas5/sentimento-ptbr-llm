@@ -3,7 +3,7 @@
 Implementa a Fase 5 do plano de elaboração (``PLANO-ELABORACAO.md``):
 coleta (scraping paralelo e gold sets), carregamento com validação de
 schema, particionamento estratificado, amostragem para validação humana,
-escrita padronizada em ``data/interim``/``data/processed`` e catalogação
+escrita padronizada em ``data/silver``/``data/gold`` e catalogação
 com hashes de rastreabilidade (ver CLAUDE.md, "Reprodutibilidade &
 Determinismo").
 
@@ -22,7 +22,7 @@ splitter
 sampler
     Amostragem aleatória e estratificada para validação humana.
 writer
-    Escrita validada e padronizada em ``data/interim``/``data/processed``.
+    Escrita validada e padronizada em ``data/silver``/``data/gold``.
 catalog
     Catálogo dos datasets disponíveis, com hash SHA-256 e tamanho.
 """

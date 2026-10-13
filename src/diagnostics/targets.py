@@ -62,7 +62,7 @@ def adapt_labeled_corpus(
     Parameters
     ----------
     labeled_corpus : pl.DataFrame
-        Corpus rotulado (ex.: ``data/processed/corpus_rotulado.parquet``).
+        Corpus rotulado (ex.: ``data/gold/corpus_rotulado.parquet``).
     model_columns : Mapping[str, str], optional
         Mapa ``coluna_original -> lab_<modelo>``, by default
         :data:`DEFAULT_MODEL_COLUMNS`.

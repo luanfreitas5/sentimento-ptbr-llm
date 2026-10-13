@@ -101,7 +101,7 @@ def run_ingestion_stage(
         "repro": paths.repro_file,
     }
     catalog_entries = build_dataset_catalog(catalog_datasets)
-    write_dataset_catalog(catalog_entries, paths.data_raw_dir / _CATALOG_FILE_NAME)
+    write_dataset_catalog(catalog_entries, paths.data_bronze_dir / _CATALOG_FILE_NAME)
 
     logger.info(
         "Etapa de ingestão concluída: %d tweet(s) coletado(s), %d dataset(s) catalogado(s).",

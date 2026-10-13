@@ -449,7 +449,7 @@ def _write_sample(
         sample,
         key,
         sample_csv=sample_path,
-        key_parquet=paths.data_interim_dir / "diagnostics" / SAMPLE_KEY_FILE_NAME,
+        key_parquet=paths.data_silver_dir / "diagnostics" / SAMPLE_KEY_FILE_NAME,
     )
     return sample_path
 

@@ -12,7 +12,7 @@ export PYTHONHASHSEED := 42
 	update lock export \
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
-	clean-processed clean-reports clean-outputs clean-notebooks \
+	clean-gold clean-reports clean-outputs clean-notebooks \
 	ingest preprocess label label-hf label-openai compare hypotheses features \
 	classical deep transformer llm evaluate report all \
 	patterns diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
@@ -134,13 +134,13 @@ release:  ## Cria uma nova release (versão + changelog + tag)
 	uv run cz bump --changelog
 
 # --- Limpeza de saídas do pipeline ------------------------------------------
-clean-processed:  ## Remove os artefatos de dados processados
-	rm -rf data/processed/*.parquet
+clean-gold:  ## Remove os dados da camada gold (derivados; bronze nunca é apagado)
+	rm -rf data/gold/*.parquet
 
 clean-reports:  ## Remove os relatórios gerados (pastas por modelo + comparação)
 	find reports -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
-clean-outputs: clean-processed clean-reports  ## Remove todas as saídas do pipeline
+clean-outputs: clean-gold clean-reports  ## Remove todas as saídas do pipeline
 
 clean-notebooks:  ## Remove os notebooks com células vazias
 	uv run nbstripout notebooks

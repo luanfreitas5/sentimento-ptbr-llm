@@ -1,4 +1,4 @@
-"""Escrita padronizada de datasets em ``data/interim`` e ``data/processed``.
+"""Escrita padronizada de datasets em ``data/silver`` e ``data/gold``.
 
 As funções de escrita validada aplicam o contrato de dados apropriado antes
 de persistir o DataFrame, garantindo que apenas dados conformes ao schema
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def write_dataset(dataframe: pl.DataFrame, file_path: Path) -> None:
-    """Escreve um DataFrame em Parquet, o formato padrão dos estágios ``interim``/``processed``.
+    """Escreve um DataFrame em Parquet, o formato padrão dos camadas ``silver``/``gold``.
 
     Parameters
     ----------
@@ -41,7 +41,7 @@ def write_dataset(dataframe: pl.DataFrame, file_path: Path) -> None:
     Examples
     --------
     >>> write_dataset(
-    ...     pl.DataFrame({"id": ["1"]}), Path("data/interim/exemplo.parquet")
+    ...     pl.DataFrame({"id": ["1"]}), Path("data/silver/exemplo.parquet")
     ... )  # doctest: +SKIP
     """
     validate_not_empty_collection(dataframe, collection_name=str(file_path))
@@ -50,7 +50,7 @@ def write_dataset(dataframe: pl.DataFrame, file_path: Path) -> None:
 
 
 def write_labeled_corpus(dataframe: pl.DataFrame, file_path: Path) -> None:
-    """Valida e escreve o corpus rotulado em ``data/processed``.
+    """Valida e escreve o corpus rotulado em ``data/gold``.
 
     Parameters
     ----------
@@ -74,7 +74,7 @@ def write_labeled_corpus(dataframe: pl.DataFrame, file_path: Path) -> None:
     Examples
     --------
     >>> df = pl.DataFrame({"id": ["1"], "text": ["ótimo"], "sentiment_label": ["positivo"]})
-    >>> write_labeled_corpus(df, Path("data/processed/exemplo.parquet"))  # doctest: +SKIP
+    >>> write_labeled_corpus(df, Path("data/gold/exemplo.parquet"))  # doctest: +SKIP
     """
     write_dataset(validate_labeled_corpus(dataframe), file_path)
 
@@ -111,6 +111,6 @@ def write_training_example_dataset(dataframe: pl.DataFrame, file_path: Path) -> 
     ...         "split": ["treino"],
     ...     }
     ... )
-    >>> write_training_example_dataset(df, Path("data/processed/treino.parquet"))  # doctest: +SKIP
+    >>> write_training_example_dataset(df, Path("data/gold/treino.parquet"))  # doctest: +SKIP
     """
     write_dataset(validate_training_example(dataframe), file_path)

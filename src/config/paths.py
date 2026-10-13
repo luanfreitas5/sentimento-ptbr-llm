@@ -23,7 +23,7 @@ def resolve_project_path(relative_path: str | Path) -> Path:
     Parameters
     ----------
     relative_path : str | Path
-        Caminho relativo à raiz do repositório (ex.: ``"data/raw"``).
+        Caminho relativo à raiz do repositório (ex.: ``"data/bronze"``).
 
     Returns
     -------
@@ -44,7 +44,7 @@ class ProjectPaths:
 
     Parameters
     ----------
-    data_raw_dir, data_external_dir, data_interim_dir, data_processed_dir : Path
+    data_bronze_dir, data_external_dir, data_silver_dir, data_gold_dir : Path
         Diretórios das etapas de dados (ver CLAUDE.md, "Project Structure").
     raw_tweets_file, tweetsentbr_file, repro_file : Path
         Arquivos de dados de entrada (coleta própria e gold sets externos).
@@ -70,10 +70,10 @@ class ProjectPaths:
         Diretórios de documentação (MkDocs Material).
     """
 
-    data_raw_dir: Path
+    data_bronze_dir: Path
     data_external_dir: Path
-    data_interim_dir: Path
-    data_processed_dir: Path
+    data_silver_dir: Path
+    data_gold_dir: Path
 
     raw_tweets_file: Path
     tweetsentbr_file: Path
@@ -129,16 +129,16 @@ def load_project_paths(config_file_path: Path = DEFAULT_PATHS_CONFIG_FILE) -> Pr
 
     Examples
     --------
-    >>> load_project_paths().data_raw_dir.name
+    >>> load_project_paths().data_bronze_dir.name
     'raw'
     """
     dados = read_yaml(config_file_path)
 
     return ProjectPaths(
-        data_raw_dir=resolve_project_path(dados["data"]["raw"]),
+        data_bronze_dir=resolve_project_path(dados["data"]["bronze"]),
         data_external_dir=resolve_project_path(dados["data"]["external"]),
-        data_interim_dir=resolve_project_path(dados["data"]["interim"]),
-        data_processed_dir=resolve_project_path(dados["data"]["processed"]),
+        data_silver_dir=resolve_project_path(dados["data"]["silver"]),
+        data_gold_dir=resolve_project_path(dados["data"]["gold"]),
         raw_tweets_file=resolve_project_path(dados["data_files"]["raw_tweets"]),
         tweetsentbr_file=resolve_project_path(dados["data_files"]["tweetsentbr"]),
         repro_file=resolve_project_path(dados["data_files"]["repro"]),

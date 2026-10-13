@@ -3,34 +3,34 @@
 # pathlib.Path absolutos em src/config/paths.py.
 
 data:
-  raw: "data/raw"
-  external: "data/external"
-  interim: "data/interim"
-  processed: "data/processed"
+  bronze: "data/bronze"
+  external: "data/bronze/external"
+  silver: "data/silver"
+  gold: "data/gold"
 
 data_files:
-  # Fora de data/raw/ propositalmente: preprocessing.run_preprocessing_stage
-  # (via data.loader.load_raw_tweet_batch) faz glob em data/raw/*.parquet
+  # Fora de data/bronze/ propositalmente: preprocessing.run_preprocessing_stage
+  # (via data.loader.load_raw_tweet_batch) faz glob em data/bronze/*.parquet
   # esperando o lote de tweets brutos coletados por usuário (RawTweetSchema,
   # 13 colunas); o arquivo consolidado de ingestion tem um schema mínimo
   # incompatível (id/text/data_source/data_collected) e colidiria com esse
   # glob, quebrando `--stage all` com um ShapeError do polars.
-  raw_tweets: "data/interim/tweets_coletados.parquet"
-  tweetsentbr: "data/external/tweetsentbr.parquet"
-  repro: "data/external/repro.parquet"
-  corpus_normalizado: "data/interim/corpus_normalizado.parquet"
-  corpus_rotulado: "data/processed/corpus_rotulado.parquet"
+  raw_tweets: "data/silver/tweets_coletados.parquet"
+  tweetsentbr: "data/bronze/external/tweetsentbr.parquet"
+  repro: "data/bronze/external/repro.parquet"
+  corpus_normalizado: "data/silver/corpus_normalizado.parquet"
+  corpus_rotulado: "data/gold/corpus_rotulado.parquet"
   # Bases independentes de rotulagem (uma por fonte), mesmos tweets nas duas:
   # comparadas pela etapa `comparative_evaluation` via `id`.
-  tweets_data_huggingface: "data/processed/tweets_data_huggingface.parquet"
-  tweets_data_openai: "data/processed/tweets_data_openai.parquet"
-  corpus_treino: "data/processed/treino.parquet"
-  corpus_validacao: "data/processed/validacao.parquet"
-  corpus_teste: "data/processed/teste.parquet"
+  tweets_data_huggingface: "data/gold/tweets_data_huggingface.parquet"
+  tweets_data_openai: "data/gold/tweets_data_openai.parquet"
+  corpus_treino: "data/gold/treino.parquet"
+  corpus_validacao: "data/gold/validacao.parquet"
+  corpus_teste: "data/gold/teste.parquet"
 
 labeling:
   # Checkpoints de retomada da rotulagem por LLM (fora do Git: data/* é ignorado).
-  checkpoints: "data/interim/labeling_checkpoints"
+  checkpoints: "data/silver/labeling_checkpoints"
 
 models:
   checkpoints: "models/checkpoints"

@@ -37,7 +37,7 @@ def read_csv(file_path: Path, **kwargs: Any) -> pl.DataFrame:
 
     Examples
     --------
-    >>> read_csv(Path("data/raw/exemplo.csv"))  # doctest: +SKIP
+    >>> read_csv(Path("data/bronze/exemplo.csv"))  # doctest: +SKIP
     """
     validate_file_exists(file_path)
     # infer_schema_length=0: lê todas as colunas como string por padrão. Os
@@ -69,7 +69,7 @@ def write_csv(dataframe: pl.DataFrame, file_path: Path, **kwargs: Any) -> None:
 
     Examples
     --------
-    >>> write_csv(pl.DataFrame({"a": [1, 2]}), Path("data/interim/exemplo.csv"))  # doctest: +SKIP
+    >>> write_csv(pl.DataFrame({"a": [1, 2]}), Path("data/silver/exemplo.csv"))  # doctest: +SKIP
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
     dataframe.write_csv(file_path, **kwargs)

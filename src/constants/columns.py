@@ -35,7 +35,7 @@ RAW_CORPUS_REQUIRED_COLUMNS: tuple[str, ...] = (
 # Colunas obrigatórias no corpus já rotulado, pronto para modelagem
 LABELED_CORPUS_REQUIRED_COLUMNS: tuple[str, ...] = (ID_COLUMN, TEXT_COLUMN, TARGET_COLUMN)
 
-# Colunas do lote bruto real coletado por usuário (data/raw/*.parquet),
+# Colunas do lote bruto real coletado por usuário (data/bronze/*.parquet),
 # usadas por data.loader.load_raw_tweet_batch e
 # preprocessing.filtering.filter_by_raw_metadata.
 TWEET_ID_COLUMN = "tweet_id"

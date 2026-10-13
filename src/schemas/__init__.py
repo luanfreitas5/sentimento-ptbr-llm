@@ -1,7 +1,7 @@
 """Contratos de dados (schemas ``pandera.polars``) do projeto.
 
-Validam DataFrames nas fronteiras entre etapas do pipeline (``raw ->
-interim -> processed`` e entrada/saída de modelo), falhando cedo com uma
+Validam DataFrames nas fronteiras entre etapas do pipeline (``bronze ->
+silver -> gold`` e entrada/saída de modelo), falhando cedo com uma
 :class:`exceptions.data.DataValidationError` em vez de propagar dados
 corrompidos silenciosamente (ver CLAUDE.md, "Data Contracts").
 

@@ -2,7 +2,7 @@
 
 Implementa o estágio ``preprocessing`` de ``configs/config.yaml -> stages``:
 carrega em paralelo o lote de tweets brutos coletados por usuário
-(``data/raw/*.parquet`` — ver ``src/data/loader.py``), filtra por metadados
+(``data/bronze/*.parquet`` — ver ``src/data/loader.py``), filtra por metadados
 da coleta (retweet/idioma — ``src/preprocessing/filtering.py``), aplica o
 pipeline de normalização/limpeza de ``src/preprocessing/pipeline.py`` e
 grava o resultado no corpus normalizado (``paths.normalized_corpus_file``).
@@ -62,7 +62,7 @@ def run_preprocessing_stage(
     Raises
     ------
     EmptyDatasetError
-        Se ``data/raw/`` não contiver arquivos, ou se o corpus ficar vazio
+        Se ``data/bronze/`` não contiver arquivos, ou se o corpus ficar vazio
         após os filtros.
     PipelineStageError
         Se a normalização de algum texto do corpus falhar.
@@ -72,7 +72,7 @@ def run_preprocessing_stage(
     >>> run_preprocessing_stage(paths)  # doctest: +SKIP
     """
     raw_batch = load_raw_tweet_batch(
-        paths.data_raw_dir, max_workers=max_workers, show_progress=show_progress
+        paths.data_bronze_dir, max_workers=max_workers, show_progress=show_progress
     )
     filtered_batch = filter_by_raw_metadata(
         raw_batch, exclude_retweets=exclude_retweets, required_language=required_language

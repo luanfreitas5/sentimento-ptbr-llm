@@ -19,7 +19,7 @@ Uma única seed (`42`) é propagada por todo o pipeline via `src/config/environm
 
 ## Hash de dados
 
-Cada dataset intermediário pode ser verificado com `src/utils/hashing.py` (SHA-256), permitindo detectar mudanças silenciosas de dados entre execuções. O catálogo de datasets (`src/data/catalog.py`) registra os hashes junto aos caminhos em `data/raw/catalog.json`.
+Cada dataset intermediário pode ser verificado com `src/utils/hashing.py` (SHA-256), permitindo detectar mudanças silenciosas de dados entre execuções. O catálogo de datasets (`src/data/catalog.py`) registra os hashes junto aos caminhos em `data/bronze/catalog.json`.
 
 ## Rastreamento com MLflow
 

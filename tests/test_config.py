@@ -43,7 +43,7 @@ class TestPaths:
 
         paths = load_project_paths(config_file_path)
 
-        assert paths.data_raw_dir == PROJECT_ROOT / "data/raw"
+        assert paths.data_bronze_dir == PROJECT_ROOT / "data/bronze"
         assert paths.logs_dir == PROJECT_ROOT / "logs"
         assert paths.models_registry_dir == PROJECT_ROOT / "models/registry"
 

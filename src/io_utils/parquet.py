@@ -1,6 +1,6 @@
 """Leitura e escrita de arquivos Parquet como DataFrames Polars.
 
-Parquet é o formato preferido para os estágios ``interim`` e ``processed``
+Parquet é o formato preferido para os camadas ``silver`` e ``gold``
 (ver ``configs/paths.yaml``): colunar, tipado e eficiente para leitura
 parcial.
 """
@@ -38,7 +38,7 @@ def read_parquet(file_path: Path, **kwargs: Any) -> pl.DataFrame:
 
     Examples
     --------
-    >>> read_parquet(Path("data/processed/corpus_treino.parquet"))  # doctest: +SKIP
+    >>> read_parquet(Path("data/gold/corpus_treino.parquet"))  # doctest: +SKIP
     """
     validate_file_exists(file_path)
     dataframe = pl.read_parquet(file_path, **kwargs)
@@ -65,7 +65,7 @@ def write_parquet(dataframe: pl.DataFrame, file_path: Path, **kwargs: Any) -> No
     Examples
     --------
     >>> write_parquet(
-    ...     pl.DataFrame({"a": [1, 2]}), Path("data/processed/exemplo.parquet")
+    ...     pl.DataFrame({"a": [1, 2]}), Path("data/gold/exemplo.parquet")
     ... )  # doctest: +SKIP
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)

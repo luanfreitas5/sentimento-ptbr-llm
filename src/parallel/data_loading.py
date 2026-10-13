@@ -4,7 +4,7 @@ Usa múltiplas threads (``ThreadPoolExecutor``): a leitura/decodificação
 Parquet do ``polars`` é implementada em Rust e libera o GIL, então threads
 evitam o custo de serializar DataFrames inteiros entre processos ao
 carregar o lote de tweets brutos coletados por usuário (um arquivo por
-usuário — ver ``data/raw/`` e ``src/data/loader.py``).
+usuário — ver ``data/bronze/`` e ``src/data/loader.py``).
 """
 
 from collections.abc import Iterable
@@ -44,7 +44,7 @@ def run_parallel_parquet_loading(
 
     Examples
     --------
-    >>> run_parallel_parquet_loading([Path("data/raw/usuario1.parquet")])  # doctest: +SKIP
+    >>> run_parallel_parquet_loading([Path("data/bronze/usuario1.parquet")])  # doctest: +SKIP
     """
     return execute_parallel_tasks(
         read_parquet,

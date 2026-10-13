@@ -57,10 +57,10 @@ confidence:
 gold_sets:
   tweetsentbr:
     enabled: true
-    path: "data/external/tweetsentbr.parquet"
+    path: "data/bronze/external/tweetsentbr.parquet"
   repro:
     enabled: true
-    path: "data/external/repro.parquet"
+    path: "data/bronze/external/repro.parquet"
 
 validation:
   metric: "cohen_kappa"

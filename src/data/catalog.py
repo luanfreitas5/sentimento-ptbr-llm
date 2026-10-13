@@ -1,7 +1,7 @@
 """Catálogo dos datasets do projeto e seus hashes de rastreabilidade.
 
-Registra, para cada arquivo de dados relevante (bruto, gold set, interim,
-processado), seu hash SHA-256 e tamanho em bytes, permitindo detectar
+Registra, para cada arquivo de dados relevante (bronze, external, silver,
+gold), seu hash SHA-256 e tamanho em bytes, permitindo detectar
 mudanças silenciosas nos dados entre execuções (ver CLAUDE.md,
 "Reprodutibilidade & Determinismo").
 """

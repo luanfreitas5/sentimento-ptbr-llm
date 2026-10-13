@@ -9,7 +9,7 @@ Classificação de sentimento em três classes — `negativo`, `neutro`, `positi
 ## Fontes de dados
 
 - **Coleta própria** de tweets via `twscrape` (`src/parallel/scraping.py`, `src/data/downloader.py`), termos de busca informados pelo usuário.
-- **Gold sets públicos** para validação/benchmark: [TweetSentBR](https://huggingface.co/datasets) e RePro, carregados em `data/external/`.
+- **Gold sets públicos** para validação/benchmark: [TweetSentBR](https://huggingface.co/datasets) e RePro, carregados em `data/bronze/external/`.
 
 ## Rotulagem semiautomática em cascata
 

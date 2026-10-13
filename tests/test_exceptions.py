@@ -94,8 +94,8 @@ class TestDataExceptions:
 
     def test_data_not_found_error_message(self) -> None:
         """A mensagem deve citar a fonte de dados ausente."""
-        data_error = DataNotFoundError("data/raw/tweets.parquet")
-        assert "data/raw/tweets.parquet" in str(data_error)
+        data_error = DataNotFoundError("data/bronze/tweets.parquet")
+        assert "data/bronze/tweets.parquet" in str(data_error)
 
     def test_empty_dataset_error_message(self) -> None:
         """A mensagem deve citar o dataset vazio."""
