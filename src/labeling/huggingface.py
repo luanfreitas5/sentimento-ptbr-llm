@@ -1,8 +1,9 @@
 """Rotulagem de sentimento via modelo do Hugging Face (base ``tweets_data_huggingface``).
 
 Implementa a seção ``huggingface`` de ``configs/labeling.yaml``: um classificador
-de sequência do Hugging Face Hub (ex.: ``pysentimiento/bertweet-pt-sentiment``,
-BERTweet-pt ajustado para sentimento em tweets) é carregado localmente via
+de sequência do Hugging Face Hub (ex.:
+``cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual``, XLM-RoBERTa treinado em
+tweets multilíngues) é carregado localmente via
 ``transformers`` e classifica cada tweet em ``negativo``/``neutro``/``positivo``.
 
 Diferente da base OpenAI (LLM gerativo guiado por prompt), este modelo é um
@@ -36,7 +37,7 @@ from utils.memory import release_gpu_memory
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_HUGGINGFACE_MODEL = "pysentimiento/bertweet-pt-sentiment"
+DEFAULT_HUGGINGFACE_MODEL = "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual"
 _DTYPE_CHOICES: tuple[str, ...] = ("auto", "float16", "bfloat16", "float32")
 
 # Nomes de classe usados pelos modelos de sentimento do Hub -> classe do projeto.
@@ -324,7 +325,7 @@ def create_huggingface_batch_classifier(
     hf_model : HuggingFaceModel
         Modelo carregado por :func:`load_huggingface_model`.
     max_input_tokens : int, optional
-        Máximo de tokens de entrada; o BERTweet-pt aceita até 128, by default 128.
+        Máximo de tokens de entrada; o XLM-R aceita até 512 (BERTweet-pt, até 128), by default 128.
 
     Returns
     -------

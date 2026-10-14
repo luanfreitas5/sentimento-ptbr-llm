@@ -43,7 +43,7 @@ from config.paths import CONFIGS_DIR, ProjectPaths, load_project_paths
 from config.settings import GeneralConfig, Settings, create_settings, load_general_config
 from constants.labels import (
     GOLD_SOURCE_NAMES,
-    HUGGINGFACE_CARDIFF_SOURCE,
+    HUGGINGFACE_SECONDARY_SOURCE,
     HUGGINGFACE_SOURCE,
     LABEL_SOURCE_NAMES,
 )
@@ -162,7 +162,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=[*LABEL_SOURCE_NAMES, _ALL_SOURCES_OPTION],
         help=(
             "Fonte(s) de rotulagem da etapa `labeling`: `huggingface` (modelo do Hugging Face, "
-            "todos os tweets), `huggingface_cardiff` (segundo modelo do Hugging Face, só na "
+            "todos os tweets), `huggingface_secondary` (segundo modelo do Hugging Face, só na "
             "amostra dos gold sets), `gold_openai` (gpt-6-luna) e `gold_unb` "
             "(UnB-Llama-3.3-70B-Instruct) — gold sets via API, sobre uma amostra do corpus — "
             "ou `all` (as quatro, em sequência)."
@@ -487,11 +487,10 @@ def _build_huggingface_source(
 ) -> LabelingSource:
     """Monta uma fonte do Hugging Face, carregada só quando executada.
 
-    ``huggingface`` rotula todos os tweets; ``huggingface_cardiff`` rotula só a amostra dos
-    gold sets (mesmos ``sample_size`` e ``random_state``), para a análise de consenso.
+    ``huggingface`` (primário) e ``huggingface_secondary`` rotulam todos os tweets; só o primário
+    alimenta as etapas seguintes, e o consenso restringe ambos à amostra dos gold sets.
     """
     hf_config = labeling_config[source_name]
-    is_cardiff = source_name == HUGGINGFACE_CARDIFF_SOURCE
     gold_config = labeling_config["gold_sets"]
     return LabelingSource(
         name=source_name,
@@ -510,7 +509,6 @@ def _build_huggingface_source(
             revision=hf_config["revision"],
             max_input_tokens=hf_config["max_input_tokens"],
         ),
-        sample_size=gold_config["sample_size"] if is_cardiff else None,
         sample_seed=gold_config["random_state"],
     )
 
@@ -586,7 +584,7 @@ def _build_labeling_sources(
     Returns
     -------
     list[LabelingSource]
-        Fontes a executar, na ordem ``huggingface`` -> ``huggingface_cardiff`` -> ``gold_openai``
+        Fontes a executar, na ordem ``huggingface`` -> ``huggingface_secondary`` -> ``gold_openai``
         -> ``gold_unb``.
     """
     requested = (
@@ -595,7 +593,7 @@ def _build_labeling_sources(
     sources: list[LabelingSource] = []
     sources.extend(
         _build_huggingface_source(labeling_config, settings, name)
-        for name in (HUGGINGFACE_SOURCE, HUGGINGFACE_CARDIFF_SOURCE)
+        for name in (HUGGINGFACE_SOURCE, HUGGINGFACE_SECONDARY_SOURCE)
         if name in requested
     )
     sources.extend(

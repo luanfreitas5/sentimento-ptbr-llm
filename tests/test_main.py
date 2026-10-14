@@ -59,7 +59,7 @@ class TestBuildLabelingStageKwargs:
 
         assert [source.name for source in kwargs["sources"]] == [
             "huggingface",
-            "huggingface_cardiff",
+            "huggingface_secondary",
             "gold_openai",
             "gold_unb",
         ]
@@ -83,16 +83,18 @@ class TestBuildLabelingStageKwargs:
             ]
         }
 
-        assert sources["huggingface"].model_name.startswith("pysentimiento/bertweet-pt-sentiment@")
-        assert sources["huggingface"].prompt_template == ""
-        assert sources["huggingface"].sample_size is None
-        assert sources["huggingface_cardiff"].model_name.startswith(
+        assert sources["huggingface"].model_name.startswith(
             "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual@"
         )
-        assert sources["huggingface_cardiff"].prompt_template == ""
-        # mesma amostra dos gold sets: cobre exatamente os mesmos tweets
-        assert sources["huggingface_cardiff"].sample_size == sources["gold_openai"].sample_size
-        assert sources["huggingface_cardiff"].sample_seed == sources["gold_openai"].sample_seed
+        assert sources["huggingface"].prompt_template == ""
+        assert sources["huggingface"].sample_size is None
+        assert sources["huggingface_secondary"].model_name.startswith(
+            "pysentimiento/bertweet-pt-sentiment@"
+        )
+        assert sources["huggingface_secondary"].prompt_template == ""
+        # rotula todo o corpus (sem amostra), como o primário
+        assert sources["huggingface_secondary"].sample_size is None
+        assert sources["huggingface_secondary"].sample_seed == sources["gold_openai"].sample_seed
         assert sources["gold_openai"].model_name == "gpt-6-luna"
         assert sources["gold_openai"].reasoning_effort == "low"
         assert sources["gold_unb"].model_name == "UnB-Llama-3.3-70B-Instruct"

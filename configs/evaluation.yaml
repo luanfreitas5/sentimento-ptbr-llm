@@ -83,7 +83,7 @@ llm_comparison:
   examples_per_transition: 3 # exemplos por par de classes divergentes
 
 # Etapa `label_consensus` (src/pipelines/label_consensus.py): consenso de rotulagem entre o
-# Hugging Face (pysentimiento), o Hugging Face (cardiffnlp) e os gold sets, sobre a amostra
+# Hugging Face (cardiffnlp, primário), o Hugging Face (pysentimiento, secundário) e os gold sets, sobre a amostra
 # dos gold sets. Grava em reports/{tables,figures}/<output_subdir>/ e reports/metrics/.
 label_consensus:
   output_subdir: "consenso_rotulagem"

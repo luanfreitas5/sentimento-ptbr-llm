@@ -13,7 +13,7 @@ export PYTHONHASHSEED := 42
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
 	clean-gold clean-reports clean-outputs clean-notebooks \
-	ingest preprocess label label-hf label-hf-cardiff label-openai compare consensus hypotheses features \
+	ingest preprocess label label-hf label-hf-secondary label-openai compare consensus hypotheses features \
 	classical deep transformer llm evaluate report all \
 	patterns diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
 	mlflow app \
@@ -202,8 +202,8 @@ label:  ## [3] Rotula com as três fontes: tweets_data_huggingface (todos) + gol
 label-hf:  ## [3] Rotula TODOS os tweets com o modelo do Hugging Face (base tweets_data_huggingface; retoma do checkpoint)
 	$(RUN) --stage labeling --label-source huggingface
 
-label-hf-cardiff:  ## [3] Rotula a amostra dos gold sets com o 2º modelo do Hugging Face (cardiffnlp; retoma do checkpoint)
-	$(RUN) --stage labeling --label-source huggingface_cardiff
+label-hf-secondary:  ## [3] Rotula todo o corpus com o 2º modelo do Hugging Face (pysentimiento; retoma do checkpoint)
+	$(RUN) --stage labeling --label-source huggingface_secondary
 
 label-gold-openai:  ## [3] Gold set da amostra via API com gpt-6-luna, effort low (requer OPENAI_BASE_URL/OPENAI_KEY no .env; retoma do checkpoint)
 	$(RUN) --stage labeling --label-source gold_openai

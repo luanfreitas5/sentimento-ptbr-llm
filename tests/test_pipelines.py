@@ -53,7 +53,7 @@ def pipeline_paths(tmp_path: Path) -> ProjectPaths:
         normalized_corpus_file=tmp_path / "data" / "silver" / "normalizado.parquet",
         labeled_corpus_file=tmp_path / "data" / "gold" / "rotulado.parquet",
         huggingface_labeled_file=tmp_path / "data" / "gold" / "tweets_hf.parquet",
-        huggingface_cardiff_file=tmp_path / "data" / "gold" / "tweets_hf_cardiff.parquet",
+        huggingface_secondary_file=tmp_path / "data" / "gold" / "tweets_hf_secondary.parquet",
         gold_openai_file=tmp_path / "data" / "gold" / "gold_openai.parquet",
         gold_unb_file=tmp_path / "data" / "gold" / "gold_unb.parquet",
         labeling_checkpoints_dir=tmp_path / "data" / "silver" / "checkpoints",

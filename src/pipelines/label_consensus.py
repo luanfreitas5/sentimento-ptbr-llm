@@ -1,9 +1,9 @@
 """Consenso de rotulagem entre os modelos do Hugging Face e os gold sets.
 
 Implementa o estágio ``label_consensus`` de ``configs/config.yaml -> stages``. A etapa lê as
-bases rotuladas já geradas pela etapa ``labeling`` — ``tweets_data_huggingface`` (restrita à
-amostra), ``tweets_data_huggingface_cardiff``, ``gold_openai`` e ``gold_unb`` — e, sobre os
-MESMOS tweets:
+bases rotuladas já geradas pela etapa ``labeling`` — ``tweets_data_huggingface`` e
+``tweets_data_huggingface_secondary`` (ambas sobre todo o corpus, restritas à amostra quando há
+gold set), ``gold_openai`` e ``gold_unb`` — e, sobre os MESMOS tweets:
 
 1. une as bases pelo ``id`` e valida os contratos de dados;
 2. conta os votos por classe de cada tweet e define a classe e o nível de consenso
@@ -26,7 +26,7 @@ from typing import Any, cast
 import polars as pl
 
 from config.paths import ProjectPaths
-from constants.labels import HUGGINGFACE_CARDIFF_SOURCE, HUGGINGFACE_SOURCE
+from constants.labels import GOLD_SOURCE_NAMES, HUGGINGFACE_SECONDARY_SOURCE, HUGGINGFACE_SOURCE
 from data.loader import read_dataset_file
 from evaluation.label_consensus import (
     build_consensus_frame,
@@ -77,17 +77,19 @@ def _resolve_source_paths(paths: ProjectPaths) -> dict[str, Path]:
     """Arquivo de cada rotulador, na ordem em que aparecem nas tabelas."""
     return {
         HUGGINGFACE_SOURCE: paths.huggingface_labeled_file,
-        HUGGINGFACE_CARDIFF_SOURCE: paths.huggingface_cardiff_file,
+        HUGGINGFACE_SECONDARY_SOURCE: paths.huggingface_secondary_file,
         "gold_openai": paths.gold_openai_file,
         "gold_unb": paths.gold_unb_file,
     }
 
 
 def load_consensus_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
-    """Lê as bases rotuladas disponíveis; o Hugging Face é restrito à amostra das demais.
+    """Lê as bases rotuladas disponíveis; os modelos do Hugging Face são restritos à amostra gold.
 
-    A base ``huggingface`` cobre todo o corpus, enquanto as outras três cobrem só a amostra
-    dos gold sets: ela é filtrada para os ``id`` da primeira base de amostra encontrada.
+    Os dois modelos do Hugging Face cobrem todo o corpus, enquanto os gold sets cobrem só a
+    amostra. Havendo gold set, as bases do Hugging Face são filtradas para os ``id`` do primeiro
+    gold encontrado, para que todos os rotuladores avaliem os MESMOS tweets; sem gold set, a
+    análise cobre o corpus inteiro (apenas os dois modelos do Hugging Face).
 
     Parameters
     ----------
@@ -102,28 +104,29 @@ def load_consensus_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
     Raises
     ------
     DataNotFoundError
-        Se houver menos de dois rotuladores gerados ou nenhuma base de amostra.
+        Se houver menos de dois rotuladores gerados.
     DataValidationError
-        Se a base de amostra tiver tweets ausentes na base ``huggingface``.
+        Se a base gold tiver tweets ausentes em alguma base do Hugging Face.
 
     Examples
     --------
     >>> sorted(load_consensus_sources(paths))  # doctest: +SKIP
-    ['gold_openai', 'gold_unb', 'huggingface', 'huggingface_cardiff']
+    ['gold_openai', 'gold_unb', 'huggingface', 'huggingface_secondary']
     """
     available = _read_available_sources(paths)
-    sample_names = [name for name in available if name != HUGGINGFACE_SOURCE]
-    if len(available) < _MIN_RATERS or not sample_names:
+    if len(available) < _MIN_RATERS:
         raise DataNotFoundError(
-            "o consenso exige ao menos dois rotuladores, um deles de amostra "
-            "(`huggingface_cardiff`, `gold_openai` ou `gold_unb`); gere-os com "
-            "`make label-hf-cardiff`, `make label-gold-openai` e `make label-gold-unb`. "
+            "o consenso exige ao menos dois rotuladores; gere-os com `make label-hf`, "
+            "`make label-hf-secondary`, `make label-gold-openai` e `make label-gold-unb`. "
             f"Disponíveis: {list(available)}"
         )
-    if HUGGINGFACE_SOURCE in available:
-        available[HUGGINGFACE_SOURCE] = _restrict_to_sample(
-            available[HUGGINGFACE_SOURCE], available[sample_names[0]], sample_names[0]
-        )
+    gold_names = [name for name in available if name in GOLD_SOURCE_NAMES]
+    if gold_names:
+        for name in (HUGGINGFACE_SOURCE, HUGGINGFACE_SECONDARY_SOURCE):
+            if name in available:
+                available[name] = _restrict_to_sample(
+                    available[name], available[gold_names[0]], gold_names[0], name
+                )
     return available
 
 
@@ -139,9 +142,9 @@ def _read_available_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
 
 
 def _restrict_to_sample(
-    huggingface: pl.DataFrame, sample: pl.DataFrame, sample_name: str
+    huggingface: pl.DataFrame, sample: pl.DataFrame, sample_name: str, source_name: str
 ) -> pl.DataFrame:
-    """Filtra a base completa do Hugging Face para os ``id`` da base de amostra."""
+    """Filtra a base completa de um modelo do Hugging Face para os ``id`` da base de amostra."""
     sample_ids = sample["id"].to_list()
     restricted = huggingface.filter(pl.col("id").is_in(sample_ids))
     n_missing = len(sample_ids) - restricted.height
@@ -149,8 +152,7 @@ def _restrict_to_sample(
         raise DataValidationError(
             schema_name="label_consensus",
             detail=(
-                f"a base '{sample_name}' tem {n_missing} tweet(s) ausente(s) em "
-                f"'{HUGGINGFACE_SOURCE}'"
+                f"a base '{sample_name}' tem {n_missing} tweet(s) ausente(s) em '{source_name}'"
             ),
         )
     return restricted

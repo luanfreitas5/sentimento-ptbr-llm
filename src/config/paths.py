@@ -52,8 +52,8 @@ class ProjectPaths:
         Arquivos intermediário normalizado e final rotulado.
     huggingface_labeled_file : Path
         Base ``tweets_data_huggingface`` (todos os tweets, rotulados pelo modelo do Hugging Face).
-    huggingface_cardiff_file : Path
-        Base do segundo modelo do Hugging Face (``cardiffnlp``), só na amostra dos gold sets.
+    huggingface_secondary_file : Path
+        Base do segundo modelo do Hugging Face (``pysentimiento``), todos os tweets.
     gold_openai_file, gold_unb_file : Path
         Gold sets (amostra do corpus rotulada por LLMs via API: ``gpt-6-luna`` e
         ``UnB-Llama-3.3-70B-Instruct``).
@@ -84,7 +84,7 @@ class ProjectPaths:
     normalized_corpus_file: Path
     labeled_corpus_file: Path
     huggingface_labeled_file: Path
-    huggingface_cardiff_file: Path
+    huggingface_secondary_file: Path
     gold_openai_file: Path
     gold_unb_file: Path
     labeling_checkpoints_dir: Path
@@ -150,8 +150,8 @@ def load_project_paths(config_file_path: Path = DEFAULT_PATHS_CONFIG_FILE) -> Pr
         huggingface_labeled_file=resolve_project_path(
             dados["data_files"]["tweets_data_huggingface"]
         ),
-        huggingface_cardiff_file=resolve_project_path(
-            dados["data_files"]["tweets_data_huggingface_cardiff"]
+        huggingface_secondary_file=resolve_project_path(
+            dados["data_files"]["tweets_data_huggingface_secondary"]
         ),
         gold_openai_file=resolve_project_path(dados["data_files"]["gold_openai"]),
         gold_unb_file=resolve_project_path(dados["data_files"]["gold_unb"]),

@@ -231,7 +231,7 @@ def _write_consensus_bases(paths: ProjectPaths, sources: dict[str, pl.DataFrame]
         (pl.col("id").cast(pl.Int64) + 100).cast(pl.String).alias("id")
     )
     write_dataset(pl.concat([sources["a"], extra]), paths.huggingface_labeled_file)
-    write_dataset(sources["b"], paths.huggingface_cardiff_file)
+    write_dataset(sources["b"], paths.huggingface_secondary_file)
     write_dataset(sources["c"], paths.gold_openai_file)
     write_dataset(sources["d"], paths.gold_unb_file)
 
@@ -252,7 +252,7 @@ class TestRunLabelConsensusStage:
         assert result.consensus_frame.height == 6  # tweets extras do HF ficaram de fora
         assert result.summary["sources"] == [
             "huggingface",
-            "huggingface_cardiff",
+            "huggingface_secondary",
             "gold_openai",
             "gold_unb",
         ]
@@ -278,7 +278,7 @@ class TestRunLabelConsensusStage:
         """Rotuladores ainda não gerados são dispensados (mínimo de dois)."""
         _write_consensus_bases(pipeline_paths, sources)
         pipeline_paths.gold_unb_file.unlink()
-        pipeline_paths.huggingface_cardiff_file.unlink()
+        pipeline_paths.huggingface_secondary_file.unlink()
 
         result = run_label_consensus_stage(pipeline_paths, n_bootstrap=30)
 
@@ -292,7 +292,7 @@ class TestRunLabelConsensusStage:
         """Com menos de dois rotuladores, orienta a gerar as bases faltantes."""
         write_dataset(sources["c"], pipeline_paths.gold_openai_file)
 
-        with pytest.raises(DataNotFoundError, match="make label-hf-cardiff"):
+        with pytest.raises(DataNotFoundError, match="make label-hf-secondary"):
             run_label_consensus_stage(pipeline_paths)
 
     def test_raises_when_sample_has_tweets_missing_from_huggingface(

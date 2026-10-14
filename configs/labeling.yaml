@@ -15,32 +15,33 @@
 # usa um classificador ajustado e não recebe prompt.
 prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
 
-# Classificador de sentimento do Hugging Face Hub (src/labeling/huggingface.py), via
-# transformers. BERTweet-pt ajustado (classes NEG/NEU/POS): é um encoder de ~135M de
-# parâmetros, roda em CPU ou em qualquer GPU, é determinístico e NÃO usa o `prompt_name`.
-# A confiança é a probabilidade softmax da classe escolhida. Para modelos de acesso
-# restrito, defina SENTIMENTO_HUGGINGFACE_TOKEN no .env. A memória da GPU é liberada a
-# cada lote.
+# Rotulador PRIMÁRIO do Hugging Face (src/labeling/huggingface.py), via transformers:
+# XLM-RoBERTa treinado em tweets multilíngues (inclui português), classes
+# negative/neutral/positive. Rotula TODO o corpus e é a única fonte que alimenta as etapas
+# seguintes (features, treino, hypothesaes_analysis). É um encoder de ~278M de parâmetros,
+# roda em CPU ou em qualquer GPU, é determinístico e NÃO usa o `prompt_name`. A confiança é
+# a probabilidade softmax da classe escolhida. Para modelos de acesso restrito, defina
+# SENTIMENTO_HUGGINGFACE_TOKEN no .env. A memória da GPU é liberada a cada lote.
 huggingface:
-  model: "pysentimiento/bertweet-pt-sentiment" # Hugging Face Hub (https://huggingface.co/pysentimiento/bertweet-pt-sentiment)
-  revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
+  model: "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual" # https://huggingface.co/cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual
+  revision: "82107f4ccba672c9ab1eee538e727e462cad21de" # SHA do commit (reprodutibilidade) # pragma: allowlist secret
   device: "auto" # "auto" | "cpu" | "cuda" | "cuda:0" ...
   dtype: "auto" # "auto" | "float16" | "bfloat16" | "float32"
   batch_size: 64 # tweets por lote (e por gravação no checkpoint)
-  max_input_tokens: 128 # limite do BERTweet-pt (o excedente é truncado)
+  max_input_tokens: 128 # tweets são curtos; o XLM-R aceita até 512
 
-# Segundo classificador do Hugging Face, para a análise de consenso (etapa `label_consensus`):
-# XLM-RoBERTa treinado em tweets multilíngues (inclui português), classes
-# negative/neutral/positive. Roda só na MESMA amostra dos gold sets (`gold_sets.sample_size`
-# e `gold_sets.random_state`), então cobre exatamente os mesmos tweets, e não alimenta
-# nenhuma etapa de treino. Demais chaves como em `huggingface`.
-huggingface_cardiff:
-  model: "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual" # https://huggingface.co/cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual
-  revision: "82107f4ccba672c9ab1eee538e727e462cad21de" # SHA do commit (reprodutibilidade) # pragma: allowlist secret
+# Rotulador SECUNDÁRIO do Hugging Face, para a análise de consenso (etapa `label_consensus`):
+# BERTweet-pt ajustado (classes NEG/NEU/POS). Rotula TODO o corpus, como o primário, para
+# medir quantos tweets entram em consenso entre os dois modelos; o consenso com os gold sets
+# é restrito à amostra deles. Não alimenta nenhuma etapa de treino. Demais chaves como em
+# `huggingface`.
+huggingface_secondary:
+  model: "pysentimiento/bertweet-pt-sentiment" # https://huggingface.co/pysentimiento/bertweet-pt-sentiment
+  revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
   device: "auto"
   dtype: "auto"
   batch_size: 64
-  max_input_tokens: 128 # tweets são curtos; o XLM-R aceita até 512
+  max_input_tokens: 128 # limite do BERTweet-pt (o excedente é truncado)
 
 # Parâmetros comuns da chamada à API OpenAI-compatível (src/labeling/openai_labeler.py),
 # autenticada por OPENAI_BASE_URL/OPENAI_KEY no .env (ver .env.example), via Chat
@@ -65,6 +66,7 @@ confidence:
   low_confidence_threshold: 0.5 # abaixo disso, candidato à validação humana
 
 # Gold sets: amostra do corpus normalizado rotulada por dois LLMs da API OpenAI-compatível.
+# `openai` (gpt-6-luna) é a referência PRIMÁRIA e `unb` a SECUNDÁRIA.
 # A amostra é a mesma nos dois (mesma `random_state` e `sample_size`), então os gold sets
 # cobrem exatamente os mesmos tweets. Cada um é uma execução separada
 # (`--label-source gold_openai` / `gold_unb`): o endpoint vem de OPENAI_BASE_URL/OPENAI_KEY,

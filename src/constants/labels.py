@@ -22,15 +22,15 @@ UNDEFINED_LABEL = "indefinido"
 UNDEFINED_SCORE = 0.0
 
 # Fontes de rotulagem: o modelo do Hugging Face (todos os tweets), um segundo modelo do
-# Hugging Face (``huggingface_cardiff``, só na amostra dos gold sets, para a análise de
+# Hugging Face (``huggingface_secondary``, também em todos os tweets, para a análise de
 # consenso) e os gold sets rotulados por LLMs via API (amostra do corpus; referência na
 # avaliação comparativa).
 HUGGINGFACE_SOURCE = "huggingface"
-HUGGINGFACE_CARDIFF_SOURCE = "huggingface_cardiff"
+HUGGINGFACE_SECONDARY_SOURCE = "huggingface_secondary"
 GOLD_SOURCE_NAMES: tuple[str, ...] = ("gold_openai", "gold_unb")
 LABEL_SOURCE_NAMES: tuple[str, ...] = (
     HUGGINGFACE_SOURCE,
-    HUGGINGFACE_CARDIFF_SOURCE,
+    HUGGINGFACE_SECONDARY_SOURCE,
     *GOLD_SOURCE_NAMES,
 )
 

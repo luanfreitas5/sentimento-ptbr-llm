@@ -3,7 +3,7 @@
 Funções puras sobre as bases rotuladas de cada fonte (``LabeledSourceSchema``), sem
 E/S nem gráficos: a etapa ``label_consensus`` (``src/pipelines/label_consensus.py``)
 as grava em disco. Cada fonte é um "rotulador" (``huggingface``,
-``huggingface_cardiff``, ``gold_openai``, ``gold_unb``) e todos rotulam os MESMOS
+``huggingface_secondary``, ``gold_openai``, ``gold_unb``) e todos rotulam os MESMOS
 tweets (a amostra dos gold sets).
 
 Para cada tweet, conta-se quantos rotuladores votaram em cada classe e classifica-se o
