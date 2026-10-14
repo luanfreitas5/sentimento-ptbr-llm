@@ -56,12 +56,19 @@ stages:
       - src/evaluation/llm_comparison.py
       - src/visualization/comparison.py
       - data/gold/tweets_data_huggingface.parquet
+      - data/gold/tweets_data_huggingface_secondary.parquet
       - data/gold/gold_gpt-6-luna.parquet
       - data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet
     params:
       - configs/evaluation.yaml:
           - llm_comparison
     outs:
+      - reports/metrics/comparativo_hf_huggingface_secondary.json:
+          cache: false
+      - reports/tables/comparativo_hf_huggingface_secondary:
+          cache: false
+      - reports/figures/comparativo_hf_huggingface_secondary:
+          cache: false
       - reports/metrics/comparativo_hf_gold_openai.json:
           cache: false
       - reports/metrics/comparativo_hf_gold_unb.json:

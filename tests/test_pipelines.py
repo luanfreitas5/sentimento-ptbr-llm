@@ -705,6 +705,43 @@ class TestRunComparativeEvaluationStage:
 
         assert set(results) == {"gold_unb"}
 
+    def test_compares_the_two_huggingface_models_when_there_is_no_gold_set(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Sem gold set, o HF primário é comparado ao secundário sobre o corpus inteiro."""
+        _write_comparison_bases(pipeline_paths)
+        pipeline_paths.gold_openai_file.unlink()
+        pipeline_paths.gold_unb_file.unlink()
+        hf_ids = [str(index) for index in range(60 + _N_EXTRA_HF_TWEETS)]
+        _write_labeled_base(
+            pipeline_paths.huggingface_secondary_file, hf_ids, _LABEL_CYCLE_GOLD, -0.1
+        )
+
+        results = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
+
+        assert set(results) == {"huggingface_secondary"}
+        result = results["huggingface_secondary"]
+        assert result.summary["agreement"]["n_tweets"] == 60 + _N_EXTRA_HF_TWEETS
+        assert result.metrics_path == (
+            pipeline_paths.reports_metrics_dir / "comparativo_hf_huggingface_secondary.json"
+        )
+        assert all(path.is_file() for path in result.tables.values())
+
+    def test_compares_huggingface_models_and_gold_sets_on_the_gold_sample(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Com gold set, o par HF primário x secundário é restrito à amostra do gold set."""
+        _write_comparison_bases(pipeline_paths)
+        hf_ids = [str(index) for index in range(60 + _N_EXTRA_HF_TWEETS)]
+        _write_labeled_base(
+            pipeline_paths.huggingface_secondary_file, hf_ids, _LABEL_CYCLE_GOLD, -0.1
+        )
+
+        results = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
+
+        assert set(results) == {"huggingface_secondary", "gold_openai", "gold_unb"}
+        assert results["huggingface_secondary"].summary["agreement"]["n_tweets"] == 60
+
     def test_raises_with_guidance_when_no_gold_set_exists(
         self, pipeline_paths: ProjectPaths
     ) -> None:

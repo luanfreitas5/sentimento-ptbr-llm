@@ -1,4 +1,7 @@
-"""Gráficos da comparação entre o Hugging Face e um gold set (LLM via API OpenAI-compatível).
+"""Gráficos da comparação entre o Hugging Face e uma base de referência.
+
+A referência é um gold set (LLM via API OpenAI-compatível) ou o segundo modelo do Hugging Face;
+o rótulo exibido nos gráficos é parametrizado por ``reference_label``.
 
 Desenham as tabelas de :mod:`evaluation.llm_comparison` com a paleta do
 projeto (:mod:`visualization.theme`). Cada função devolve uma
@@ -17,19 +20,26 @@ from exceptions.data import EmptyDatasetError
 from visualization.theme import MODEL_COLOR_PALETTE, SENTIMENT_COLOR_PALETTE
 
 _HF, _OA = MODEL_NAMES
-_MODEL_DISPLAY_NAMES: dict[str, str] = {
-    "huggingface": "LLM Hugging Face",
-    "openai": "Gold set (API)",
-}
+DEFAULT_REFERENCE_LABEL = "Gold set (API)"
+_HF_LABEL = "LLM Hugging Face"
 
 
-def plot_class_distribution_by_model(distribution: pl.DataFrame) -> Figure:
+def _display_names(reference_label: str) -> dict[str, str]:
+    """Nome exibido de cada modelo; o segundo é a base de referência."""
+    return {_HF: _HF_LABEL, _OA: reference_label}
+
+
+def plot_class_distribution_by_model(
+    distribution: pl.DataFrame, *, reference_label: str = DEFAULT_REFERENCE_LABEL
+) -> Figure:
     """Barras agrupadas com a proporção de cada classe de sentimento, por modelo.
 
     Parameters
     ----------
     distribution : pl.DataFrame
         Saída de :func:`evaluation.llm_comparison.calculate_class_distribution`.
+    reference_label : str, optional
+        Nome exibido da base de referência, by default "Gold set (API)".
 
     Returns
     -------
@@ -56,9 +66,10 @@ def plot_class_distribution_by_model(distribution: pl.DataFrame) -> Figure:
     """
     if distribution.is_empty():
         raise EmptyDatasetError("distribuição de classes")
+    display_names = _display_names(reference_label)
     data = distribution.with_columns(
         (pl.col("proportion") * 100).alias("percentage"),
-        pl.col("model").replace(_MODEL_DISPLAY_NAMES).alias("model_name"),
+        pl.col("model").replace(display_names).alias("model_name"),
     )
     figure, axis = plt.subplots(figsize=(8, 5))
     sns.barplot(
@@ -67,7 +78,7 @@ def plot_class_distribution_by_model(distribution: pl.DataFrame) -> Figure:
         y="percentage",
         hue="model_name",
         order=list(SENTIMENT_CLASSES),
-        palette={_MODEL_DISPLAY_NAMES[m]: color for m, color in MODEL_COLOR_PALETTE.items()},
+        palette={display_names[m]: color for m, color in MODEL_COLOR_PALETTE.items()},
         ax=axis,
     )
     axis.set_title("Distribuição das classes de sentimento por modelo")
@@ -78,19 +89,23 @@ def plot_class_distribution_by_model(distribution: pl.DataFrame) -> Figure:
     return figure
 
 
-def plot_confidence_comparison(frame: pl.DataFrame) -> Figure:
+def plot_confidence_comparison(
+    frame: pl.DataFrame, *, reference_label: str = DEFAULT_REFERENCE_LABEL
+) -> Figure:
     """Distribuição da confiança de cada modelo e dispersão das duas confianças por tweet.
 
     Parameters
     ----------
     frame : pl.DataFrame
         Saída de :func:`evaluation.llm_comparison.build_comparison_frame`.
+    reference_label : str, optional
+        Nome exibido da base de referência, by default "Gold set (API)".
 
     Returns
     -------
     matplotlib.figure.Figure
         Figura com dois painéis: histogramas sobrepostos e mapa de densidade
-        (Hugging Face no eixo x, gold set no eixo y; a diagonal é a concordância de confiança).
+        (Hugging Face no eixo x, referência no eixo y; a diagonal é a concordância de confiança).
 
     Raises
     ------
@@ -107,6 +122,7 @@ def plot_confidence_comparison(frame: pl.DataFrame) -> Figure:
     """
     if frame.is_empty():
         raise EmptyDatasetError("frame de comparação")
+    display_names = _display_names(reference_label)
     figure, (hist_axis, density_axis) = plt.subplots(1, 2, figsize=(12, 5))
     for model in MODEL_NAMES:
         sns.histplot(
@@ -116,7 +132,7 @@ def plot_confidence_comparison(frame: pl.DataFrame) -> Figure:
             stat="proportion",
             alpha=0.55,
             color=MODEL_COLOR_PALETTE[model],
-            label=_MODEL_DISPLAY_NAMES[model],
+            label=display_names[model],
             ax=hist_axis,
         )
     hist_axis.set_title("Distribuição da confiança por modelo")
@@ -133,9 +149,9 @@ def plot_confidence_comparison(frame: pl.DataFrame) -> Figure:
         mincnt=1,
     )
     density_axis.plot([0, 1], [0, 1], linestyle="--", color="#555555", linewidth=1)
-    density_axis.set_title("Confiança por tweet: Hugging Face vs. gold set")
-    density_axis.set_xlabel("Confiança — LLM Hugging Face")
-    density_axis.set_ylabel("Confiança — gold set (API)")
+    density_axis.set_title(f"Confiança por tweet: Hugging Face vs. {reference_label}")
+    density_axis.set_xlabel(f"Confiança — {_HF_LABEL}")
+    density_axis.set_ylabel(f"Confiança — {reference_label}")
     figure.colorbar(hexbin, ax=density_axis, label="Tweets")
     figure.tight_layout()
     return figure
@@ -195,8 +211,10 @@ def plot_agreement_by_text_length(length_analysis: pl.DataFrame) -> Figure:
     return figure
 
 
-def plot_divergence_transitions(transitions: pl.DataFrame, *, top_n: int = 6) -> Figure:
-    """Barras horizontais com as principais migrações de classe (Hugging Face → gold set).
+def plot_divergence_transitions(
+    transitions: pl.DataFrame, *, top_n: int = 6, reference_label: str = DEFAULT_REFERENCE_LABEL
+) -> Figure:
+    """Barras horizontais com as principais migrações de classe (Hugging Face → referência).
 
     Parameters
     ----------
@@ -205,6 +223,8 @@ def plot_divergence_transitions(transitions: pl.DataFrame, *, top_n: int = 6) ->
         :func:`evaluation.llm_comparison.summarize_classification_differences`.
     top_n : int, optional
         Quantidade de pares exibidos, by default 6 (todos os pares possíveis entre 3 classes).
+    reference_label : str, optional
+        Nome exibido da base de referência, by default "Gold set (API)".
 
     Returns
     -------
@@ -233,8 +253,8 @@ def plot_divergence_transitions(transitions: pl.DataFrame, *, top_n: int = 6) ->
     ]
     figure, axis = plt.subplots(figsize=(8, 4.5))
     axis.barh(names[::-1], top["n_tweets"].to_list()[::-1], color=MODEL_COLOR_PALETTE[_HF])
-    axis.set_title("Principais diferenças de classificação (Hugging Face → gold set)")
+    axis.set_title(f"Principais diferenças de classificação (Hugging Face → {reference_label})")
     axis.set_xlabel("Tweets divergentes")
-    axis.set_ylabel("Classe atribuída (Hugging Face → gold set)")
+    axis.set_ylabel(f"Classe atribuída (Hugging Face → {reference_label})")
     figure.tight_layout()
     return figure

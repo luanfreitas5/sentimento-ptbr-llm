@@ -1,12 +1,16 @@
-"""Avaliação comparativa entre a base do Hugging Face e os gold sets rotulados por LLMs.
+"""Avaliação comparativa entre a base do Hugging Face e as demais bases rotuladas.
 
 Implementa o estágio ``comparative_evaluation`` de ``configs/config.yaml ->
-stages``. Executada diretamente (``make compare``), a etapa faz sozinha, para
-cada gold set já gerado (``gold_openai`` e ``gold_unb``), todo o fluxo, sem
-passos manuais intermediários:
+stages``. Assim como em ``label_consensus``, a etapa roda com o que estiver
+disponível: compara ``tweets_data_huggingface`` (modelo primário) com cada base
+de referência já gerada — o segundo modelo do Hugging Face
+(``huggingface_secondary``) e/ou os gold sets (``gold_openai`` e ``gold_unb``) —,
+com ou sem gold set. Executada diretamente (``make compare``), faz sozinha, para
+cada referência, todo o fluxo, sem passos manuais intermediários:
 
-1. carrega ``tweets_data_huggingface`` e o gold set, e restringe o Hugging Face
-   aos tweets da amostra do gold set;
+1. carrega ``tweets_data_huggingface`` e a referência; havendo gold set, as bases
+   do Hugging Face são restritas aos tweets da amostra do gold set, e sem gold
+   set a comparação entre os dois modelos do Hugging Face cobre o corpus inteiro;
 2. valida os contratos de dados e une as bases pelo ``id`` do tweet (as duas
    precisam conter exatamente os mesmos tweets);
 3. calcula concordância (com IC por bootstrap), Kappa de Cohen (simples e
@@ -23,7 +27,7 @@ modelos NÃO faz parte desta etapa: tem estágio próprio (``hypotheses``,
 ``src/pipelines/hypotheses.py``), que reutiliza :func:`load_comparison_frame`.
 
 Os gold sets são rotulados por LLMs, não por humanos: a comparação mede a
-concordância do modelo do Hugging Face com cada LLM de referência, não
+concordância do modelo do Hugging Face com cada rotulador de referência, não
 "acerto" absoluto. Todas as tabelas com texto usam o texto normalizado (sem
 menções/URLs).
 """
@@ -37,7 +41,12 @@ import numpy as np
 import polars as pl
 
 from config.paths import ProjectPaths
-from constants.labels import GOLD_SOURCE_NAMES, HUGGINGFACE_SOURCE, SENTIMENT_CLASSES
+from constants.labels import (
+    GOLD_SOURCE_NAMES,
+    HUGGINGFACE_SECONDARY_SOURCE,
+    HUGGINGFACE_SOURCE,
+    SENTIMENT_CLASSES,
+)
 from data.loader import read_dataset_file
 from evaluation.llm_comparison import (
     analyze_by_text_length,
@@ -55,6 +64,7 @@ from exceptions.data import DataNotFoundError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
 from visualization.comparison import (
+    DEFAULT_REFERENCE_LABEL,
     plot_agreement_by_text_length,
     plot_class_distribution_by_model,
     plot_confidence_comparison,
@@ -70,7 +80,7 @@ _SUMMARY_MARKDOWN_FILE_NAME = "resumo_comparativo.md"
 
 @dataclass(frozen=True)
 class ComparativeEvaluationResult:
-    """Resultado consolidado da avaliação comparativa Hugging Face vs. um gold set.
+    """Resultado consolidado da avaliação comparativa Hugging Face vs. uma base de referência.
 
     Attributes
     ----------
@@ -96,8 +106,13 @@ class ComparativeEvaluationResult:
 
 _MAKE_TARGETS: dict[str, str] = {
     HUGGINGFACE_SOURCE: "label-hf",
+    HUGGINGFACE_SECONDARY_SOURCE: "label-hf-secondary",
     "gold_openai": "label-gold-openai",
     "gold_unb": "label-gold-unb",
+}
+REFERENCE_SOURCE_NAMES: tuple[str, ...] = (HUGGINGFACE_SECONDARY_SOURCE, *GOLD_SOURCE_NAMES)
+_REFERENCE_LABELS: dict[str, str] = {
+    HUGGINGFACE_SECONDARY_SOURCE: "LLM Hugging Face (secundário)",
 }
 
 
@@ -121,23 +136,52 @@ def resolve_gold_path(paths: ProjectPaths, gold_name: str) -> Path:
     return gold_paths[gold_name]
 
 
+def resolve_reference_path(paths: ProjectPaths, reference_name: str) -> Path:
+    """Arquivo de uma base de referência: ``huggingface_secondary`` ou um gold set."""
+    if reference_name == HUGGINGFACE_SECONDARY_SOURCE:
+        return paths.huggingface_secondary_file
+    return resolve_gold_path(paths, reference_name)
+
+
 def list_available_gold_names(paths: ProjectPaths) -> list[str]:
     """Gold sets já gerados pela etapa ``labeling`` (arquivos existentes)."""
     return [name for name in GOLD_SOURCE_NAMES if resolve_gold_path(paths, name).is_file()]
 
 
-def load_comparison_frame(paths: ProjectPaths, gold_name: str) -> pl.DataFrame:
-    """Une o Hugging Face e um gold set pelo ``id``, restrito aos tweets do gold set.
+def list_available_reference_names(paths: ProjectPaths) -> list[str]:
+    """Bases de referência já geradas: segundo modelo do Hugging Face e gold sets."""
+    return [
+        name for name in REFERENCE_SOURCE_NAMES if resolve_reference_path(paths, name).is_file()
+    ]
 
-    O gold set rotula só uma amostra do corpus; o Hugging Face (todos os tweets) é
-    filtrado para essa amostra antes da união.
+
+def _resolve_sample_ids(
+    paths: ProjectPaths, reference_name: str, reference_base: pl.DataFrame
+) -> list[str] | None:
+    """``id`` da amostra gold que restringe a comparação, ou ``None`` para o corpus inteiro."""
+    if reference_name in GOLD_SOURCE_NAMES:
+        return reference_base["id"].to_list()
+    gold_names = list_available_gold_names(paths)
+    if not gold_names:
+        return None
+    return read_dataset_file(resolve_gold_path(paths, gold_names[0]))["id"].to_list()
+
+
+def load_comparison_frame(paths: ProjectPaths, reference_name: str) -> pl.DataFrame:
+    """Une o Hugging Face primário e uma base de referência pelo ``id``.
+
+    Um gold set rotula só uma amostra do corpus; o Hugging Face (todos os tweets) é filtrado
+    para essa amostra antes da união. Para ``huggingface_secondary`` (também sobre todo o
+    corpus), havendo gold set as duas bases do Hugging Face são restritas à amostra do primeiro
+    gold encontrado, para avaliar os mesmos tweets dos demais rotuladores; sem gold set, a
+    comparação cobre o corpus inteiro.
 
     Parameters
     ----------
     paths : ProjectPaths
         Caminhos resolvidos do projeto.
-    gold_name : str
-        ``gold_openai`` ou ``gold_unb``.
+    reference_name : str
+        ``huggingface_secondary``, ``gold_openai`` ou ``gold_unb``.
 
     Returns
     -------
@@ -149,18 +193,22 @@ def load_comparison_frame(paths: ProjectPaths, gold_name: str) -> pl.DataFrame:
     DataNotFoundError
         Se alguma das bases ainda não foi gerada.
     DataValidationError
-        Se alguma base violar o contrato ou o gold tiver tweets ausentes no Hugging Face.
+        Se alguma base violar o contrato ou a amostra tiver tweets ausentes no Hugging Face.
 
     Examples
     --------
     >>> load_comparison_frame(paths, "gold_unb")  # doctest: +SKIP
     """
-    gold_base = load_labeled_source(resolve_gold_path(paths, gold_name), gold_name)
-    hf_base = load_labeled_source(paths.huggingface_labeled_file, HUGGINGFACE_SOURCE)
-    return build_comparison_frame(
-        hf_base.filter(pl.col("id").is_in(gold_base["id"].to_list())),
-        gold_base,
+    reference_base = load_labeled_source(
+        resolve_reference_path(paths, reference_name), reference_name
     )
+    hf_base = load_labeled_source(paths.huggingface_labeled_file, HUGGINGFACE_SOURCE)
+    sample_ids = _resolve_sample_ids(paths, reference_name, reference_base)
+    if sample_ids is not None:
+        hf_base = hf_base.filter(pl.col("id").is_in(sample_ids))
+        if reference_name == HUGGINGFACE_SECONDARY_SOURCE:
+            reference_base = reference_base.filter(pl.col("id").is_in(sample_ids))
+    return build_comparison_frame(hf_base, reference_base)
 
 
 def _write_tables(tables: dict[str, pl.DataFrame], directory: Path) -> dict[str, Path]:
@@ -177,7 +225,7 @@ def _build_agreement_matrix_table(matrix: np.ndarray) -> pl.DataFrame:
     return pl.DataFrame(
         {"label_huggingface": list(SENTIMENT_CLASSES)}
         | {
-            f"gold_{label}": matrix[:, index].astype(int).tolist()
+            f"reference_{label}": matrix[:, index].astype(int).tolist()
             for index, label in enumerate(SENTIMENT_CLASSES)
         }
     )
@@ -190,13 +238,16 @@ def _save_figures(
     length_analysis: pl.DataFrame,
     transitions: pl.DataFrame,
     directory: Path,
+    reference_label: str,
 ) -> list[Path]:
     """Gera e salva os gráficos da comparação (PNG 300 dpi + SVG)."""
     apply_project_theme()
-    x_label = "Classe atribuída — gold set (LLM via API)"
+    x_label = f"Classe atribuída — {reference_label}"
     y_label = "Classe atribuída — modelo Hugging Face"
     figures = {
-        "distribuicao_classes": plot_class_distribution_by_model(distribution),
+        "distribuicao_classes": plot_class_distribution_by_model(
+            distribution, reference_label=reference_label
+        ),
         "matriz_concordancia": plot_confusion_matrix_heatmap(
             matrix, title="Concordância entre os modelos (tweets)", x_label=x_label, y_label=y_label
         ),
@@ -207,23 +258,38 @@ def _save_figures(
             x_label=x_label,
             y_label=y_label,
         ),
-        "comparacao_confianca": plot_confidence_comparison(frame),
+        "comparacao_confianca": plot_confidence_comparison(frame, reference_label=reference_label),
         "concordancia_por_tamanho": plot_agreement_by_text_length(length_analysis),
     }
     if not transitions.is_empty():
-        figures["transicoes_divergencia"] = plot_divergence_transitions(transitions)
+        figures["transicoes_divergencia"] = plot_divergence_transitions(
+            transitions, reference_label=reference_label
+        )
     saved: list[Path] = []
     for name, figure in figures.items():
         saved.extend(save_figure(figure, name, directory=directory))
     return saved
 
 
-def _build_markdown_summary(summary: dict[str, Any], gold_name: str) -> str:
+def _build_markdown_disclaimer(reference_name: str) -> list[str]:
+    """Ressalva de interpretação: nenhuma das bases é rotulada por humanos."""
+    if reference_name == HUGGINGFACE_SECONDARY_SOURCE:
+        return [
+            "Ambos são modelos do Hugging Face (não há rotulagem humana): estes números medem a",
+            "concordância entre os dois modelos, não o acerto absoluto.",
+        ]
+    return [
+        "O gold set é rotulado por um LLM (não por humanos): estes números medem a concordância",
+        "com esse LLM, não o acerto absoluto.",
+    ]
+
+
+def _build_markdown_summary(summary: dict[str, Any], reference_name: str) -> str:
     """Resumo legível dos números principais, para leitura rápida do relatório."""
     agreement = summary["agreement"]
     confidence = summary["confidence"]
     lines = [
-        f"# Comparação Hugging Face × {gold_name}",
+        f"# Comparação Hugging Face × {reference_name}",
         "",
         f"- Tweets comparados: **{agreement['n_tweets']}**",
         (
@@ -240,15 +306,14 @@ def _build_markdown_summary(summary: dict[str, Any], gold_name: str) -> str:
         f"- Divergências de polaridade oposta: {agreement['opposite_polarity_rate']:.1%}",
         (f"- Correlação de Spearman entre as confianças: {confidence['spearman_rho']:.3f}"),
         "",
-        "O gold set é rotulado por um LLM (não por humanos): estes números medem a concordância",
-        "com esse LLM, não o acerto absoluto.",
+        *_build_markdown_disclaimer(reference_name),
     ]
     return "\n".join(lines) + "\n"
 
 
-def run_gold_comparison(
+def run_reference_comparison(
     paths: ProjectPaths,
-    gold_name: str,
+    reference_name: str,
     *,
     output_subdir: str,
     random_seed: int = 42,
@@ -260,14 +325,14 @@ def run_gold_comparison(
     n_length_bins: int = 5,
     examples_per_transition: int = 3,
 ) -> ComparativeEvaluationResult:
-    """Executa toda a avaliação comparativa entre o Hugging Face e um gold set.
+    """Executa toda a avaliação comparativa entre o Hugging Face e uma base de referência.
 
     Parameters
     ----------
     paths : ProjectPaths
         Caminhos resolvidos do projeto.
-    gold_name : str
-        ``gold_openai`` ou ``gold_unb``.
+    reference_name : str
+        ``huggingface_secondary``, ``gold_openai`` ou ``gold_unb``.
     output_subdir : str
         Subpasta de ``reports/tables``, ``reports/figures`` e nome do JSON em
         ``reports/metrics``.
@@ -302,12 +367,13 @@ def run_gold_comparison(
 
     Examples
     --------
-    >>> run_gold_comparison(
+    >>> run_reference_comparison(
     ...     paths, "gold_unb", output_subdir="comparativo_hf_gold_unb"
     ... )  # doctest: +SKIP
     """
-    frame = load_comparison_frame(paths, gold_name)
-    logger.info("Comparando %d tweet(s) do Hugging Face com '%s'.", frame.height, gold_name)
+    frame = load_comparison_frame(paths, reference_name)
+    reference_label = _REFERENCE_LABELS.get(reference_name, DEFAULT_REFERENCE_LABEL)
+    logger.info("Comparando %d tweet(s) do Hugging Face com '%s'.", frame.height, reference_name)
 
     tables_dir = paths.reports_tables_dir / output_subdir
     figures_dir = paths.reports_figures_dir / output_subdir
@@ -347,7 +413,9 @@ def run_gold_comparison(
         },
         tables_dir,
     )
-    figures = _save_figures(frame, distribution, matrix, length_analysis, transitions, figures_dir)
+    figures = _save_figures(
+        frame, distribution, matrix, length_analysis, transitions, figures_dir, reference_label
+    )
 
     summary: dict[str, Any] = {
         "agreement": agreement,
@@ -360,7 +428,7 @@ def run_gold_comparison(
     }
     write_json(summary, metrics_path)
     (tables_dir / _SUMMARY_MARKDOWN_FILE_NAME).write_text(
-        _build_markdown_summary(summary, gold_name), encoding="utf-8"
+        _build_markdown_summary(summary, reference_name), encoding="utf-8"
     )
     logger.info(
         "Avaliação comparativa concluída: concordância %.1f%%, kappa %.3f; resultados em %s.",
@@ -383,43 +451,51 @@ def run_comparative_evaluation_stage(
     output_subdir: str = "comparativo_hf",
     **comparison_kwargs: Any,
 ) -> dict[str, ComparativeEvaluationResult]:
-    """Compara o Hugging Face com cada gold set já gerado (``gold_openai`` e ``gold_unb``).
+    """Compara o Hugging Face primário com cada base de referência já gerada.
+
+    As referências são o segundo modelo do Hugging Face (``huggingface_secondary``) e os gold
+    sets (``gold_openai`` e ``gold_unb``); as ausentes são avisadas no log e dispensadas, como
+    em ``label_consensus``. A comparação entre os modelos do Hugging Face roda mesmo sem gold set.
 
     Parameters
     ----------
     paths : ProjectPaths
         Caminhos resolvidos do projeto.
     output_subdir : str, optional
-        Prefixo das subpastas de saída; cada gold set grava em
-        ``<output_subdir>_<gold>`` (ex.: ``comparativo_hf_gold_unb``), by default "comparativo_hf".
+        Prefixo das subpastas de saída; cada referência grava em
+        ``<output_subdir>_<referência>`` (ex.: ``comparativo_hf_gold_unb`` ou
+        ``comparativo_hf_huggingface_secondary``), by default "comparativo_hf".
     **comparison_kwargs : Any
-        Demais argumentos de :func:`run_gold_comparison` (semente, bootstrap, limiares).
+        Demais argumentos de :func:`run_reference_comparison` (semente, bootstrap, limiares).
 
     Returns
     -------
     dict[str, ComparativeEvaluationResult]
-        Resultado por gold set comparado.
+        Resultado por base de referência comparada.
 
     Raises
     ------
     DataNotFoundError
-        Se nenhum gold set foi gerado ou o Hugging Face ainda não foi rotulado.
+        Se nenhuma base de referência foi gerada ou o Hugging Face ainda não foi rotulado.
 
     Examples
     --------
     >>> run_comparative_evaluation_stage(paths)  # doctest: +SKIP
     """
-    available = list_available_gold_names(paths)
+    available = list_available_reference_names(paths)
     if not available:
         raise DataNotFoundError(
-            "nenhum gold set encontrado; gere-os com `make label-gold-openai` e/ou "
-            "`make label-gold-unb`"
+            "nenhuma base de referência encontrada; gere-as com `make label-hf-secondary`, "
+            "`make label-gold-openai` e/ou `make label-gold-unb`"
         )
-    for missing in set(GOLD_SOURCE_NAMES) - set(available):
-        logger.warning("Gold set '%s' ainda não gerado: comparação dispensada.", missing)
+    for missing in set(REFERENCE_SOURCE_NAMES) - set(available):
+        logger.warning("Base '%s' ainda não gerada: comparação dispensada.", missing)
     return {
-        gold_name: run_gold_comparison(
-            paths, gold_name, output_subdir=f"{output_subdir}_{gold_name}", **comparison_kwargs
+        reference_name: run_reference_comparison(
+            paths,
+            reference_name,
+            output_subdir=f"{output_subdir}_{reference_name}",
+            **comparison_kwargs,
         )
-        for gold_name in available
+        for reference_name in available
     }
