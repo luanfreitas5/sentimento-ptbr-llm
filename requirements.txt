@@ -350,7 +350,7 @@ magika==0.6.3
     # via markitdown
 mako==1.4.3
     # via alembic
-mando==0.7.1
+mando==0.8.2
     # via radon
 markdown==3.10.3 ; python_full_version < '3.11'
     # via
