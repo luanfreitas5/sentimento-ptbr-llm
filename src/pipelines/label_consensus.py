@@ -21,7 +21,7 @@ de dois); os ausentes são avisados no log.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import polars as pl
 
@@ -301,7 +301,7 @@ def run_label_consensus_stage(
         "levels": levels.to_dicts(),
         "by_class": by_class.to_dicts(),
         "pairwise": pairwise.to_dicts(),
-        "polarity_conflict_rate": float(frame["polarity_conflict"].mean()),
+        "polarity_conflict_rate": float(cast("float", frame["polarity_conflict"].mean())),
     }
     write_json(summary, metrics_path)
     (tables_dir / _SUMMARY_MARKDOWN_FILE_NAME).write_text(

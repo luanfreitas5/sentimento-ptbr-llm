@@ -36,7 +36,7 @@ huggingface:
 # nenhuma etapa de treino. Demais chaves como em `huggingface`.
 huggingface_cardiff:
   model: "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual" # https://huggingface.co/cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual
-  revision: "82107f4ccba672c9ab1eee538e727e462cad21de" # SHA do commit (reprodutibilidade)
+  revision: "82107f4ccba672c9ab1eee538e727e462cad21de" # SHA do commit (reprodutibilidade) # pragma: allowlist secret
   device: "auto"
   dtype: "auto"
   batch_size: 64

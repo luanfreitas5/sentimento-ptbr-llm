@@ -24,7 +24,7 @@ import logging
 import warnings
 from collections.abc import Mapping, Sequence
 from itertools import combinations
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import polars as pl
@@ -380,8 +380,9 @@ def calculate_multi_rater_agreement(
     >>> calculate_multi_rater_agreement(frame, ["a", "b"], n_bootstrap=50)  # doctest: +SKIP
     """
     votes = frame.select(f"{_VOTES_PREFIX}{label}" for label in SENTIMENT_CLASSES).to_numpy()
-    rng = np.random.default_rng(random_seed)
-    resample_indices = rng.integers(0, frame.height, size=(n_bootstrap, frame.height))
+    resample_indices = np.random.default_rng(random_seed).integers(
+        0, frame.height, size=(n_bootstrap, frame.height)
+    )
     boot = [_calculate_fleiss(votes[indices]) for indices in resample_indices]
     valid_boot = np.array([value for value in boot if value is not None])
     reliability_data = [frame[_label_column(name)].to_list() for name in source_names]
@@ -393,7 +394,7 @@ def calculate_multi_rater_agreement(
             list(_bootstrap_interval(valid_boot, confidence_level)) if valid_boot.size else None
         ),
         "krippendorff_alpha": calculate_krippendorff_alpha(reliability_data),
-        "unanimity_rate": float((frame["consensus_level"] == "unanimidade").mean()),
+        "unanimity_rate": float(cast("float", (frame["consensus_level"] == "unanimidade").mean())),
         "confidence_level": confidence_level,
     }
 
