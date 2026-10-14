@@ -94,6 +94,33 @@ def build_consensus_frame(sources: Mapping[str, pl.DataFrame]) -> pl.DataFrame:
     >>> frame["consensus_level"].to_list()
     ['unanimidade']
     """
+    _validate_sources(sources)
+    names = list(sources)
+    joined = sources[names[0]].select("id", "text_normalized")
+    for name in names:
+        joined = joined.join(
+            sources[name].select(
+                "id",
+                pl.col("sentiment_label").alias(_label_column(name)),
+                pl.col("confidence_score").alias(f"confidence_{name}"),
+            ),
+            on="id",
+            how="inner",
+        )
+    label_columns = [_label_column(name) for name in names]
+    defined = joined.filter(pl.all_horizontal(pl.col(c) != UNDEFINED_LABEL for c in label_columns))
+    if defined.is_empty():
+        raise EmptyDatasetError("tweets com rótulo definido em todos os rotuladores")
+    if defined.height < joined.height:
+        logger.warning(
+            "%d tweet(s) com sentimento indefinido em algum rotulador ficaram fora do consenso.",
+            joined.height - defined.height,
+        )
+    return _add_consensus_columns(defined.sort("id"), label_columns)
+
+
+def _validate_sources(sources: Mapping[str, pl.DataFrame]) -> None:
+    """Garante contrato válido, bases não vazias e o mesmo conjunto de ``id`` em todas."""
     if len(sources) < _MIN_RATERS:
         raise DataValidationError(
             schema_name="label_consensus",
@@ -117,30 +144,6 @@ def build_consensus_frame(sources: Mapping[str, pl.DataFrame]) -> pl.DataFrame:
                     f"(ex.: {sorted(ids ^ reference_ids)[:_MAX_ID_SAMPLE_IN_ERROR]})"
                 ),
             )
-
-    names = list(sources)
-    first = sources[names[0]].select("id", "text_normalized")
-    joined = first
-    for name in names:
-        joined = joined.join(
-            sources[name].select(
-                "id",
-                pl.col("sentiment_label").alias(_label_column(name)),
-                pl.col("confidence_score").alias(f"confidence_{name}"),
-            ),
-            on="id",
-            how="inner",
-        )
-    label_columns = [_label_column(name) for name in names]
-    defined = joined.filter(pl.all_horizontal(pl.col(c) != UNDEFINED_LABEL for c in label_columns))
-    if defined.is_empty():
-        raise EmptyDatasetError("tweets com rótulo definido em todos os rotuladores")
-    if defined.height < joined.height:
-        logger.warning(
-            "%d tweet(s) com sentimento indefinido em algum rotulador ficaram fora do consenso.",
-            joined.height - defined.height,
-        )
-    return _add_consensus_columns(defined.sort("id"), label_columns)
 
 
 def _add_consensus_columns(frame: pl.DataFrame, label_columns: Sequence[str]) -> pl.DataFrame:

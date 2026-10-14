@@ -111,13 +111,7 @@ def load_consensus_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
     >>> sorted(load_consensus_sources(paths))  # doctest: +SKIP
     ['gold_openai', 'gold_unb', 'huggingface', 'huggingface_cardiff']
     """
-    source_paths = _resolve_source_paths(paths)
-    missing = [name for name, path in source_paths.items() if not path.is_file()]
-    for name in missing:
-        logger.warning("Rotulador '%s' ainda não gerado: fora da análise de consenso.", name)
-    available = {
-        name: read_dataset_file(path) for name, path in source_paths.items() if name not in missing
-    }
+    available = _read_available_sources(paths)
     sample_names = [name for name in available if name != HUGGINGFACE_SOURCE]
     if len(available) < _MIN_RATERS or not sample_names:
         raise DataNotFoundError(
@@ -127,20 +121,39 @@ def load_consensus_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
             f"Disponíveis: {list(available)}"
         )
     if HUGGINGFACE_SOURCE in available:
-        sample_ids = available[sample_names[0]]["id"].to_list()
-        available[HUGGINGFACE_SOURCE] = available[HUGGINGFACE_SOURCE].filter(
-            pl.col("id").is_in(sample_ids)
+        available[HUGGINGFACE_SOURCE] = _restrict_to_sample(
+            available[HUGGINGFACE_SOURCE], available[sample_names[0]], sample_names[0]
         )
-        n_missing = len(sample_ids) - available[HUGGINGFACE_SOURCE].height
-        if n_missing:
-            raise DataValidationError(
-                schema_name="label_consensus",
-                detail=(
-                    f"a base '{sample_names[0]}' tem {n_missing} tweet(s) ausente(s) em "
-                    f"'{HUGGINGFACE_SOURCE}'"
-                ),
-            )
     return available
+
+
+def _read_available_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
+    """Lê as bases já geradas e avisa no log as que ainda não existem."""
+    available: dict[str, pl.DataFrame] = {}
+    for name, path in _resolve_source_paths(paths).items():
+        if path.is_file():
+            available[name] = read_dataset_file(path)
+        else:
+            logger.warning("Rotulador '%s' ainda não gerado: fora da análise de consenso.", name)
+    return available
+
+
+def _restrict_to_sample(
+    huggingface: pl.DataFrame, sample: pl.DataFrame, sample_name: str
+) -> pl.DataFrame:
+    """Filtra a base completa do Hugging Face para os ``id`` da base de amostra."""
+    sample_ids = sample["id"].to_list()
+    restricted = huggingface.filter(pl.col("id").is_in(sample_ids))
+    n_missing = len(sample_ids) - restricted.height
+    if n_missing:
+        raise DataValidationError(
+            schema_name="label_consensus",
+            detail=(
+                f"a base '{sample_name}' tem {n_missing} tweet(s) ausente(s) em "
+                f"'{HUGGINGFACE_SOURCE}'"
+            ),
+        )
+    return restricted
 
 
 def _write_tables(tables: dict[str, pl.DataFrame], directory: Path) -> dict[str, Path]:

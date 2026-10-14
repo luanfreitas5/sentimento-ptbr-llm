@@ -25,6 +25,23 @@ _LEVEL_ALPHAS: dict[str, float] = {
 }
 
 
+def _build_kappa_matrix(pairwise: pl.DataFrame, source_names: list[str]) -> np.ndarray:
+    """Matriz simétrica de Kappa (diagonal 1; ``nan`` quando o Kappa é indefinido)."""
+    index = {name: position for position, name in enumerate(source_names)}
+    matrix = np.eye(len(source_names))
+    for row in pairwise.iter_rows(named=True):
+        kappa = np.nan if row["cohen_kappa"] is None else row["cohen_kappa"]
+        matrix[index[row["source_a"]], index[row["source_b"]]] = kappa
+        matrix[index[row["source_b"]], index[row["source_a"]]] = kappa
+    return matrix
+
+
+def _read_level_counts(by_class: pl.DataFrame, level: str, labels: list[str]) -> np.ndarray:
+    """Tweets de um nível de consenso em cada classe, na ordem de ``labels``."""
+    counts = dict(zip(by_class["consensus_label"], by_class[f"n_{level}"], strict=True))
+    return np.array([counts[label] for label in labels])
+
+
 def plot_pairwise_kappa_heatmap(pairwise: pl.DataFrame, source_names: list[str]) -> Figure:
     """Mapa de calor do Kappa de Cohen entre cada par de rotuladores.
 
@@ -51,15 +68,9 @@ def plot_pairwise_kappa_heatmap(pairwise: pl.DataFrame, source_names: list[str])
     """
     if pairwise.is_empty():
         raise EmptyDatasetError("concordância par a par")
-    index = {name: position for position, name in enumerate(source_names)}
-    matrix = np.eye(len(source_names))
-    for row in pairwise.iter_rows(named=True):
-        kappa = np.nan if row["cohen_kappa"] is None else row["cohen_kappa"]
-        matrix[index[row["source_a"]], index[row["source_b"]]] = kappa
-        matrix[index[row["source_b"]], index[row["source_a"]]] = kappa
     figure, axis = plt.subplots(figsize=(7, 6))
     sns.heatmap(
-        matrix,
+        _build_kappa_matrix(pairwise, source_names),
         annot=True,
         fmt=".2f",
         vmin=0.0,
@@ -104,12 +115,10 @@ def plot_consensus_by_class(by_class: pl.DataFrame) -> Figure:
         raise EmptyDatasetError("consenso por classe")
     labels = [*SENTIMENT_CLASSES, NO_CONSENSUS_LABEL]
     colors = {**SENTIMENT_COLOR_PALETTE, NO_CONSENSUS_LABEL: _NO_CONSENSUS_COLOR}
-    data = by_class.to_dict(as_series=False)
-    row_of = {label: data["consensus_label"].index(label) for label in labels}
     figure, axis = plt.subplots(figsize=(9, 5))
     bottoms = np.zeros(len(labels))
     for level in CONSENSUS_LEVELS:
-        values = np.array([data[f"n_{level}"][row_of[label]] for label in labels])
+        values = _read_level_counts(by_class, level, labels)
         axis.bar(
             labels,
             values,
