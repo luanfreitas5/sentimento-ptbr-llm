@@ -44,7 +44,7 @@ stages:
     params:
       - configs/labeling.yaml:
     outs:
-      - data/gold/tweets_data_huggingface.parquet
+      - data/gold/tweets_data_twitter-xlm-roberta-base-sentiment-multilingual.parquet
       - data/gold/gold_gpt-6-luna.parquet
       - data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet
       - data/gold/corpus_rotulado.parquet
@@ -55,8 +55,8 @@ stages:
       - src/pipelines/comparative_evaluation.py
       - src/evaluation/llm_comparison.py
       - src/visualization/comparison.py
-      - data/gold/tweets_data_huggingface.parquet
-      - data/gold/tweets_data_huggingface_secondary.parquet
+      - data/gold/tweets_data_twitter-xlm-roberta-base-sentiment-multilingual.parquet
+      - data/gold/tweets_data_bertweet-pt-sentiment.parquet
       - data/gold/gold_gpt-6-luna.parquet
       - data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet
     params:
@@ -89,7 +89,7 @@ stages:
     deps:
       - src/pipelines/hypotheses.py
       - src/diagnostics
-      - data/gold/tweets_data_huggingface.parquet
+      - data/gold/tweets_data_twitter-xlm-roberta-base-sentiment-multilingual.parquet
       - data/gold/gold_gpt-6-luna.parquet
       - data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet
     params:

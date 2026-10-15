@@ -505,8 +505,11 @@ def test_project_paths_expose_the_new_labeling_locations() -> None:
 
     paths: ProjectPaths = load_project_paths()
 
-    assert paths.huggingface_labeled_file.name == "tweets_data_huggingface.parquet"
-    assert paths.huggingface_secondary_file.name == "tweets_data_huggingface_secondary.parquet"
+    assert (
+        paths.huggingface_labeled_file.name
+        == "tweets_data_twitter-xlm-roberta-base-sentiment-multilingual.parquet"
+    )
+    assert paths.huggingface_secondary_file.name == "tweets_data_bertweet-pt-sentiment.parquet"
     assert paths.gold_openai_file.name == "gold_gpt-6-luna.parquet"
     assert paths.gold_unb_file.name == "gold_UnB-Llama-3.3-70B-Instruct.parquet"
     assert paths.labeling_checkpoints_dir.name == "labeling_checkpoints"

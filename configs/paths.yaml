@@ -20,10 +20,10 @@ data_files:
   corpus_rotulado: "data/gold/corpus_rotulado.parquet"
   # Base rotulada pelo modelo do Hugging Face (todos os tweets) e gold sets rotulados por
   # LLMs via API (amostra do corpus), comparados na etapa `comparative_evaluation` via `id`.
-  tweets_data_huggingface: "data/gold/tweets_data_huggingface.parquet"
+  tweets_data_huggingface: "data/gold/tweets_data_twitter-xlm-roberta-base-sentiment-multilingual.parquet"
   # Segundo modelo do Hugging Face (pysentimiento, secundário), todos os tweets: alimenta a
   # etapa `label_consensus`.
-  tweets_data_huggingface_secondary: "data/gold/tweets_data_huggingface_secondary.parquet"
+  tweets_data_huggingface_secondary: "data/gold/tweets_data_bertweet-pt-sentiment.parquet"
   gold_openai: "data/gold/gold_gpt-6-luna.parquet"
   gold_unb: "data/gold/gold_UnB-Llama-3.3-70B-Instruct.parquet"
   corpus_treino: "data/gold/treino.parquet"
