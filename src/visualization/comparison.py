@@ -1,7 +1,8 @@
-"""Gráficos da comparação entre o Hugging Face e uma base de referência.
+"""Gráficos da comparação entre o modelo primário do Hugging Face e uma base de referência.
 
 A referência é um gold set (LLM via API OpenAI-compatível) ou o segundo modelo do Hugging Face;
-o rótulo exibido nos gráficos é parametrizado por ``reference_label``.
+os nomes exibidos nos gráficos (os dos modelos) são parametrizados por ``primary_label`` e
+``reference_label``.
 
 Desenham as tabelas de :mod:`evaluation.llm_comparison` com a paleta do
 projeto (:mod:`visualization.theme`). Cada função devolve uma
@@ -21,16 +22,19 @@ from visualization.theme import MODEL_COLOR_PALETTE, SENTIMENT_COLOR_PALETTE
 
 _HF, _OA = MODEL_NAMES
 DEFAULT_REFERENCE_LABEL = "Gold set (API)"
-_HF_LABEL = "LLM Hugging Face"
+DEFAULT_PRIMARY_LABEL = "LLM Hugging Face"
 
 
-def _display_names(reference_label: str) -> dict[str, str]:
+def _display_names(primary_label: str, reference_label: str) -> dict[str, str]:
     """Nome exibido de cada modelo; o segundo é a base de referência."""
-    return {_HF: _HF_LABEL, _OA: reference_label}
+    return {_HF: primary_label, _OA: reference_label}
 
 
 def plot_class_distribution_by_model(
-    distribution: pl.DataFrame, *, reference_label: str = DEFAULT_REFERENCE_LABEL
+    distribution: pl.DataFrame,
+    *,
+    primary_label: str = DEFAULT_PRIMARY_LABEL,
+    reference_label: str = DEFAULT_REFERENCE_LABEL,
 ) -> Figure:
     """Barras agrupadas com a proporção de cada classe de sentimento, por modelo.
 
@@ -38,6 +42,8 @@ def plot_class_distribution_by_model(
     ----------
     distribution : pl.DataFrame
         Saída de :func:`evaluation.llm_comparison.calculate_class_distribution`.
+    primary_label : str, optional
+        Nome exibido do modelo primário, by default "LLM Hugging Face".
     reference_label : str, optional
         Nome exibido da base de referência, by default "Gold set (API)".
 
@@ -66,7 +72,7 @@ def plot_class_distribution_by_model(
     """
     if distribution.is_empty():
         raise EmptyDatasetError("distribuição de classes")
-    display_names = _display_names(reference_label)
+    display_names = _display_names(primary_label, reference_label)
     data = distribution.with_columns(
         (pl.col("proportion") * 100).alias("percentage"),
         pl.col("model").replace(display_names).alias("model_name"),
@@ -90,7 +96,10 @@ def plot_class_distribution_by_model(
 
 
 def plot_confidence_comparison(
-    frame: pl.DataFrame, *, reference_label: str = DEFAULT_REFERENCE_LABEL
+    frame: pl.DataFrame,
+    *,
+    primary_label: str = DEFAULT_PRIMARY_LABEL,
+    reference_label: str = DEFAULT_REFERENCE_LABEL,
 ) -> Figure:
     """Distribuição da confiança de cada modelo e dispersão das duas confianças por tweet.
 
@@ -98,6 +107,8 @@ def plot_confidence_comparison(
     ----------
     frame : pl.DataFrame
         Saída de :func:`evaluation.llm_comparison.build_comparison_frame`.
+    primary_label : str, optional
+        Nome exibido do modelo primário, by default "LLM Hugging Face".
     reference_label : str, optional
         Nome exibido da base de referência, by default "Gold set (API)".
 
@@ -122,7 +133,7 @@ def plot_confidence_comparison(
     """
     if frame.is_empty():
         raise EmptyDatasetError("frame de comparação")
-    display_names = _display_names(reference_label)
+    display_names = _display_names(primary_label, reference_label)
     figure, (hist_axis, density_axis) = plt.subplots(1, 2, figsize=(12, 5))
     for model in MODEL_NAMES:
         sns.histplot(
@@ -149,8 +160,8 @@ def plot_confidence_comparison(
         mincnt=1,
     )
     density_axis.plot([0, 1], [0, 1], linestyle="--", color="#555555", linewidth=1)
-    density_axis.set_title(f"Confiança por tweet: Hugging Face vs. {reference_label}")
-    density_axis.set_xlabel(f"Confiança — {_HF_LABEL}")
+    density_axis.set_title(f"Confiança por tweet: {primary_label} vs. {reference_label}")
+    density_axis.set_xlabel(f"Confiança — {primary_label}")
     density_axis.set_ylabel(f"Confiança — {reference_label}")
     figure.colorbar(hexbin, ax=density_axis, label="Tweets")
     figure.tight_layout()
@@ -212,9 +223,13 @@ def plot_agreement_by_text_length(length_analysis: pl.DataFrame) -> Figure:
 
 
 def plot_divergence_transitions(
-    transitions: pl.DataFrame, *, top_n: int = 6, reference_label: str = DEFAULT_REFERENCE_LABEL
+    transitions: pl.DataFrame,
+    *,
+    top_n: int = 6,
+    primary_label: str = DEFAULT_PRIMARY_LABEL,
+    reference_label: str = DEFAULT_REFERENCE_LABEL,
 ) -> Figure:
-    """Barras horizontais com as principais migrações de classe (Hugging Face → referência).
+    """Barras horizontais com as principais migrações de classe (modelo primário → referência).
 
     Parameters
     ----------
@@ -223,6 +238,8 @@ def plot_divergence_transitions(
         :func:`evaluation.llm_comparison.summarize_classification_differences`.
     top_n : int, optional
         Quantidade de pares exibidos, by default 6 (todos os pares possíveis entre 3 classes).
+    primary_label : str, optional
+        Nome exibido do modelo primário, by default "LLM Hugging Face".
     reference_label : str, optional
         Nome exibido da base de referência, by default "Gold set (API)".
 
@@ -253,8 +270,8 @@ def plot_divergence_transitions(
     ]
     figure, axis = plt.subplots(figsize=(8, 4.5))
     axis.barh(names[::-1], top["n_tweets"].to_list()[::-1], color=MODEL_COLOR_PALETTE[_HF])
-    axis.set_title(f"Principais diferenças de classificação (Hugging Face → {reference_label})")
+    axis.set_title(f"Principais diferenças de classificação ({primary_label} → {reference_label})")
     axis.set_xlabel("Tweets divergentes")
-    axis.set_ylabel(f"Classe atribuída (Hugging Face → {reference_label})")
+    axis.set_ylabel(f"Classe atribuída ({primary_label} → {reference_label})")
     figure.tight_layout()
     return figure

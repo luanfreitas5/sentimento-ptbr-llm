@@ -154,7 +154,7 @@ class TestBuildComparativeEvaluationStageKwargs:
             _build_comparative_evaluation_stage_kwargs, ["--stage", "comparative_evaluation"]
         )
 
-        assert kwargs["output_subdir"] == "comparativo_hf"
+        assert kwargs["output_subdir"] == "comparativo"
         assert kwargs["high_confidence_threshold"] == 0.8
         assert kwargs["low_confidence_threshold"] == 0.5
         assert kwargs["n_bootstrap"] == 1000
@@ -290,7 +290,7 @@ class TestHypothesesStageKwargs:
         assert kwargs["mode"] == "disagreement"
         assert kwargs["skip"] is False
         assert kwargs["targets"] == ("disagreement", "uncertainty")
-        assert kwargs["output_subdir"] == "comparativo_hf"
+        assert kwargs["output_subdir"] == "comparativo"
         assert "patterns_kwargs" not in kwargs
         assert "diagnostics_kwargs" not in kwargs
 

@@ -28,7 +28,12 @@ from typing import Any
 from config.paths import ProjectPaths
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.json import write_json
-from pipelines.comparative_evaluation import list_available_gold_names, load_comparison_frame
+from labeling.model_names import load_source_model_names
+from pipelines.comparative_evaluation import (
+    build_comparison_subdir,
+    list_available_gold_names,
+    load_comparison_frame,
+)
 from pipelines.diagnostics_analysis import run_diagnostics_stage
 from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
 
@@ -71,6 +76,7 @@ def _run_disagreement_mode(
     """Gera hipóteses sobre a discordância/incerteza entre o Hugging Face e cada gold set."""
     from diagnostics.model_disagreement import run_disagreement_hypotheses
 
+    model_names = load_source_model_names()
     available = list_available_gold_names(paths)
     if not available:
         raise DataNotFoundError(
@@ -79,7 +85,7 @@ def _run_disagreement_mode(
         )
     summary: list[dict[str, Any]] = []
     for gold_name in available:
-        gold_subdir = f"{output_subdir}_{gold_name}"
+        gold_subdir = build_comparison_subdir(output_subdir, model_names, gold_name)
         outcomes = run_disagreement_hypotheses(
             load_comparison_frame(paths, gold_name),
             paths,
@@ -109,7 +115,7 @@ def run_hypotheses_stage(
     *,
     mode: str = "disagreement",
     skip: bool = False,
-    output_subdir: str = "comparativo_hf",
+    output_subdir: str = "comparativo",
     targets: Sequence[str] = ("disagreement", "uncertainty"),
     top_tweets_per_hypothesis: int = 10,
     diagnostics_config_file: Path | None = None,
@@ -130,7 +136,7 @@ def run_hypotheses_stage(
         Se ``True``, não executa nada (útil em ``--stage all`` sem LLM/GPU), by default False.
     output_subdir : str, optional
         Prefixo das subpastas de ``reports/tables`` (modo ``disagreement``), igual ao da
-        etapa ``comparative_evaluation`` (uma subpasta por gold set), by default "comparativo_hf".
+        etapa ``comparative_evaluation`` (uma subpasta por gold set), by default "comparativo".
     targets : Sequence[str], optional
         ``disagreement`` e/ou ``uncertainty`` (modo ``disagreement``), by default os dois.
     top_tweets_per_hypothesis : int, optional

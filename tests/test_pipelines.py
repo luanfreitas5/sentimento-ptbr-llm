@@ -28,8 +28,12 @@ from exceptions.pipeline import (
     UnknownPipelineStageError,
 )
 from io_utils.json import read_json
+from labeling.model_names import load_source_model_names
 from pipelines import hypothesaes_analysis, training_deep_learning, workflow
-from pipelines.comparative_evaluation import run_comparative_evaluation_stage
+from pipelines.comparative_evaluation import (
+    build_comparison_subdir,
+    run_comparative_evaluation_stage,
+)
 from pipelines.features import run_features_stage
 from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
 from pipelines.ingestion import run_ingestion_stage
@@ -656,18 +660,36 @@ class TestRunComparativeEvaluationStage:
         for gold_name, result in results.items():
             assert set(result.tables) == expected_tables
             assert all(path.is_file() for path in result.tables.values())
-            assert result.metrics_path == (
-                pipeline_paths.reports_metrics_dir / f"comparativo_hf_{gold_name}.json"
-            )
+            subdir = build_comparison_subdir("comparativo", load_source_model_names(), gold_name)
+            assert result.metrics_path == pipeline_paths.reports_metrics_dir / f"{subdir}.json"
             assert result.metrics_path.is_file()
-            assert (
-                pipeline_paths.reports_tables_dir
-                / f"comparativo_hf_{gold_name}"
-                / "resumo_comparativo.md"
-            ).is_file()
+            assert (pipeline_paths.reports_tables_dir / subdir / "resumo_comparativo.md").is_file()
             figure_names = {path.name for path in result.figures}
             assert {"distribuicao_classes.png", "matriz_concordancia.svg"} <= figure_names
             assert all(path.is_file() for path in result.figures)
+
+    def test_tables_and_figures_use_model_names_instead_of_source_identifiers(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Tabelas e resumo trazem o nome dos modelos, não ``huggingface``."""
+        _write_comparison_bases(pipeline_paths)
+        names = load_source_model_names()
+        primary, reference = names["huggingface"], names["gold_unb"]
+
+        result = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)["gold_unb"]
+
+        distribution = pl.read_csv(result.tables["distribuicao_classes"])
+        assert set(distribution["model"]) == {primary, reference}
+        divergences = pl.read_csv(result.tables["maiores_divergencias"])
+        assert {f"label_{primary}", f"label_{reference}"} <= set(divergences.columns)
+        assert not any(
+            "huggingface" in column or "openai" in column for column in divergences.columns
+        )
+        matrix = pl.read_csv(result.tables["matriz_concordancia"])
+        assert f"{reference}_positivo" in matrix.columns
+        assert result.summary["models"] == {"primary": primary, "reference": reference}
+        assert primary in result.tables["distribuicao_classes"].parent.name
+        assert reference in result.figures[0].parent.name
 
     def test_agreement_metrics_match_the_synthetic_bases(
         self, pipeline_paths: ProjectPaths
@@ -722,9 +744,10 @@ class TestRunComparativeEvaluationStage:
         assert set(results) == {"huggingface_secondary"}
         result = results["huggingface_secondary"]
         assert result.summary["agreement"]["n_tweets"] == 60 + _N_EXTRA_HF_TWEETS
-        assert result.metrics_path == (
-            pipeline_paths.reports_metrics_dir / "comparativo_hf_huggingface_secondary.json"
+        subdir = build_comparison_subdir(
+            "comparativo", load_source_model_names(), "huggingface_secondary"
         )
+        assert result.metrics_path == pipeline_paths.reports_metrics_dir / f"{subdir}.json"
         assert all(path.is_file() for path in result.tables.values())
 
     def test_compares_huggingface_models_and_gold_sets_on_the_gold_sample(
@@ -804,9 +827,8 @@ class TestRunHypothesesStage:
         assert captured == {"n_tweets": [60, 60], "targets": ("disagreement",)}
         assert [item["gold"] for item in summary] == ["gold_openai", "gold_unb"]
         assert summary[0]["status"] == "gate_reprovado"
-        written = read_json(
-            pipeline_paths.reports_metrics_dir / "hipoteses_comparativo_hf_gold_unb.json"
-        )
+        subdir = build_comparison_subdir("comparativo", load_source_model_names(), "gold_unb")
+        written = read_json(pipeline_paths.reports_metrics_dir / f"hipoteses_{subdir}.json")
         assert written[0]["target"] == "disagreement"
 
     def test_skip_returns_none_without_touching_the_bases(

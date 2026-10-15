@@ -33,6 +33,7 @@ menções/URLs).
 """
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,7 @@ from constants.labels import (
 )
 from data.loader import read_dataset_file
 from evaluation.llm_comparison import (
+    MODEL_NAMES,
     analyze_by_text_length,
     build_agreement_matrix,
     build_comparison_frame,
@@ -63,8 +65,8 @@ from evaluation.llm_comparison import (
 from exceptions.data import DataNotFoundError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
+from labeling.model_names import build_file_slug, load_source_model_names
 from visualization.comparison import (
-    DEFAULT_REFERENCE_LABEL,
     plot_agreement_by_text_length,
     plot_class_distribution_by_model,
     plot_confidence_comparison,
@@ -111,9 +113,7 @@ _MAKE_TARGETS: dict[str, str] = {
     "gold_unb": "label-gold-unb",
 }
 REFERENCE_SOURCE_NAMES: tuple[str, ...] = (HUGGINGFACE_SECONDARY_SOURCE, *GOLD_SOURCE_NAMES)
-_REFERENCE_LABELS: dict[str, str] = {
-    HUGGINGFACE_SECONDARY_SOURCE: "LLM Hugging Face (secundário)",
-}
+_INTERNAL_MODEL_SUFFIXES: tuple[str, str] = MODEL_NAMES
 
 
 def load_labeled_source(path: Path, source_name: str) -> pl.DataFrame:
@@ -153,6 +153,54 @@ def list_available_reference_names(paths: ProjectPaths) -> list[str]:
     return [
         name for name in REFERENCE_SOURCE_NAMES if resolve_reference_path(paths, name).is_file()
     ]
+
+
+def build_comparison_subdir(
+    prefix: str, model_names: Mapping[str, str], reference_name: str
+) -> str:
+    """Nome da subpasta/JSON de uma comparação, com os nomes dos modelos comparados.
+
+    Parameters
+    ----------
+    prefix : str
+        Prefixo configurado (``configs/evaluation.yaml -> llm_comparison.output_subdir``).
+    model_names : Mapping[str, str]
+        Nome do modelo de cada fonte (ver :func:`labeling.model_names.load_source_model_names`).
+    reference_name : str
+        ``huggingface_secondary``, ``gold_openai`` ou ``gold_unb``.
+
+    Returns
+    -------
+    str
+        ``<prefixo>_<modelo primário>_vs_<modelo de referência>``.
+
+    Examples
+    --------
+    >>> names = {"huggingface": "modelo-a", "gold_unb": "Modelo-B"}
+    >>> build_comparison_subdir("comparativo", names, "gold_unb")
+    'comparativo_modelo-a_vs_Modelo-B'
+    """
+    primary_slug = build_file_slug(model_names[HUGGINGFACE_SOURCE])
+    reference_slug = build_file_slug(model_names[reference_name])
+    return f"{prefix}_{primary_slug}_vs_{reference_slug}"
+
+
+def _apply_model_names(table: pl.DataFrame, primary: str, reference: str) -> pl.DataFrame:
+    """Troca os identificadores internos pelos nomes dos modelos nas colunas e valores.
+
+    Colunas ``*_huggingface``/``*_openai`` viram ``*_<modelo>``; os valores das colunas
+    ``model`` e ``more_confident_model`` são trocados da mesma forma.
+    """
+    suffix_names = dict(zip(_INTERNAL_MODEL_SUFFIXES, (primary, reference), strict=True))
+    renames = {
+        column: f"{column[: -len(suffix)]}{name}"
+        for column in table.columns
+        for suffix, name in suffix_names.items()
+        if column.endswith(f"_{suffix}")
+    }
+    renamed = table.rename(renames)
+    value_columns = [c for c in ("model", "more_confident_model") if c in renamed.columns]
+    return renamed.with_columns(pl.col(c).replace(suffix_names) for c in value_columns)
 
 
 def _resolve_sample_ids(
@@ -211,21 +259,23 @@ def load_comparison_frame(paths: ProjectPaths, reference_name: str) -> pl.DataFr
     return build_comparison_frame(hf_base, reference_base)
 
 
-def _write_tables(tables: dict[str, pl.DataFrame], directory: Path) -> dict[str, Path]:
-    """Grava cada tabela em CSV e devolve os caminhos, indexados pelo nome."""
+def _write_tables(
+    tables: dict[str, pl.DataFrame], directory: Path, primary: str, reference: str
+) -> dict[str, Path]:
+    """Grava cada tabela em CSV, com os nomes dos modelos, e devolve os caminhos."""
     written: dict[str, Path] = {}
     for name, table in tables.items():
         written[name] = directory / f"{name}.csv"
-        write_csv(table, written[name])
+        write_csv(_apply_model_names(table, primary, reference), written[name])
     return written
 
 
-def _build_agreement_matrix_table(matrix: np.ndarray) -> pl.DataFrame:
-    """Matriz de concordância como tabela: uma linha por classe do Hugging Face."""
+def _build_agreement_matrix_table(matrix: np.ndarray, reference: str) -> pl.DataFrame:
+    """Matriz de concordância como tabela: uma linha por classe do modelo primário."""
     return pl.DataFrame(
-        {"label_huggingface": list(SENTIMENT_CLASSES)}
+        {f"label_{MODEL_NAMES[0]}": list(SENTIMENT_CLASSES)}
         | {
-            f"reference_{label}": matrix[:, index].astype(int).tolist()
+            f"{reference}_{label}": matrix[:, index].astype(int).tolist()
             for index, label in enumerate(SENTIMENT_CLASSES)
         }
     )
@@ -238,32 +288,38 @@ def _save_figures(
     length_analysis: pl.DataFrame,
     transitions: pl.DataFrame,
     directory: Path,
+    primary_label: str,
     reference_label: str,
 ) -> list[Path]:
     """Gera e salva os gráficos da comparação (PNG 300 dpi + SVG)."""
     apply_project_theme()
     x_label = f"Classe atribuída — {reference_label}"
-    y_label = "Classe atribuída — modelo Hugging Face"
+    y_label = f"Classe atribuída — {primary_label}"
     figures = {
         "distribuicao_classes": plot_class_distribution_by_model(
-            distribution, reference_label=reference_label
+            distribution, primary_label=primary_label, reference_label=reference_label
         ),
         "matriz_concordancia": plot_confusion_matrix_heatmap(
-            matrix, title="Concordância entre os modelos (tweets)", x_label=x_label, y_label=y_label
+            matrix,
+            title=f"Concordância: {primary_label} × {reference_label} (tweets)",
+            x_label=x_label,
+            y_label=y_label,
         ),
         "matriz_concordancia_normalizada": plot_confusion_matrix_heatmap(
             matrix,
             normalize=True,
-            title="Concordância entre os modelos (proporção por linha)",
+            title=f"Concordância: {primary_label} × {reference_label} (proporção por linha)",
             x_label=x_label,
             y_label=y_label,
         ),
-        "comparacao_confianca": plot_confidence_comparison(frame, reference_label=reference_label),
+        "comparacao_confianca": plot_confidence_comparison(
+            frame, primary_label=primary_label, reference_label=reference_label
+        ),
         "concordancia_por_tamanho": plot_agreement_by_text_length(length_analysis),
     }
     if not transitions.is_empty():
         figures["transicoes_divergencia"] = plot_divergence_transitions(
-            transitions, reference_label=reference_label
+            transitions, primary_label=primary_label, reference_label=reference_label
         )
     saved: list[Path] = []
     for name, figure in figures.items():
@@ -271,25 +327,27 @@ def _save_figures(
     return saved
 
 
-def _build_markdown_disclaimer(reference_name: str) -> list[str]:
+def _build_markdown_disclaimer(reference_name: str, primary: str, reference: str) -> list[str]:
     """Ressalva de interpretação: nenhuma das bases é rotulada por humanos."""
     if reference_name == HUGGINGFACE_SECONDARY_SOURCE:
         return [
-            "Ambos são modelos do Hugging Face (não há rotulagem humana): estes números medem a",
-            "concordância entre os dois modelos, não o acerto absoluto.",
+            f"{primary} e {reference} são modelos do Hugging Face (não há rotulagem humana): estes",
+            "números medem a concordância entre os dois modelos, não o acerto absoluto.",
         ]
     return [
-        "O gold set é rotulado por um LLM (não por humanos): estes números medem a concordância",
-        "com esse LLM, não o acerto absoluto.",
+        f"O gold set é rotulado pelo LLM {reference} (não por humanos): estes números medem a",
+        "concordância com esse LLM, não o acerto absoluto.",
     ]
 
 
-def _build_markdown_summary(summary: dict[str, Any], reference_name: str) -> str:
+def _build_markdown_summary(
+    summary: dict[str, Any], reference_name: str, primary: str, reference: str
+) -> str:
     """Resumo legível dos números principais, para leitura rápida do relatório."""
     agreement = summary["agreement"]
     confidence = summary["confidence"]
     lines = [
-        f"# Comparação Hugging Face × {reference_name}",
+        f"# Comparação {primary} × {reference}",
         "",
         f"- Tweets comparados: **{agreement['n_tweets']}**",
         (
@@ -306,9 +364,20 @@ def _build_markdown_summary(summary: dict[str, Any], reference_name: str) -> str
         f"- Divergências de polaridade oposta: {agreement['opposite_polarity_rate']:.1%}",
         (f"- Correlação de Spearman entre as confianças: {confidence['spearman_rho']:.3f}"),
         "",
-        *_build_markdown_disclaimer(reference_name),
+        *_build_markdown_disclaimer(reference_name, primary, reference),
     ]
     return "\n".join(lines) + "\n"
+
+
+def _apply_summary_names(
+    confidence_summary: dict[str, Any], primary: str, reference: str
+) -> dict[str, Any]:
+    """Troca os identificadores internos nas chaves do resumo de confiança."""
+    internal = f"{MODEL_NAMES[0]}_minus_{MODEL_NAMES[1]}"
+    return {
+        key.replace(internal, f"{primary}_minus_{reference}"): value
+        for key, value in confidence_summary.items()
+    }
 
 
 def run_reference_comparison(
@@ -316,6 +385,7 @@ def run_reference_comparison(
     reference_name: str,
     *,
     output_subdir: str,
+    model_names: Mapping[str, str] | None = None,
     random_seed: int = 42,
     n_bootstrap: int = 1000,
     confidence_level: float = 0.95,
@@ -336,6 +406,9 @@ def run_reference_comparison(
     output_subdir : str
         Subpasta de ``reports/tables``, ``reports/figures`` e nome do JSON em
         ``reports/metrics``.
+    model_names : Mapping[str, str] | None, optional
+        Nome do modelo de cada fonte, exibido em tabelas e gráficos; ``None`` lê
+        ``configs/labeling.yaml``, by default None.
     random_seed : int, optional
         Semente do bootstrap, by default 42.
     n_bootstrap : int, optional
@@ -368,12 +441,13 @@ def run_reference_comparison(
     Examples
     --------
     >>> run_reference_comparison(
-    ...     paths, "gold_unb", output_subdir="comparativo_hf_gold_unb"
+    ...     paths, "gold_unb", output_subdir="comparativo_modelo-a_vs_modelo-b"
     ... )  # doctest: +SKIP
     """
+    names = model_names if model_names is not None else load_source_model_names()
+    primary_label, reference_label = names[HUGGINGFACE_SOURCE], names[reference_name]
     frame = load_comparison_frame(paths, reference_name)
-    reference_label = _REFERENCE_LABELS.get(reference_name, DEFAULT_REFERENCE_LABEL)
-    logger.info("Comparando %d tweet(s) do Hugging Face com '%s'.", frame.height, reference_name)
+    logger.info("Comparando %d tweet(s): %s × %s.", frame.height, primary_label, reference_label)
 
     tables_dir = paths.reports_tables_dir / output_subdir
     figures_dir = paths.reports_figures_dir / output_subdir
@@ -397,7 +471,7 @@ def run_reference_comparison(
     tables = _write_tables(
         {
             "distribuicao_classes": distribution,
-            "matriz_concordancia": _build_agreement_matrix_table(matrix),
+            "matriz_concordancia": _build_agreement_matrix_table(matrix, reference_label),
             "confianca_por_modelo": confidence_table,
             "maiores_divergencias": find_top_divergences(frame, top_n=top_n_divergences),
             "conflitos_de_confianca": find_confidence_conflicts(
@@ -412,14 +486,24 @@ def run_reference_comparison(
             "exemplos_transicoes": transition_examples,
         },
         tables_dir,
+        primary_label,
+        reference_label,
     )
     figures = _save_figures(
-        frame, distribution, matrix, length_analysis, transitions, figures_dir, reference_label
+        frame,
+        distribution,
+        matrix,
+        length_analysis,
+        transitions,
+        figures_dir,
+        primary_label,
+        reference_label,
     )
 
     summary: dict[str, Any] = {
+        "models": {"primary": primary_label, "reference": reference_label},
         "agreement": agreement,
-        "confidence": confidence_summary,
+        "confidence": _apply_summary_names(confidence_summary, primary_label, reference_label),
         "thresholds": {
             "high_confidence": high_confidence_threshold,
             "low_confidence": low_confidence_threshold,
@@ -428,7 +512,8 @@ def run_reference_comparison(
     }
     write_json(summary, metrics_path)
     (tables_dir / _SUMMARY_MARKDOWN_FILE_NAME).write_text(
-        _build_markdown_summary(summary, reference_name), encoding="utf-8"
+        _build_markdown_summary(summary, reference_name, primary_label, reference_label),
+        encoding="utf-8",
     )
     logger.info(
         "Avaliação comparativa concluída: concordância %.1f%%, kappa %.3f; resultados em %s.",
@@ -448,7 +533,8 @@ def run_reference_comparison(
 def run_comparative_evaluation_stage(
     paths: ProjectPaths,
     *,
-    output_subdir: str = "comparativo_hf",
+    output_subdir: str = "comparativo",
+    model_names: Mapping[str, str] | None = None,
     **comparison_kwargs: Any,
 ) -> dict[str, ComparativeEvaluationResult]:
     """Compara o Hugging Face primário com cada base de referência já gerada.
@@ -463,8 +549,11 @@ def run_comparative_evaluation_stage(
         Caminhos resolvidos do projeto.
     output_subdir : str, optional
         Prefixo das subpastas de saída; cada referência grava em
-        ``<output_subdir>_<referência>`` (ex.: ``comparativo_hf_gold_unb`` ou
-        ``comparativo_hf_huggingface_secondary``), by default "comparativo_hf".
+        ``<output_subdir>_<modelo primário>_vs_<modelo de referência>`` (ex.:
+        ``comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_gpt-6-luna``),
+        by default "comparativo".
+    model_names : Mapping[str, str] | None, optional
+        Nome do modelo de cada fonte; ``None`` lê ``configs/labeling.yaml``, by default None.
     **comparison_kwargs : Any
         Demais argumentos de :func:`run_reference_comparison` (semente, bootstrap, limiares).
 
@@ -482,6 +571,7 @@ def run_comparative_evaluation_stage(
     --------
     >>> run_comparative_evaluation_stage(paths)  # doctest: +SKIP
     """
+    names = model_names if model_names is not None else load_source_model_names()
     available = list_available_reference_names(paths)
     if not available:
         raise DataNotFoundError(
@@ -494,7 +584,8 @@ def run_comparative_evaluation_stage(
         reference_name: run_reference_comparison(
             paths,
             reference_name,
-            output_subdir=f"{output_subdir}_{reference_name}",
+            output_subdir=build_comparison_subdir(output_subdir, names, reference_name),
+            model_names=names,
             **comparison_kwargs,
         )
         for reference_name in available

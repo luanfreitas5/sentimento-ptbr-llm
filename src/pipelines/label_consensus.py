@@ -19,6 +19,7 @@ de dois); os ausentes são avisados no log.
 """
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -39,6 +40,7 @@ from evaluation.label_consensus import (
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
+from labeling.model_names import load_source_model_names
 from visualization.consensus import plot_consensus_by_class, plot_pairwise_kappa_heatmap
 from visualization.theme import apply_project_theme, save_figure
 
@@ -222,6 +224,7 @@ def run_label_consensus_stage(
     paths: ProjectPaths,
     *,
     output_subdir: str = "consenso_rotulagem",
+    model_names: Mapping[str, str] | None = None,
     random_seed: int = 42,
     n_bootstrap: int = 1000,
     confidence_level: float = 0.95,
@@ -236,6 +239,9 @@ def run_label_consensus_stage(
     output_subdir : str, optional
         Subpasta de ``reports/tables`` e ``reports/figures`` e nome do JSON em
         ``reports/metrics``, by default "consenso_rotulagem".
+    model_names : Mapping[str, str] | None, optional
+        Nome do modelo de cada fonte, usado para identificar os rotuladores em tabelas e
+        gráficos; ``None`` lê ``configs/labeling.yaml``, by default None.
     random_seed : int, optional
         Semente do bootstrap, by default 42.
     n_bootstrap : int, optional
@@ -261,7 +267,8 @@ def run_label_consensus_stage(
     --------
     >>> run_label_consensus_stage(paths)  # doctest: +SKIP
     """
-    sources = load_consensus_sources(paths)
+    names = model_names if model_names is not None else load_source_model_names()
+    sources = {names[source]: base for source, base in load_consensus_sources(paths).items()}
     source_names = list(sources)
     frame = build_consensus_frame(sources)
     logger.info(

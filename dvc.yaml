@@ -63,23 +63,23 @@ stages:
       - configs/evaluation.yaml:
           - llm_comparison
     outs:
-      - reports/metrics/comparativo_hf_huggingface_secondary.json:
+      - reports/metrics/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_bertweet-pt-sentiment.json:
           cache: false
-      - reports/tables/comparativo_hf_huggingface_secondary:
+      - reports/tables/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_bertweet-pt-sentiment:
           cache: false
-      - reports/figures/comparativo_hf_huggingface_secondary:
+      - reports/figures/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_bertweet-pt-sentiment:
           cache: false
-      - reports/metrics/comparativo_hf_gold_openai.json:
+      - reports/metrics/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_gpt-6-luna.json:
           cache: false
-      - reports/metrics/comparativo_hf_gold_unb.json:
+      - reports/metrics/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_UnB-Llama-3.3-70B-Instruct.json:
           cache: false
-      - reports/tables/comparativo_hf_gold_openai:
+      - reports/tables/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_gpt-6-luna:
           cache: false
-      - reports/tables/comparativo_hf_gold_unb:
+      - reports/tables/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_UnB-Llama-3.3-70B-Instruct:
           cache: false
-      - reports/figures/comparativo_hf_gold_openai:
+      - reports/figures/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_gpt-6-luna:
           cache: false
-      - reports/figures/comparativo_hf_gold_unb:
+      - reports/figures/comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_UnB-Llama-3.3-70B-Instruct:
           cache: false
 
   # Modo padrão (`disagreement`): HypotheSAEs sobre a discordância/incerteza entre o Hugging Face e cada gold set.
@@ -97,9 +97,9 @@ stages:
           - hypotheses
       - configs/diagnostics.yaml:
     outs:
-      - reports/metrics/hipoteses_comparativo_hf_gold_openai.json:
+      - reports/metrics/hipoteses_comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_gpt-6-luna.json:
           cache: false
-      - reports/metrics/hipoteses_comparativo_hf_gold_unb.json:
+      - reports/metrics/hipoteses_comparativo_twitter-xlm-roberta-base-sentiment-multilingual_vs_UnB-Llama-3.3-70B-Instruct.json:
           cache: false
 
   features:

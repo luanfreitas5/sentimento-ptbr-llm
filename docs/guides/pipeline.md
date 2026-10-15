@@ -16,8 +16,8 @@ O acoplamento entre estágios é o sistema de arquivos (Parquet em `data/`, chec
 | `ingestion` | `ingest` | `src/pipelines/ingestion.py` | função de coleta definida pelo usuário (`--scrape-func`) | `data/silver/tweets_coletados.parquet` |
 | `preprocessing` | `preprocess` | `src/pipelines/preprocessing.py` | lote de tweets brutos coletados por usuário, `data/bronze/*.parquet` (ver `src/data/loader.py::load_raw_tweet_batch`) | `data/silver/corpus_normalizado.parquet` |
 | `labeling` | `label` (`label-hf` / `label-gold-openai` / `label-gold-unb`) | `src/pipelines/labeling.py` | corpus normalizado | `data/gold/tweets_data_huggingface.parquet`, gold sets `gold_gpt-6-luna.parquet` e `gold_UnB-Llama-3.3-70B-Instruct.parquet` (+ `.meta.json`) e `corpus_rotulado.parquet` |
-| `comparative_evaluation` | `compare` | `src/pipelines/comparative_evaluation.py` | base do Hugging Face + segundo modelo HF e/ou gold sets (o que existir) | tabelas em `reports/tables/comparativo_hf_<gold>/`, gráficos em `reports/figures/comparativo_hf_<gold>/`, resumo em `reports/metrics/comparativo_hf_<gold>.json` (`<gold>` = `huggingface_secondary`, `gold_openai` ou `gold_unb`; a comparação entre os dois modelos do Hugging Face roda mesmo sem gold set) |
-| `hypotheses` | `hypotheses` | `src/pipelines/hypotheses.py` | base do Hugging Face + gold sets (modo `disagreement`), corpus rotulado (`patterns`) | hipóteses do HypotheSAEs em `reports/tables/comparativo_hf_<gold>/` e `reports/metrics/hipoteses_*.json` (ver [Hipóteses](#hipoteses-hypothesaes)) |
+| `comparative_evaluation` | `compare` | `src/pipelines/comparative_evaluation.py` | base do Hugging Face + segundo modelo HF e/ou gold sets (o que existir) | tabelas em `reports/tables/comparativo_<modelo primário>_vs_<modelo de referência>/`, gráficos em `reports/figures/comparativo_<modelo primário>_vs_<modelo de referência>/`, resumo em `reports/metrics/comparativo_<modelo primário>_vs_<modelo de referência>.json` (a referência é o segundo modelo do Hugging Face, `gold_openai` ou `gold_unb`, identificados pelo nome do modelo em `configs/labeling.yaml`; a comparação entre os dois modelos do Hugging Face roda mesmo sem gold set) |
+| `hypotheses` | `hypotheses` | `src/pipelines/hypotheses.py` | base do Hugging Face + gold sets (modo `disagreement`), corpus rotulado (`patterns`) | hipóteses do HypotheSAEs em `reports/tables/comparativo_<modelo primário>_vs_<modelo de referência>/` e `reports/metrics/hipoteses_*.json` (ver [Hipóteses](#hipoteses-hypothesaes)) |
 | `features` | `features` | `src/pipelines/features.py` | corpus rotulado | splits treino/validação/teste, features TF-IDF e o vetorizador ajustado no treino (`models/checkpoints/tfidf_vectorizer.joblib`) |
 | `training_classical` | `classical` | `src/pipelines/training_classical.py` | splits + vetorizador | Baseline (`dummy`) + ML tradicional (NB, LR, SVM, RF, XGBoost) em `models/checkpoints/*.joblib` |
 | `training_deep_learning` | `deep` | `src/pipelines/training_deep_learning.py` | splits | LSTM e CNN em `models/checkpoints/*.pt` |
@@ -125,10 +125,10 @@ vez por gold set. Limiares e opções em
 Os gold sets são rotulados por LLMs (não por humanos): mede-se a **concordância com esses LLMs**, não o
 acerto absoluto.
 
-| Análise | Saída (em `reports/tables/comparativo_hf_<gold>/`) |
+| Análise | Saída (em `reports/tables/comparativo_<modelo primário>_vs_<modelo de referência>/`) |
 |---|---|
 | Distribuição das classes | `distribuicao_classes.csv` |
-| Concordância/divergência (IC bootstrap), Kappa simples e ponderado, Stuart-Maxwell | `reports/metrics/comparativo_hf_<gold>.json`, `resumo_comparativo.md` |
+| Concordância/divergência (IC bootstrap), Kappa simples e ponderado, Stuart-Maxwell | `reports/metrics/comparativo_<modelo primário>_vs_<modelo de referência>.json`, `resumo_comparativo.md` |
 | Matriz de concordância | `matriz_concordancia.csv` |
 | Confiança (descritivas, Spearman, Wilcoxon pareado) | `confianca_por_modelo.csv` |
 | Maiores divergências (polaridade oposta e ambos confiantes) | `maiores_divergencias.csv` |
@@ -137,7 +137,7 @@ acerto absoluto.
 | Casos ambíguos | `casos_ambiguos.csv`, `resumo_ambiguidade.csv` |
 | Diferenças de classificação | `transicoes_divergencia.csv`, `exemplos_transicoes.csv` |
 
-Gráficos (PNG 300 dpi + SVG) em `reports/figures/comparativo_hf_<gold>/`. As tabelas com texto usam
+Gráficos (PNG 300 dpi + SVG) em `reports/figures/comparativo_<modelo primário>_vs_<modelo de referência>/`. As tabelas com texto usam
 apenas o texto normalizado.
 
 ### HypotheSAEs sobre a divergência

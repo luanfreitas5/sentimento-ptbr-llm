@@ -18,6 +18,7 @@ from evaluation.label_consensus import (
     summarize_consensus_levels,
 )
 from exceptions.data import DataNotFoundError, DataValidationError, EmptyDatasetError
+from labeling.model_names import load_source_model_names
 from pipelines.label_consensus import run_label_consensus_stage
 from pipelines.workflow import STAGE_REGISTRY
 from tests.test_pipelines import pipeline_paths  # noqa: F401  (fixture reutilizada)
@@ -250,12 +251,7 @@ class TestRunLabelConsensusStage:
         result = run_label_consensus_stage(pipeline_paths, n_bootstrap=30)
 
         assert result.consensus_frame.height == 6  # tweets extras do HF ficaram de fora
-        assert result.summary["sources"] == [
-            "huggingface",
-            "huggingface_secondary",
-            "gold_openai",
-            "gold_unb",
-        ]
+        assert result.summary["sources"] == list(load_source_model_names().values())
         assert set(result.tables) == {
             "consenso_por_tweet",
             "niveis_de_consenso",
@@ -282,7 +278,8 @@ class TestRunLabelConsensusStage:
 
         result = run_label_consensus_stage(pipeline_paths, n_bootstrap=30)
 
-        assert result.summary["sources"] == ["huggingface", "gold_openai"]
+        names = load_source_model_names()
+        assert result.summary["sources"] == [names["huggingface"], names["gold_openai"]]
 
     def test_raises_when_fewer_than_two_raters(
         self,
