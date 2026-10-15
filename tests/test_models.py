@@ -181,6 +181,8 @@ class TestBuildSvmClassifier:
     def test_uses_defaults_from_model_params(self) -> None:
         """Os padrões devem espelhar ``configs/model_params.yaml``."""
         classifier = build_svm_classifier()
+        assert isinstance(classifier, CalibratedClassifierCV)
+        assert isinstance(classifier.estimator, LinearSVC)
         assert classifier.cv == 3
         assert classifier.estimator.C == 1.0
         assert classifier.estimator.class_weight == "balanced"
@@ -191,6 +193,7 @@ class TestBuildSvmClassifier:
         X = rng.random((60, 5))  # noqa: N806
         y = np.array(["negativo", "neutro", "positivo"] * 20)
         classifier = build_svm_classifier().fit(X, y)
+        assert isinstance(classifier, CalibratedClassifierCV)
         np.testing.assert_allclose(classifier.predict_proba(X).sum(axis=1), 1.0)
 
 

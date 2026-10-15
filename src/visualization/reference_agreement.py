@@ -230,15 +230,16 @@ def plot_agreement_confidence_heatmap(
     if agreement_pair.is_empty():
         raise EmptyDatasetError("concordância por cruzamento de confiança")
     row_column, column_column = f"confidence_band_{_HF}", f"confidence_band_{_OA}"
-    reliable = agreement_pair.with_columns(
-        pl.when(pl.col("n_tweets") >= minimum_tweets)
-        .then(pl.col("agreement_rate") * 100)
-        .otherwise(None)
-        .alias("agreement_percent")
+    matrix = (
+        agreement_pair.with_columns(
+            pl.when(pl.col("n_tweets") >= minimum_tweets)
+            .then(pl.col("agreement_rate") * 100)
+            .otherwise(None)
+            .alias("agreement_percent")
+        )
+        .pivot(on=column_column, index=row_column, values="agreement_percent", sort_columns=True)
+        .sort(row_column)
     )
-    matrix = reliable.pivot(
-        on=column_column, index=row_column, values="agreement_percent", sort_columns=True
-    ).sort(row_column)
     figure, axis = plt.subplots(figsize=(8, 6))
     sns.heatmap(
         matrix.drop(row_column).to_numpy().astype(float),
