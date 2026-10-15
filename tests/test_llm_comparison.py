@@ -32,6 +32,12 @@ from evaluation.llm_comparison import (
     find_top_divergences,
     summarize_classification_differences,
 )
+from evaluation.reference_agreement import (
+    analyze_agreement_by_confidence,
+    analyze_agreement_by_confidence_pair,
+    calculate_per_class_metrics,
+    compare_confidence_by_agreement,
+)
 from exceptions.data import DataValidationError, EmptyDatasetError
 from exceptions.pipeline import SanityGateFailedError
 from visualization.comparison import (
@@ -39,6 +45,11 @@ from visualization.comparison import (
     plot_class_distribution_by_model,
     plot_confidence_comparison,
     plot_divergence_transitions,
+)
+from visualization.reference_agreement import (
+    plot_agreement_by_confidence,
+    plot_agreement_confidence_heatmap,
+    plot_per_class_metrics,
 )
 
 
@@ -372,6 +383,153 @@ class TestComparisonPlots:
     )
     def test_plots_reject_empty_tables(self, plot: Any) -> None:
         """Tabelas vazias levantam ``EmptyDatasetError`` em vez de gerar um gráfico vazio."""
+        with pytest.raises(EmptyDatasetError):
+            plot(pl.DataFrame())
+
+
+class TestPerClassMetrics:
+    """Testes de :func:`evaluation.reference_agreement.calculate_per_class_metrics`."""
+
+    def test_matches_hand_computed_scores(self, frame: pl.DataFrame) -> None:
+        """Precisão/revocação/F1 conferem com o cálculo manual (referência = openai)."""
+        table = calculate_per_class_metrics(frame, n_bootstrap=50).to_dicts()
+        by_label = {row["label"]: row for row in table}
+
+        # positivo: hf prevê 3 (ids 0, 3, 5); a referência tem 2 (ids 0, 4); acerto só no 0
+        assert by_label["positivo"]["precision"] == pytest.approx(1 / 3)
+        assert by_label["positivo"]["recall"] == pytest.approx(1 / 2)
+        assert by_label["positivo"]["support"] == 2
+        # negativo: hf prevê 2 (ids 1, 4); a referência tem 2 (ids 1, 5) -> P=R=1/2
+        assert by_label["negativo"]["f1"] == pytest.approx(0.5)
+        assert [row["label"] for row in table][-1] == "macro"
+        assert by_label["macro"]["support"] == frame.height
+
+    def test_confidence_interval_is_ordered_and_within_unit_range(
+        self, frame: pl.DataFrame
+    ) -> None:
+        """Os limites do IC ficam ordenados e dentro de [0, 1]."""
+        for row in calculate_per_class_metrics(frame, n_bootstrap=50).to_dicts():
+            assert 0.0 <= row["f1_ci_lower"] <= row["f1_ci_upper"] <= 1.0
+
+    def test_perfect_agreement_gives_f1_one(self) -> None:
+        """Bases idênticas: F1 igual a 1 nas classes presentes."""
+        base = _base(["positivo", "negativo", "neutro"], [0.9, 0.8, 0.7])
+        table = calculate_per_class_metrics(build_comparison_frame(base, base), n_bootstrap=10)
+        assert table["f1"].to_list() == [1.0, 1.0, 1.0, 1.0]
+
+    def test_absent_class_has_zero_scores_without_division_error(self) -> None:
+        """Classe ausente nas duas bases não gera divisão por zero."""
+        base = _base(["positivo", "positivo"], [0.9, 0.8])
+        table = calculate_per_class_metrics(build_comparison_frame(base, base), n_bootstrap=10)
+        row = table.row(0, named=True)
+        assert row["label"] == "negativo"
+        assert (row["precision"], row["recall"], row["f1"], row["support"]) == (0.0, 0.0, 0.0, 0)
+
+    def test_is_reproducible_with_the_same_seed(self, frame: pl.DataFrame) -> None:
+        """A mesma semente produz exatamente os mesmos intervalos."""
+        first = calculate_per_class_metrics(frame, n_bootstrap=30, random_seed=1)
+        second = calculate_per_class_metrics(frame, n_bootstrap=30, random_seed=1)
+        assert first.equals(second)
+
+    def test_raises_for_empty_frame(self, frame: pl.DataFrame) -> None:
+        """Quadro vazio levanta erro explícito."""
+        with pytest.raises(EmptyDatasetError):
+            calculate_per_class_metrics(frame.clear())
+
+
+class TestAgreementByConfidence:
+    """Testes das análises de concordância por confiança."""
+
+    def test_bands_partition_the_tweets_of_each_model(self, frame: pl.DataFrame) -> None:
+        """Em cada modelo, as faixas somam todos os tweets e as taxas/ICs são válidos."""
+        table = analyze_agreement_by_confidence(frame)
+        for model in ("huggingface", "openai"):
+            rows = table.filter(pl.col("model") == model)
+            assert rows["n_tweets"].sum() == frame.height
+        for row in table.to_dicts():
+            assert 0.0 <= row["agreement_rate_ci_lower"] <= row["agreement_rate"]
+            assert row["agreement_rate"] <= row["agreement_rate_ci_upper"] <= 1.0
+
+    def test_band_assignment_uses_half_open_bands_and_closes_the_last_one(self) -> None:
+        """0.79 cai na primeira faixa; 0.8 e 1.0 caem na última (fechada)."""
+        frame = pl.DataFrame(
+            {
+                "confidence_huggingface": [0.79, 0.8, 1.0],
+                "confidence_openai": [0.9, 0.9, 0.9],
+                "agree": [True, False, True],
+            }
+        )
+        table = analyze_agreement_by_confidence(frame, band_edges=(0.0, 0.8, 1.0))
+        hf_rows = table.filter(pl.col("model") == "huggingface").sort("band_min")
+        assert hf_rows["n_tweets"].to_list() == [1, 2]
+        assert hf_rows["agreement_rate"].to_list() == [1.0, 0.5]
+
+    def test_pair_table_counts_every_tweet_once(self, frame: pl.DataFrame) -> None:
+        """O cruzamento das faixas cobre cada tweet exatamente uma vez."""
+        pair = analyze_agreement_by_confidence_pair(frame)
+        assert pair["n_tweets"].sum() == frame.height
+        assert {"confidence_band_huggingface", "confidence_band_openai"} <= set(pair.columns)
+
+    def test_confidence_by_agreement_reports_medians_and_effect_size(
+        self, frame: pl.DataFrame
+    ) -> None:
+        """Mediana por situação e tamanho de efeito (rank-biserial) em [-1, 1]."""
+        summary = compare_confidence_by_agreement(frame)
+        assert set(summary) == {"huggingface", "openai"}
+        for entry in summary.values():
+            assert -1.0 <= entry["rank_biserial"] <= 1.0
+            assert 0.0 <= entry["mannwhitney_p_value"] <= 1.0
+        # openai concorda nos ids 0, 1, 2 (0.90, 0.88, 0.55) -> mediana 0.88
+        assert summary["openai"]["median_when_agree"] == pytest.approx(0.88)
+
+    def test_confidence_by_agreement_is_none_without_divergences(self) -> None:
+        """Sem divergências não há teste: campos ficam ``None``."""
+        base = _base(["positivo", "negativo"], [0.9, 0.8])
+        summary = compare_confidence_by_agreement(build_comparison_frame(base, base))
+        assert summary["huggingface"]["mannwhitney_p_value"] is None
+        assert summary["huggingface"]["median_when_diverge"] is None
+
+    def test_raises_for_empty_frame(self, frame: pl.DataFrame) -> None:
+        """Quadro vazio levanta erro explícito em todas as análises."""
+        for analysis in (
+            analyze_agreement_by_confidence,
+            analyze_agreement_by_confidence_pair,
+            compare_confidence_by_agreement,
+        ):
+            with pytest.raises(EmptyDatasetError):
+                analysis(frame.clear())
+
+
+class TestReferenceAgreementPlots:
+    """Gráficos de :mod:`visualization.reference_agreement` têm eixos rotulados."""
+
+    def test_per_class_plot_labels_axes(self, frame: pl.DataFrame) -> None:
+        """Eixos rotulados e uma posição por classe mais a média macro."""
+        axis = plot_per_class_metrics(calculate_per_class_metrics(frame, n_bootstrap=20)).axes[0]
+        assert axis.get_ylabel() == "Valor da métrica"
+        assert len(axis.get_xticks()) == len(SENTIMENT_CLASSES) + 1
+
+    def test_confidence_plot_labels_axes(self, frame: pl.DataFrame) -> None:
+        """Concordância em % com limite 0-100."""
+        axis = plot_agreement_by_confidence(analyze_agreement_by_confidence(frame)).axes[0]
+        assert axis.get_ylabel() == "Concordância (%)"
+        assert axis.get_ylim() == (0, 100)
+
+    def test_heatmap_is_generated_even_when_every_cell_is_below_the_minimum(
+        self, frame: pl.DataFrame
+    ) -> None:
+        """Com limiar acima de qualquer célula, o mapa é gerado (células em branco)."""
+        figure = plot_agreement_confidence_heatmap(
+            analyze_agreement_by_confidence_pair(frame), minimum_tweets=1_000
+        )
+        assert figure.axes[0].get_xlabel().startswith("Confiança")
+
+    @pytest.mark.parametrize(
+        "plot",
+        [plot_per_class_metrics, plot_agreement_by_confidence, plot_agreement_confidence_heatmap],
+    )
+    def test_plots_reject_empty_tables(self, plot: Any) -> None:
+        """Tabelas vazias levantam ``EmptyDatasetError``."""
         with pytest.raises(EmptyDatasetError):
             plot(pl.DataFrame())
 

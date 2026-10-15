@@ -62,6 +62,12 @@ from evaluation.llm_comparison import (
     find_top_divergences,
     summarize_classification_differences,
 )
+from evaluation.reference_agreement import (
+    analyze_agreement_by_confidence,
+    analyze_agreement_by_confidence_pair,
+    calculate_per_class_metrics,
+    compare_confidence_by_agreement,
+)
 from exceptions.data import DataNotFoundError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
@@ -73,6 +79,11 @@ from visualization.comparison import (
     plot_divergence_transitions,
 )
 from visualization.confusion_matrix import plot_confusion_matrix_heatmap
+from visualization.reference_agreement import (
+    plot_agreement_by_confidence,
+    plot_agreement_confidence_heatmap,
+    plot_per_class_metrics,
+)
 from visualization.theme import apply_project_theme, save_figure
 
 logger = logging.getLogger(__name__)
@@ -287,6 +298,9 @@ def _save_figures(
     matrix: np.ndarray,
     length_analysis: pl.DataFrame,
     transitions: pl.DataFrame,
+    per_class_metrics: pl.DataFrame,
+    agreement_by_confidence: pl.DataFrame,
+    agreement_pair: pl.DataFrame,
     directory: Path,
     primary_label: str,
     reference_label: str,
@@ -316,6 +330,15 @@ def _save_figures(
             frame, primary_label=primary_label, reference_label=reference_label
         ),
         "concordancia_por_tamanho": plot_agreement_by_text_length(length_analysis),
+        "metricas_por_classe": plot_per_class_metrics(
+            per_class_metrics, primary_label=primary_label, reference_label=reference_label
+        ),
+        "concordancia_por_confianca": plot_agreement_by_confidence(
+            agreement_by_confidence, primary_label=primary_label, reference_label=reference_label
+        ),
+        "concordancia_por_confianca_cruzada": plot_agreement_confidence_heatmap(
+            agreement_pair, primary_label=primary_label, reference_label=reference_label
+        ),
     }
     if not transitions.is_empty():
         figures["transicoes_divergencia"] = plot_divergence_transitions(
@@ -468,6 +491,13 @@ def run_reference_comparison(
     transitions, transition_examples = summarize_classification_differences(
         frame, examples_per_transition=examples_per_transition
     )
+    per_class_metrics = calculate_per_class_metrics(
+        frame, n_bootstrap=n_bootstrap, confidence_level=confidence_level, random_seed=random_seed
+    )
+    agreement_by_confidence = analyze_agreement_by_confidence(
+        frame, confidence_level=confidence_level
+    )
+    agreement_pair = analyze_agreement_by_confidence_pair(frame)
     tables = _write_tables(
         {
             "distribuicao_classes": distribution,
@@ -484,6 +514,9 @@ def run_reference_comparison(
             "resumo_ambiguidade": ambiguity_summary,
             "transicoes_divergencia": transitions,
             "exemplos_transicoes": transition_examples,
+            "metricas_por_classe": per_class_metrics,
+            "concordancia_por_confianca": agreement_by_confidence,
+            "concordancia_por_confianca_cruzada": agreement_pair,
         },
         tables_dir,
         primary_label,
@@ -495,6 +528,9 @@ def run_reference_comparison(
         matrix,
         length_analysis,
         transitions,
+        per_class_metrics,
+        agreement_by_confidence,
+        agreement_pair,
         figures_dir,
         primary_label,
         reference_label,
@@ -504,6 +540,17 @@ def run_reference_comparison(
         "models": {"primary": primary_label, "reference": reference_label},
         "agreement": agreement,
         "confidence": _apply_summary_names(confidence_summary, primary_label, reference_label),
+        "confidence_by_agreement": dict(
+            zip(
+                (primary_label, reference_label),
+                compare_confidence_by_agreement(frame).values(),
+                strict=True,
+            )
+        ),
+        "per_class_f1": {
+            row["label"]: {k: row[k] for k in ("f1", "f1_ci_lower", "f1_ci_upper")}
+            for row in per_class_metrics.to_dicts()
+        },
         "thresholds": {
             "high_confidence": high_confidence_threshold,
             "low_confidence": low_confidence_threshold,
