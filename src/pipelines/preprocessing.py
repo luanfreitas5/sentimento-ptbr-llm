@@ -28,6 +28,7 @@ def run_preprocessing_stage(
     show_progress: bool = True,
     exclude_retweets: bool = True,
     required_language: str | None = "pt",
+    apply_portuguese_filter: bool = True,
     **preprocessing_overrides: Any,
 ) -> Path:
     """Executa a etapa de pré-processamento sobre o lote de tweets brutos.
@@ -48,7 +49,12 @@ def run_preprocessing_stage(
         by default True.
     required_language : str | None, optional
         Repassado a :func:`preprocessing.filtering.filter_by_raw_metadata`,
-        by default "pt".
+        by default "pt". Ignorado (filtro desligado) quando
+        ``apply_portuguese_filter`` for ``False``.
+    apply_portuguese_filter : bool, optional
+        Se ``True``, aplica os filtros de idioma português (metadado
+        ``language`` da coleta e heurística de stopwords dos critérios de
+        inclusão). Se ``False``, desliga ambos, by default True.
     **preprocessing_overrides : Any
         Hiperparâmetros repassados a
         :func:`preprocessing.pipeline.run_preprocessing_pipeline` (ex.:
@@ -75,10 +81,13 @@ def run_preprocessing_stage(
         paths.data_bronze_dir, max_workers=max_workers, show_progress=show_progress
     )
     filtered_batch = filter_by_raw_metadata(
-        raw_batch, exclude_retweets=exclude_retweets, required_language=required_language
+        raw_batch,
+        exclude_retweets=exclude_retweets,
+        required_language=required_language if apply_portuguese_filter else None,
     )
     normalized_corpus = run_preprocessing_pipeline(
         filtered_batch,
+        apply_portuguese_filter=apply_portuguese_filter,
         max_workers=max_workers,
         show_progress=show_progress,
         **preprocessing_overrides,

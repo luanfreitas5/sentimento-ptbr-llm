@@ -176,6 +176,7 @@ def filter_by_inclusion_criteria(
     minimum_portuguese_ratio: float = 0.15,
     max_repeated_word_ratio: float = 0.5,
     drop_duplicate_text: bool = True,
+    apply_portuguese_filter: bool = True,
 ) -> pl.DataFrame:
     """Aplica em sequência todos os critérios de inclusão/exclusão do corpus.
 
@@ -200,6 +201,9 @@ def filter_by_inclusion_criteria(
     drop_duplicate_text : bool, optional
         Se ``True``, remove linhas de texto duplicado após os demais
         critérios, by default True.
+    apply_portuguese_filter : bool, optional
+        Se ``False``, pula o filtro heurístico de idioma português, by
+        default True.
 
     Returns
     -------
@@ -227,9 +231,10 @@ def filter_by_inclusion_criteria(
         minimum_characters=minimum_characters,
         minimum_words=minimum_words,
     )
-    filtered = filter_by_portuguese_language(
-        filtered, text_column=text_column, minimum_ratio=minimum_portuguese_ratio
-    )
+    if apply_portuguese_filter:
+        filtered = filter_by_portuguese_language(
+            filtered, text_column=text_column, minimum_ratio=minimum_portuguese_ratio
+        )
     filtered = filter_spam_like_rows(
         filtered, text_column=text_column, max_repeated_word_ratio=max_repeated_word_ratio
     )

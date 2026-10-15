@@ -142,6 +142,15 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--portuguese-filter",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Aplica (padrão) ou desliga (--no-portuguese-filter) os filtros de idioma "
+            "português da etapa `preprocessing` (metadado `language` e heurística)."
+        ),
+    )
+    parser.add_argument(
         "--model-names",
         default=None,
         metavar="MODELO1,MODELO2,...",
@@ -446,7 +455,11 @@ def _build_preprocessing_stage_kwargs(
         Argumentos nomeados para :func:`pipelines.preprocessing.run_preprocessing_stage`.
     """
     del general_config, settings
-    return {"paths": paths, "max_workers": args.max_workers}
+    return {
+        "paths": paths,
+        "max_workers": args.max_workers,
+        "apply_portuguese_filter": args.portuguese_filter,
+    }
 
 
 def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:

@@ -49,6 +49,19 @@ class TestBuildPreprocessingStageKwargs:
         kwargs = _build_kwargs(_build_preprocessing_stage_kwargs, ["--stage", "preprocessing"])
         assert kwargs["max_workers"] is None
 
+    def test_portuguese_filter_enabled_by_default(self) -> None:
+        """Sem flag, o filtro de idioma português deve permanecer ligado."""
+        kwargs = _build_kwargs(_build_preprocessing_stage_kwargs, ["--stage", "preprocessing"])
+        assert kwargs["apply_portuguese_filter"] is True
+
+    def test_no_portuguese_filter_flag_disables_filter(self) -> None:
+        """``--no-portuguese-filter`` deve desligar o filtro de idioma."""
+        kwargs = _build_kwargs(
+            _build_preprocessing_stage_kwargs,
+            ["--stage", "preprocessing", "--no-portuguese-filter"],
+        )
+        assert kwargs["apply_portuguese_filter"] is False
+
 
 class TestBuildLabelingStageKwargs:
     """Testes de :func:`main._build_labeling_stage_kwargs`."""

@@ -178,6 +178,7 @@ def run_preprocessing_pipeline(
     minimum_portuguese_ratio: float = 0.15,
     max_repeated_word_ratio: float = 0.5,
     drop_duplicate_text: bool = True,
+    apply_portuguese_filter: bool = True,
     max_workers: int | None = None,
     show_progress: bool = True,
 ) -> pl.DataFrame:
@@ -245,6 +246,9 @@ def run_preprocessing_pipeline(
         Repassado ao filtro de spam, by default 0.5.
     drop_duplicate_text : bool, optional
         Repassado ao filtro de duplicatas, by default True.
+    apply_portuguese_filter : bool, optional
+        Se ``False``, desliga o filtro heurístico de idioma português dentro
+        dos critérios de inclusão, by default True.
 
     Returns
     -------
@@ -302,6 +306,7 @@ def run_preprocessing_pipeline(
             minimum_portuguese_ratio=minimum_portuguese_ratio,
             max_repeated_word_ratio=max_repeated_word_ratio,
             drop_duplicate_text=drop_duplicate_text,
+            apply_portuguese_filter=apply_portuguese_filter,
         )
 
     if tokens_column is not None:
