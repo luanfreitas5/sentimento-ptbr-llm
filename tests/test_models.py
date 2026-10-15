@@ -5,10 +5,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
 from xgboost import XGBClassifier
 
 from exceptions.data import DataNotFoundError, EmptyDatasetError
@@ -166,19 +167,31 @@ class TestBuildLogisticRegressionClassifier:
 class TestBuildSvmClassifier:
     """Testes da fábrica do classificador SVM."""
 
-    def test_returns_configured_svc(self) -> None:
-        """O ``kernel`` informado deve ser repassado ao estimador."""
-        classifier = build_svm_classifier(kernel="rbf")
-        assert isinstance(classifier, SVC)
-        assert classifier.kernel == "rbf"
+    def test_returns_calibrated_linear_svc_by_default(self) -> None:
+        """Com ``probability=True`` o SVM linear deve vir calibrado."""
+        classifier = build_svm_classifier(C=0.5)
+        assert isinstance(classifier, CalibratedClassifierCV)
+        assert isinstance(classifier.estimator, LinearSVC)
+        assert classifier.estimator.C == 0.5
+
+    def test_returns_bare_linear_svc_without_probability(self) -> None:
+        """Com ``probability=False`` deve retornar o ``LinearSVC`` puro."""
+        assert isinstance(build_svm_classifier(probability=False), LinearSVC)
 
     def test_uses_defaults_from_model_params(self) -> None:
         """Os padrões devem espelhar ``configs/model_params.yaml``."""
         classifier = build_svm_classifier()
-        assert classifier.kernel == "linear"
-        assert classifier.C == 1.0
-        assert classifier.probability is True
-        assert classifier.class_weight == "balanced"
+        assert classifier.cv == 3
+        assert classifier.estimator.C == 1.0
+        assert classifier.estimator.class_weight == "balanced"
+
+    def test_predict_proba_sums_to_one(self) -> None:
+        """O classificador treinado deve expor probabilidades normalizadas."""
+        rng = np.random.default_rng(0)
+        X = rng.random((60, 5))  # noqa: N806
+        y = np.array(["negativo", "neutro", "positivo"] * 20)
+        classifier = build_svm_classifier().fit(X, y)
+        np.testing.assert_allclose(classifier.predict_proba(X).sum(axis=1), 1.0)
 
 
 class TestBuildRandomForestClassifier:

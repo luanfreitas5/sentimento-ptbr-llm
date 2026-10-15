@@ -28,10 +28,10 @@ classical:
     random_state: 42
 
   svm:
-    kernel: "linear"
     C: 1.0
     class_weight: "balanced"
     probability: true
+    calibration_folds: 3
     random_state: 42
 
   random_forest:
