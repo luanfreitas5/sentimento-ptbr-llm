@@ -11,6 +11,7 @@ projeto (:mod:`visualization.theme`). Cada função devolve uma
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
 import polars as pl
 import seaborn as sns
 from matplotlib.figure import Figure
@@ -202,8 +203,9 @@ def plot_agreement_by_text_length(length_analysis: pl.DataFrame) -> Figure:
     if length_analysis.is_empty():
         raise EmptyDatasetError("análise por tamanho do texto")
     rates = length_analysis["agreement_rate"].to_numpy() * 100
-    lower = rates - length_analysis["agreement_rate_ci_lower"].to_numpy() * 100
-    upper = length_analysis["agreement_rate_ci_upper"].to_numpy() * 100 - rates
+    # clip: o IC pode divergir do ponto por ruído de ponto flutuante (yerr não aceita negativos)
+    lower = np.clip(rates - length_analysis["agreement_rate_ci_lower"].to_numpy() * 100, 0.0, None)
+    upper = np.clip(length_analysis["agreement_rate_ci_upper"].to_numpy() * 100 - rates, 0.0, None)
     figure, axis = plt.subplots(figsize=(9, 5))
     axis.errorbar(
         length_analysis["length_bin"].to_list(),

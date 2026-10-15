@@ -80,10 +80,16 @@ def plot_per_class_metrics(
         values = metrics[metric].to_numpy()
         error = None
         if metric == "f1":
-            error = [
-                values - metrics["f1_ci_lower"].to_numpy(),
-                metrics["f1_ci_upper"].to_numpy() - values,
-            ]
+            # clip: o IC pode divergir do ponto por ruído de ponto flutuante
+            # (yerr não aceita negativos)
+            error = np.clip(
+                [
+                    values - metrics["f1_ci_lower"].to_numpy(),
+                    metrics["f1_ci_upper"].to_numpy() - values,
+                ],
+                0.0,
+                None,
+            )
         bars = axis.bar(
             positions + offset,
             values,
@@ -164,10 +170,14 @@ def plot_agreement_by_confidence(
         axis.errorbar(
             [bands.index(band) for band in rows["confidence_band"]],
             rates,
-            yerr=[
-                rates - rows["agreement_rate_ci_lower"].to_numpy() * 100,
-                rows["agreement_rate_ci_upper"].to_numpy() * 100 - rates,
-            ],
+            yerr=np.clip(
+                [
+                    rates - rows["agreement_rate_ci_lower"].to_numpy() * 100,
+                    rows["agreement_rate_ci_upper"].to_numpy() * 100 - rates,
+                ],
+                0.0,
+                None,
+            ),
             marker="o",
             capsize=4,
             color=MODEL_COLOR_PALETTE[model],

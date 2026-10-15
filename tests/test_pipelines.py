@@ -655,6 +655,9 @@ class TestRunComparativeEvaluationStage:
             "resumo_ambiguidade",
             "transicoes_divergencia",
             "exemplos_transicoes",
+            "metricas_por_classe",
+            "concordancia_por_confianca",
+            "concordancia_por_confianca_cruzada",
         }
         assert set(results) == {"gold_openai", "gold_unb"}
         for gold_name, result in results.items():
