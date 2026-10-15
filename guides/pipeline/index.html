@@ -909,14 +909,14 @@
 <td><code>compare</code></td>
 <td><code>src/pipelines/comparative_evaluation.py</code></td>
 <td>base do Hugging Face + segundo modelo HF e/ou gold sets (o que existir)</td>
-<td>tabelas em <code>reports/tables/comparativo_hf_&lt;gold&gt;/</code>, gráficos em <code>reports/figures/comparativo_hf_&lt;gold&gt;/</code>, resumo em <code>reports/metrics/comparativo_hf_&lt;gold&gt;.json</code> (<code>&lt;gold&gt;</code> = <code>huggingface_secondary</code>, <code>gold_openai</code> ou <code>gold_unb</code>; a comparação entre os dois modelos do Hugging Face roda mesmo sem gold set)</td>
+<td>tabelas em <code>reports/tables/comparativo_&lt;modelo primário&gt;_vs_&lt;modelo de referência&gt;/</code>, gráficos em <code>reports/figures/comparativo_&lt;modelo primário&gt;_vs_&lt;modelo de referência&gt;/</code>, resumo em <code>reports/metrics/comparativo_&lt;modelo primário&gt;_vs_&lt;modelo de referência&gt;.json</code> (a referência é o segundo modelo do Hugging Face, <code>gold_openai</code> ou <code>gold_unb</code>, identificados pelo nome do modelo em <code>configs/labeling.yaml</code>; a comparação entre os dois modelos do Hugging Face roda mesmo sem gold set)</td>
 </tr>
 <tr>
 <td><code>hypotheses</code></td>
 <td><code>hypotheses</code></td>
 <td><code>src/pipelines/hypotheses.py</code></td>
 <td>base do Hugging Face + gold sets (modo <code>disagreement</code>), corpus rotulado (<code>patterns</code>)</td>
-<td>hipóteses do HypotheSAEs em <code>reports/tables/comparativo_hf_&lt;gold&gt;/</code> e <code>reports/metrics/hipoteses_*.json</code> (ver <a href="#hipoteses-hypothesaes">Hipóteses</a>)</td>
+<td>hipóteses do HypotheSAEs em <code>reports/tables/comparativo_&lt;modelo primário&gt;_vs_&lt;modelo de referência&gt;/</code> e <code>reports/metrics/hipoteses_*.json</code> (ver <a href="#hipoteses-hypothesaes">Hipóteses</a>)</td>
 </tr>
 <tr>
 <td><code>features</code></td>
@@ -1101,7 +1101,7 @@ acerto absoluto.</p>
 <thead>
 <tr>
 <th>Análise</th>
-<th>Saída (em <code>reports/tables/comparativo_hf_&lt;gold&gt;/</code>)</th>
+<th>Saída (em <code>reports/tables/comparativo_&lt;modelo primário&gt;_vs_&lt;modelo de referência&gt;/</code>)</th>
 </tr>
 </thead>
 <tbody>
@@ -1111,7 +1111,7 @@ acerto absoluto.</p>
 </tr>
 <tr>
 <td>Concordância/divergência (IC bootstrap), Kappa simples e ponderado, Stuart-Maxwell</td>
-<td><code>reports/metrics/comparativo_hf_&lt;gold&gt;.json</code>, <code>resumo_comparativo.md</code></td>
+<td><code>reports/metrics/comparativo_&lt;modelo primário&gt;_vs_&lt;modelo de referência&gt;.json</code>, <code>resumo_comparativo.md</code></td>
 </tr>
 <tr>
 <td>Matriz de concordância</td>
@@ -1143,7 +1143,7 @@ acerto absoluto.</p>
 </tr>
 </tbody>
 </table>
-<p>Gráficos (PNG 300 dpi + SVG) em <code>reports/figures/comparativo_hf_&lt;gold&gt;/</code>. As tabelas com texto usam
+<p>Gráficos (PNG 300 dpi + SVG) em <code>reports/figures/comparativo_&lt;modelo primário&gt;_vs_&lt;modelo de referência&gt;/</code>. As tabelas com texto usam
 apenas o texto normalizado.</p>
 <h3 id="hypothesaes-sobre-a-divergencia">HypotheSAEs sobre a divergência<a class="headerlink" href="#hypothesaes-sobre-a-divergencia" title="Permanent link">&para;</a></h3>
 <p><code>src/diagnostics/model_disagreement.py</code> aplica o HypotheSAEs a dois alvos: <code>disagreement</code>
