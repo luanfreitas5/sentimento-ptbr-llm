@@ -29,11 +29,16 @@
         "ingestion",
         "preprocessing",
         "labeling",
+        "comparative_evaluation",
+        "label_consensus",
+        "hypotheses",
         "features",
         "training_classical",
         "training_deep_learning",
-        "comparative_evaluation",
-        "all"
+        "training_transformer",
+        "training_llm",
+        "evaluate",
+        "report"
       ],
       "default": "preprocessing"
     }
