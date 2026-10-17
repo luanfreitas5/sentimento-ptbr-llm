@@ -1079,7 +1079,7 @@ entrada ficam em <code>&lt;base&gt;.meta.json</code>, ao lado da base.</p>
   ajustado, não um LLM gerativo: não usa prompt, é determinístico e a confiança é a probabilidade
   softmax da classe. Roda em CPU ou GPU pequena. Fixe <code>huggingface.revision</code> num SHA.</li>
 <li><strong>Corpus das etapas seguintes:</strong> o rótulo do modelo do Hugging Face vira <code>sentiment_label</code> em
-  <code>corpus_rotulado.parquet</code> (consumido por <code>features</code> e <code>hypothesaes_analysis</code>). Os gold sets não
+  <code>corpus_rotulado.parquet</code> (consumido por <code>features</code> e <code>hypotheses</code>). Os gold sets não
   entram no treino: servem de referência na <code>comparative_evaluation</code>.</li>
 <li><strong>Endpoints:</strong> os dois gold sets usam <code>OPENAI_BASE_URL</code>/<code>OPENAI_KEY</code>; se os modelos estiverem em
   endpoints diferentes, rode <code>make label-gold-openai</code> e <code>make label-gold-unb</code> separadamente,

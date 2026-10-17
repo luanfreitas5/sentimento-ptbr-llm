@@ -54318,7 +54318,7 @@ default None.</p>
 <p>Lê <code>OPENAI_KEY</code> (obrigatória para requisições hospedadas pela
 OpenAI) e <code>OPENAI_BASE_URL</code> (opcional, para apontar a um servidor
 local/compatível, ex.: vLLM, ou o endpoint UnB usado pelas etapas
-<code>labeling</code> e <code>hypothesaes_analysis</code>). Clientes são cacheados por
+<code>labeling</code> e <code>hypotheses</code>). Clientes são cacheados por
 <code>(api_key, base_url, max_retries)</code> para evitar reconexões desnecessárias.</p>
 
 
@@ -54464,7 +54464,7 @@ controla a taxa de requisições e as retentativas), by default None
 </span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">    Lê ``OPENAI_KEY`` (obrigatória para requisições hospedadas pela</span>
 </span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">    OpenAI) e ``OPENAI_BASE_URL`` (opcional, para apontar a um servidor</span>
 </span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="sd">    local/compatível, ex.: vLLM, ou o endpoint UnB usado pelas etapas</span>
-</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">    ``labeling`` e ``hypothesaes_analysis``). Clientes são cacheados por</span>
+</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">    ``labeling`` e ``hypotheses``). Clientes são cacheados por</span>
 </span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">    ``(api_key, base_url, max_retries)`` para evitar reconexões desnecessárias.</span>
 </span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>
 </span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">    Parameters</span>
@@ -63866,7 +63866,7 @@ que os testes substituem por dublês via <code>monkeypatch</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Monta o prefixo de cache incluindo o modelo de embedding.</p>
-<p>Corrige o cache do estágio <code>hypothesaes_analysis</code>, que não distinguia o
+<p>Corrige o cache do modo <code>patterns</code> da etapa <code>hypotheses</code>, que não distinguia o
 modelo de embedding e podia reutilizar vetores incompatíveis.</p>
 
 
@@ -63975,7 +63975,7 @@ modelo de embedding e podia reutilizar vetores incompatíveis.</p>
 <span class="normal"><a href="#__codelineno-0-117">117</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="k">def</span><span class="w"> </span><span class="nf">build_embedding_cache_name</span><span class="p">(</span><span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">n_texts</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 </span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="w">    </span><span class="sd">"""Monta o prefixo de cache incluindo o modelo de embedding.</span>
 </span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">    Corrige o cache do estágio ``hypothesaes_analysis``, que não distinguia o</span>
+</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">    Corrige o cache do modo ``patterns`` da etapa ``hypotheses``, que não distinguia o</span>
 </span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a><span class="sd">    modelo de embedding e podia reutilizar vetores incompatíveis.</span>
 </span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>
 </span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a><span class="sd">    Parameters</span>
@@ -128034,7 +128034,7 @@ dados ficam num arquivo <code>.meta.json</code> ao lado da base.</p>
 <p>A rotulagem é incremental e retomável (<code>src/labeling/incremental.py</code>):
 tweets já rotulados são lidos do checkpoint, e uma falha deixa o progresso
 salvo. Depois de rotular, o estágio grava o corpus consumido pelas etapas
-seguintes (<code>features</code>, <code>hypothesaes_analysis</code>;
+seguintes (<code>features</code>, <code>hypotheses</code>;
 <code>paths.labeled_corpus_file</code>), com o rótulo do modelo do Hugging Face.</p>
 
 

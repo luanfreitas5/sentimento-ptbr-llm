@@ -865,13 +865,22 @@
 <div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>quality<span class="w">   </span><span class="c1"># ruff + basedPyright + bandit/pip-audit + vulture + xenon + interrogate + refurb</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span><span class="nb">test</span><span class="w">      </span><span class="c1"># pytest -m "not slow", cobertura mínima de 80%</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title"><code>make test</code> x portão de cobertura</p>
+<p>Numa instalação padrão (<code>make install</code>) os extras opcionais (PyTorch, <code>openai</code>, <code>tiktoken</code>, <code>ollama</code>) não
+estão presentes, e os testes que dependem deles são pulados via <code>pytest.importorskip</code>. A cobertura cai
+abaixo do <code>fail_under = 80</code> por causa do <strong>ambiente</strong>, não de um teste quebrado. Para reproduzir o portão do CI:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>install-ci<span class="w">   </span><span class="c1"># dev + PyTorch CPU + clientes LLM (espelha .github/workflows/tests.yml)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>test-ci<span class="w">      </span><span class="c1"># pytest -m "not slow" sem ressincronizar o ambiente</span>
+</span></code></pre></div>
+</div>
 <p>Se <code>make quality</code> e <code>make test</code> passarem, o ambiente está pronto para rodar o pipeline — ver o <a href="../pipeline/">guia de pipeline</a>.</p>
 <h2 id="ambiente-containerizado-opcional">Ambiente containerizado (opcional)<a class="headerlink" href="#ambiente-containerizado-opcional" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>sentimento-ptbr-llm<span class="w"> </span>.
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span>sentimento-ptbr-llm<span class="w"> </span>--stage<span class="w"> </span>preprocessing
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>mlflow<span class="w">                </span><span class="c1"># UI do MLflow em http://localhost:5000</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>docker<span class="w"> </span>compose<span class="w"> </span>--profile<span class="w"> </span>llm<span class="w"> </span>up<span class="w"> </span>ollama<span class="w">  </span><span class="c1"># servidor Ollama</span>
+<div class="highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>sentimento-ptbr-llm<span class="w"> </span>.
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span>sentimento-ptbr-llm<span class="w"> </span>--stage<span class="w"> </span>preprocessing
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>mlflow<span class="w">                </span><span class="c1"># UI do MLflow em http://localhost:5000</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>docker<span class="w"> </span>compose<span class="w"> </span>--profile<span class="w"> </span>llm<span class="w"> </span>up<span class="w"> </span>ollama<span class="w">  </span><span class="c1"># servidor Ollama</span>
 </span></code></pre></div>
 <p>Ver <code>.devcontainer/devcontainer.json</code> para um ambiente de desenvolvimento reprodutível no VS Code (Dev Containers).</p>
 
