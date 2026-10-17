@@ -8,7 +8,7 @@ project:
     Estudo comparativo entre algoritmos clássicos de Machine Learning, arquiteturas
     de Deep Learning/Transformers e LLMs locais para análise de sentimentos em
     tweets em português brasileiro.
-  version: "0.4.0"
+  version: "0.5.0"
   language: "pt-BR"
 
 reproducibility:

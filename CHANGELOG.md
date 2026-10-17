@@ -1,3 +1,56 @@
+## v0.5.0 (2026-10-17)
+
+### Feat
+
+- **diagnostics**: substituir R² pela correlação de Spearman para alvos contínuos
+- **diagnostics**: migrar Ridge para RidgeCV com busca em grade alpha
+- **evaluation**: adiciona métricas de concordância de referência e análise comparativa
+- **models**: adicionar mapeamento explícito de nomes de modelos e atualizar a nomenclatura de saída
+- **preprocessing**: adicionar opção de filtro para o idioma português
+- **pipelines**: adicionar modelo secundário do Hugging Face à avaliação comparativa
+- **consensus**: Adicionada a etapa de análise de consenso de rótulos
+- **llm**: lidar com respostas LLM truncadas com lógica de repetição adaptativa
+- **diagnostics**: Adicionada validação da taxa de falhas de anotação
+- **annotate**: preencher anotações ausentes após falhas de LLM
+- **llm**: Limitação adaptativa de taxa e ajuste de concorrência de anotações
+- **diagnostics**: implementar limitação de taxa para requisições à API OpenAI
+- **llm**: suporte a múltiplos provedores LLM com substituição via CLI
+- **labeling**: Adicionada a opção de processamento em lote paralelo e configuração do modo de resposta.
+- **labeling**: Adicionada limitação de taxa adaptativa e tratamento de sentimentos indefinidos.
+
+### Fix
+
+- **visualization**: Limitar os erros do intervalo de confiança para evitar valores negativos
+- **evaluation**: adicionar dicas de tipo para resolver erros do mypy
+- **labeling**: fixar a revisão do modelo Hugging Face Cardiff para o SHA de commit específico
+- **select_neurons**: substituir o parâmetro de penalidade obsoleto por l1_ratio
+- **config**: converte variáveis ​​de ambiente vazias em None para validadores
+- **labeling**: correção de erro de digitação no nome do modelo HuggingFace
+- **prompt**: atualização do formato do modelo de Tweet
+
+### Refactor
+
+- **diagnostics**: simplificar o pipeline do modelo e adicionar conversão de tipo
+- **diagnostics**: extrair instância do RidgeCV para maior clareza
+- **models**: substituir SVC por LinearSVC e adicionar calibração de probabilidade
+- renomear as configurações do modelo Hugging Face e atualizar o pipeline de rotulagem
+- **consensus**: extrair funções de validação e auxiliares
+- **pipelines**: simplificar a atribuição de variáveis ​​e as operações com dicionários.
+- Reestruturação do pipeline de rotulagem com conjuntos de referência
+- **data**: renomear os estágios do pipeline para arquitetura medallion
+- reestruturar os estágios do pipeline e aprimorar o gerenciamento de configuração.
+- **diagnostics**: simplificar a sintaxe de mesclagem de dicionários e a lógica de comparação
+- **llm_api**: extrair a lógica de repetição para uma função dedicada
+- **progress**: substituir tqdm por barras de progresso baseadas em rich-based
+- **labeling**: extrair a análise e validação de JSON para funções auxiliares
+- **labeling**: extrair funções auxiliares para tratamento de erros de limite de taxa e erros de API
+- **models**: extrair a construção e serialização de módulos PyTorch
+- **config**: esclarecer a configuração do BiLSTM e remover o campo de arquitetura redundante
+
+### Perf
+
+- **annotation**: aumentar os limites de concorrência e otimizar a lógica de repetição
+
 ## v0.4.0 (2026-09-20)
 
 ### Feat
