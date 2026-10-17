@@ -46,7 +46,7 @@ hypotheses:
   n_scoring_examples: 100
   scoring_metric: f1
   n_workers: 8                        # threads da interpretação
-  n_workers_annotation: 30            # threads da anotação/pontuação (limitado por llm.max_concurrency)
+  n_workers_annotation: 64            # threads da anotação/pontuação (limitado por llm.max_concurrency)
   task_specific_instructions: |
     Os textos são tweets em português do Brasil sobre sentimento (positivo, neutro, negativo).
     Gere hipóteses ESPECÍFICAS e verificáveis (evite "expressa emoção" ou "fala de algo").
@@ -68,7 +68,7 @@ llm:
   # ATENÇÃO: llama3.2:1b NÃO segue o formato de anotação (smoke test: 0/6 respostas parseáveis).
   interpreter_model_ollama: gemma2:9b
   annotator_model_ollama: gemma2:9b
-  max_concurrency: 30                 # limite de requisições simultâneas (semáforo)
+  max_concurrency: 64                 # limite de requisições simultâneas (semáforo)
   request_timeout_seconds: 120
   max_retries: 3
   # Anti-429 (só provedor "openai"/UnB): sem teto fixo (null) as threads disparam em paralelo;

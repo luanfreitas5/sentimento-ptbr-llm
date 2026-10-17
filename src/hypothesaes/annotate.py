@@ -27,7 +27,12 @@ from hypothesaes.progress import iterate_with_progress
 from hypothesaes.utils import load_prompt_template, truncate_text
 
 ANNOTATION_CACHE_DIR: Path = PROJECT_ROOT / "models" / "artifacts" / "hypothesaes_annotation_cache"
-DEFAULT_N_WORKERS = 30
+DEFAULT_N_WORKERS = 64
+# O prompt pede "Yes/No" + uma frase, mas só o início da resposta é interpretado
+# (``parse_completion``): limitar a saída corta a latência por chamada.
+DEFAULT_ANNOTATION_MAX_OUTPUT_TOKENS = 16
+_MAX_OUTPUT_TOKEN_ALIASES = ("max_output_tokens", "max_completion_tokens", "max_tokens")
+DEFAULT_CHECKPOINT_EVERY = 5000
 
 logger = logging.getLogger(__name__)
 
@@ -295,8 +300,14 @@ def annotate_single_text(
     max_words_per_example : int | None, optional
         Trunca o texto para no máximo esta quantidade de palavras antes de
         anotar, by default None.
-    temperature, max_output_tokens, timeout, reasoning_effort, verbosity :
+    temperature, timeout, reasoning_effort, verbosity :
         Repassados a :func:`hypothesaes.llm_api.generate_completion`.
+    max_output_tokens : int | None, optional
+        Limite de tokens de saída. Se ``None`` (e nenhum alias como
+        ``max_tokens`` for informado), usa
+        :data:`DEFAULT_ANNOTATION_MAX_OUTPUT_TOKENS`, pois só o início da
+        resposta ("Yes"/"No") é interpretado. Para modelos que emitem
+        ``<think>...</think>`` antes da resposta, informe um valor maior.
     max_retries : int, optional
         Número máximo de tentativas em caso de falha, by default 3.
     **completion_kwargs : Any
@@ -310,6 +321,10 @@ def annotate_single_text(
     """
     if max_words_per_example:
         text = truncate_text(text, max_words_per_example)
+    if max_output_tokens is None and not any(
+        alias in completion_kwargs for alias in _MAX_OUTPUT_TOKEN_ALIASES
+    ):
+        max_output_tokens = DEFAULT_ANNOTATION_MAX_OUTPUT_TOKENS
 
     annotate_prompt = load_prompt_template(annotate_prompt_name)
     system_prompt = (
@@ -350,21 +365,28 @@ def _should_checkpoint(
 def _retry_failed_tasks(
     retry_tasks: list[tuple[str, str]],
     model: str,
+    n_workers: int,
     results: dict[str, dict[str, int]],
     cache: dict[str, int] | None,
     **annotation_kwargs: Any,
 ) -> None:
-    """Reprocessa sequencialmente as tarefas que falharam na execução paralela."""
+    """Reprocessa, em paralelo, as tarefas que falharam na primeira execução."""
     logger.info("Reprocessando %d tarefa(s) que falharam...", len(retry_tasks))
-    for text, concept in retry_tasks:
-        try:
-            annotation, _ = annotate_single_text(
-                text=text, concept=concept, model=model, **annotation_kwargs
-            )
-            if annotation is not None:
-                _store_annotation(results, concept, text, annotation, cache)
-        except Exception:
-            logger.exception("Falha ao reprocessar anotação para o conceito '%s'.", concept)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as executor:
+        future_to_task = {
+            executor.submit(
+                annotate_single_text, text=text, concept=concept, model=model, **annotation_kwargs
+            ): (text, concept)
+            for text, concept in retry_tasks
+        }
+        for future in concurrent.futures.as_completed(future_to_task):
+            text, concept = future_to_task[future]
+            try:
+                annotation, _ = future.result()
+                if annotation is not None:
+                    _store_annotation(results, concept, text, annotation, cache)
+            except Exception:
+                logger.exception("Falha ao reprocessar anotação para o conceito '%s'.", concept)
 
 
 def _annotate_tasks_in_parallel(
@@ -374,7 +396,7 @@ def _annotate_tasks_in_parallel(
     results: dict[str, dict[str, int]],
     cache: dict[str, int] | None = None,
     cache_path: Path | None = None,
-    checkpoint_every: int = 1000,
+    checkpoint_every: int = DEFAULT_CHECKPOINT_EVERY,
     progress_desc: str = "Anotando",
     show_progress: bool = True,
     **annotation_kwargs: Any,
@@ -413,7 +435,7 @@ def _annotate_tasks_in_parallel(
                 logger.exception("Falha ao anotar texto para o conceito '%s'.", concept)
 
     if retry_tasks:
-        _retry_failed_tasks(retry_tasks, model, results, cache, **annotation_kwargs)
+        _retry_failed_tasks(retry_tasks, model, n_workers, results, cache, **annotation_kwargs)
 
 
 def _split_cached_and_uncached_tasks(
@@ -492,6 +514,7 @@ def annotate_tasks(
     """
     cache = load_annotation_cache(cache_path) if cache_path else {}
     results: dict[str, dict[str, int]] = {}
+    tasks = list(dict.fromkeys(tasks))  # pares repetidos geram uma única chamada
     uncached_tasks = _split_cached_and_uncached_tasks(
         tasks, cache, results, use_cache_only, uncached_value
     )
