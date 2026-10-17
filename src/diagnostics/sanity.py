@@ -14,7 +14,7 @@ nula de associação nula entre predição e alvo.
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -301,12 +301,11 @@ def evaluate_sanity_gate(
         return result
 
     ridge = RidgeCV(alphas=np.asarray(ridge_alphas, dtype=float))
-    model = make_pipeline(StandardScaler(), ridge)
-    predictions = model.fit(x_tr, y_tr).predict(x_ho)
+    predictions = make_pipeline(StandardScaler(), ridge).fit(x_tr, y_tr).predict(x_ho)
     logger.info(
         "Gate de sanidade '%s': alpha do RidgeCV selecionado = %.4g.",
         target_name,
-        float(ridge.alpha_),
+        cast("float", ridge.alpha_),
     )
     rng = np.random.default_rng(random_seed)
     observed = _score(metric_name, y_ho, predictions)
