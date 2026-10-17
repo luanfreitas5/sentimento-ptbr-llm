@@ -838,12 +838,7 @@ class NeuronInterpreter:
             if self.cache_name is None
             else ANNOTATION_CACHE_DIR / f"{self.cache_name}_interp-scoring.json"
         )
-        n_candidates = len(next(iter(interpretations.values())))
-        progress_desc = (
-            f"Pontuando fidelidade das interpretações ({len(interpretations)} neurônio(s); "
-            f"{n_candidates} candidato(s) por neurônio; "
-            f"{config.n_examples} exemplo(s) por interpretação)"
-        )
+        progress_desc = "Pontuando fidelidade"
         annotations = annotate_tasks(
             tasks=tasks,
             cache_path=cache_path,
