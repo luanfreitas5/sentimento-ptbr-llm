@@ -924,7 +924,7 @@ monta o mesmo contrato direto do Hugging Face e de cada gold set (<code>agreemen
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>   prompt v2 (regras curtas) ──► v1 vs v2 no G_eval (McNemar, Wilcoxon, IC) ──► rerun em G_disc
 </span></code></pre></div>
 <ol>
-<li><strong>Gate de sanidade</strong> (<code>diagnostics.sanity</code>): Ridge nos embeddings → alvo; AUC (binário) ou R²
+<li><strong>Gate de sanidade</strong> (<code>diagnostics.sanity</code>): Ridge nos embeddings → alvo; AUC (binário) ou Spearman
    (contínuo) no holdout, com IC por bootstrap e teste de permutação. Se o IC inferior não supera
    o acaso ou a permutação não é significativa, o fluxo <strong>aborta</strong> e registra o motivo no MLflow.</li>
 <li><strong>Hipóteses</strong> (<code>diagnostics.hypotheses</code>): <code>generate_hypotheses</code> na partição de descoberta com
