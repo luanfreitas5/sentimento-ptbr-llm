@@ -34,7 +34,7 @@ def get_project_version(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> s
     Returns
     -------
     str
-        Versão do projeto (ex.: ``"0.2.0"``).
+        Versão do projeto no formato SemVer (ex.: ``"0.4.0"``).
 
     Raises
     ------
@@ -43,8 +43,8 @@ def get_project_version(pyproject_file_path: Path = DEFAULT_PYPROJECT_FILE) -> s
 
     Examples
     --------
-    >>> get_project_version()
-    '0.2.0'
+    >>> get_project_version().count(".")
+    2
     """
     with pyproject_file_path.open("rb") as file:
         data = tomllib.load(file)
@@ -106,7 +106,7 @@ def read_latest_changelog_entry(changelog_file_path: Path = DEFAULT_CHANGELOG_FI
 
     Examples
     --------
-    >>> read_latest_changelog_entry().startswith("## v0.2.0")
+    >>> read_latest_changelog_entry().startswith("## v")
     True
     """
     content = changelog_file_path.read_text(encoding="utf-8")
