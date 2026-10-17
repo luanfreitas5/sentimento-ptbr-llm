@@ -89,9 +89,10 @@ def _score(metric_name: MetricName, y_true: FloatArray, y_pred: FloatArray) -> f
     """Calcula a métrica escolhida (AUC ou Spearman; ``nan`` se um vetor for constante)."""
     if metric_name == "roc_auc":
         return float(roc_auc_score(y_true, y_pred))
-    if np.std(y_true) == 0 or np.std(y_pred) == 0:
+    if 0 in (np.std(y_true), np.std(y_pred)):
         return float("nan")
-    return float(spearmanr(y_true, y_pred).statistic)
+    result = spearmanr(y_true, y_pred)
+    return float(result.statistic)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def _has_two_classes(values: FloatArray) -> bool:
