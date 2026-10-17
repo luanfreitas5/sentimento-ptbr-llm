@@ -12,12 +12,13 @@ nula de associação nula entre predição e alvo.
 """
 
 import logging
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import RidgeCV
 from sklearn.metrics import r2_score, roc_auc_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 MetricName = Literal["roc_auc", "r2"]
 _CHANCE_LEVEL: dict[str, float] = {"roc_auc": 0.5, "r2": 0.0}
+DEFAULT_RIDGE_ALPHAS: tuple[float, ...] = (1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0)
 
 FloatArray = NDArray[np.float64]
 
@@ -228,7 +230,7 @@ def evaluate_sanity_gate(
     *,
     target_name: str,
     classification: bool,
-    ridge_alpha: float = 1.0,
+    ridge_alphas: Sequence[float] = DEFAULT_RIDGE_ALPHAS,
     n_bootstrap: int = DEFAULT_BOOTSTRAP_ITERATIONS,
     n_permutations: int = 1000,
     confidence_level: float = 0.95,
@@ -248,8 +250,11 @@ def evaluate_sanity_gate(
         Nome do alvo (para log e relatório).
     classification : bool
         ``True`` para alvo binário (usa ROC-AUC); ``False`` para contínuo (R²).
-    ridge_alpha : float, optional
-        Regularização do Ridge, by default 1.0.
+    ridge_alphas : Sequence[float], optional
+        Grade de regularização do ``RidgeCV`` (validação cruzada leave-one-out
+        eficiente no treino), by default :data:`DEFAULT_RIDGE_ALPHAS`. Com
+        embeddings de alta dimensão e poucos exemplos, ``alpha`` fixo pequeno
+        sobreajusta e torna o R² do holdout fortemente negativo.
     n_bootstrap : int, optional
         Reamostragens do holdout para o IC, by default
         :data:`constants.defaults.DEFAULT_BOOTSTRAP_ITERATIONS`.
@@ -295,10 +300,12 @@ def evaluate_sanity_gate(
         logger.warning("Gate de sanidade '%s': %s.", target_name, result.reason)
         return result
 
-    predictions = (
-        make_pipeline(StandardScaler(), Ridge(alpha=ridge_alpha, random_state=random_seed))
-        .fit(x_tr, y_tr)
-        .predict(x_ho)
+    model = make_pipeline(StandardScaler(), RidgeCV(alphas=np.asarray(ridge_alphas, dtype=float)))
+    predictions = model.fit(x_tr, y_tr).predict(x_ho)
+    logger.info(
+        "Gate de sanidade '%s': alpha do RidgeCV selecionado = %.4g.",
+        target_name,
+        float(model[-1].alpha_),
     )
     rng = np.random.default_rng(random_seed)
     observed = _score(metric_name, y_ho, predictions)

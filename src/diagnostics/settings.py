@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from config.paths import CONFIGS_DIR
 from exceptions.configuration import ConfigurationFileNotFoundError, InvalidConfigurationError
@@ -61,7 +61,18 @@ class SaeSettings(_Strict):
 class SanitySettings(_Strict):
     """Parâmetros do gate de sanidade (Ridge nos embeddings)."""
 
-    ridge_alpha: float = Field(gt=0, default=1.0)
+    ridge_alphas: list[float] = Field(
+        min_length=1, default=[1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0]
+    )
+
+    @field_validator("ridge_alphas")
+    @classmethod
+    def _validate_positive_alphas(cls, value: list[float]) -> list[float]:
+        """Exige que todos os ``alpha`` da grade do RidgeCV sejam positivos."""
+        if any(alpha <= 0 for alpha in value):
+            raise ValueError("todos os valores de ridge_alphas devem ser > 0")
+        return value
+
     n_bootstrap: int = Field(gt=0, default=1000)
     n_permutations: int = Field(gt=0, default=1000)
     confidence_level: float = Field(gt=0, lt=1, default=0.95)

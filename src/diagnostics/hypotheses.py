@@ -372,7 +372,7 @@ def _execute_target(
         holdout_slice.labels,
         target_name=target_slug,
         classification=classification,
-        ridge_alpha=sanity.ridge_alpha,
+        ridge_alphas=sanity.ridge_alphas,
         n_bootstrap=sanity.n_bootstrap,
         n_permutations=sanity.n_permutations,
         confidence_level=sanity.confidence_level,

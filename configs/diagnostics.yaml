@@ -29,7 +29,7 @@ sae:
   checkpoint_subdir: diagnostics
 
 sanity:
-  ridge_alpha: 1.0
+  ridge_alphas: [1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0] # grade do RidgeCV
   n_bootstrap: 1000
   n_permutations: 1000
   confidence_level: 0.95
@@ -59,7 +59,7 @@ llm:
   # Método de geração: "openai" (endpoint OpenAI-compatível, ex.: UnB-Llama-3.3-70B-Instruct
   # via OPENAI_BASE_URL/OPENAI_KEY no .env) ou "ollama" (local).
   # Pode ser sobrescrito na CLI com --llm-provider.
-  provider: openai
+  provider: ollama # "openai" ou "ollama"
   ollama_base_url: http://localhost:11434
   openai_base_url: null               # null = usa OPENAI_BASE_URL do .env (endpoint UnB)
   # Um modelo por provedor e papel; vale o do `provider` ativo.
