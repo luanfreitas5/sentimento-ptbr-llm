@@ -300,12 +300,13 @@ def evaluate_sanity_gate(
         logger.warning("Gate de sanidade '%s': %s.", target_name, result.reason)
         return result
 
-    model = make_pipeline(StandardScaler(), RidgeCV(alphas=np.asarray(ridge_alphas, dtype=float)))
+    ridge = RidgeCV(alphas=np.asarray(ridge_alphas, dtype=float))
+    model = make_pipeline(StandardScaler(), ridge)
     predictions = model.fit(x_tr, y_tr).predict(x_ho)
     logger.info(
         "Gate de sanidade '%s': alpha do RidgeCV selecionado = %.4g.",
         target_name,
-        float(model[-1].alpha_),
+        float(ridge.alpha_),
     )
     rng = np.random.default_rng(random_seed)
     observed = _score(metric_name, y_ho, predictions)
