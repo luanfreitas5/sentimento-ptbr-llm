@@ -2,9 +2,13 @@
 
 Antes de gastar chamadas de LLM gerando hipóteses, ajusta uma regressão Ridge
 nos embeddings de treino e mede o desempenho no holdout (ROC-AUC para alvo
-binário, R² para alvo contínuo). Se o desempenho for indistinguível do acaso,
+binário, correlação de Spearman para alvo contínuo). Se o desempenho for indistinguível do acaso,
 não há sinal nos embeddings para o SAE explicar e o fluxo deve abortar (e
 registrar o motivo no MLflow).
+
+A pergunta do gate é "há sinal?", não "a previsão é bem calibrada?". Por isso o
+alvo contínuo usa Spearman (invariante à escala e a transformações monótonas), e
+não R², que penaliza previsões com escala errada mesmo quando ordenam bem o alvo.
 
 O critério é conjunto: o limite inferior do IC (bootstrap do holdout) precisa
 superar o nível de acaso e o teste de permutação precisa rejeitar a hipótese
@@ -18,8 +22,9 @@ from typing import Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import spearmanr
 from sklearn.linear_model import RidgeCV
-from sklearn.metrics import r2_score, roc_auc_score
+from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -29,8 +34,8 @@ from exceptions.pipeline import SanityGateFailedError
 
 logger = logging.getLogger(__name__)
 
-MetricName = Literal["roc_auc", "r2"]
-_CHANCE_LEVEL: dict[str, float] = {"roc_auc": 0.5, "r2": 0.0}
+MetricName = Literal["roc_auc", "spearman"]
+_CHANCE_LEVEL: dict[str, float] = {"roc_auc": 0.5, "spearman": 0.0}
 DEFAULT_RIDGE_ALPHAS: tuple[float, ...] = (1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0)
 
 FloatArray = NDArray[np.float64]
@@ -44,8 +49,8 @@ class SanityGateResult:
     ----------
     target_name : str
         Nome do alvo avaliado.
-    metric_name : {"roc_auc", "r2"}
-        Métrica usada (AUC para binário, R² para contínuo).
+    metric_name : {"roc_auc", "spearman"}
+        Métrica usada (AUC para binário, Spearman para contínuo).
     holdout_score : float
         Métrica observada no holdout (``nan`` se o alvo for degenerado).
     ci_lower, ci_upper : float
@@ -59,9 +64,8 @@ class SanityGateResult:
     reason : str
         Explicação legível da decisão.
     null_median : float
-        Mediana da métrica sob permutação do alvo (nível nulo empírico). Para R² é
-        negativa (previsões fixas contra alvo embaralhado), então o p-valor mede
-        associação, não R² positivo.
+        Mediana da métrica sob permutação do alvo (nível nulo empírico). Para
+        Spearman é ~0 (alvo embaralhado não se associa à previsão).
     """
 
     target_name: str
@@ -82,10 +86,12 @@ class SanityGateResult:
 
 
 def _score(metric_name: MetricName, y_true: FloatArray, y_pred: FloatArray) -> float:
-    """Calcula a métrica escolhida (AUC ou R²)."""
+    """Calcula a métrica escolhida (AUC ou Spearman; ``nan`` se um vetor for constante)."""
     if metric_name == "roc_auc":
         return float(roc_auc_score(y_true, y_pred))
-    return float(r2_score(y_true, y_pred))
+    if np.std(y_true) == 0 or np.std(y_pred) == 0:
+        return float("nan")
+    return float(spearmanr(y_true, y_pred).statistic)
 
 
 def _has_two_classes(values: FloatArray) -> bool:
@@ -109,7 +115,9 @@ def _bootstrap_interval(
         indices = rng.integers(0, n_rows, n_rows)
         if metric_name == "roc_auc" and not _has_two_classes(y_true[indices]):
             continue
-        scores.append(_score(metric_name, y_true[indices], y_pred[indices]))
+        score = _score(metric_name, y_true[indices], y_pred[indices])
+        if not np.isnan(score):
+            scores.append(score)
     if not scores:
         return float("nan"), float("nan")
     tail = (1.0 - confidence_level) / 2.0 * 100.0
@@ -128,8 +136,8 @@ def _permutation_test(
 ) -> tuple[float, float]:
     """Teste de permutação unilateral: retorna (p-valor, mediana da métrica nula).
 
-    O p-valor é a fração de permutações do alvo com métrica >= observada. Para R²
-    o nulo fica abaixo de 0, então um R² observado negativo ainda pode ter p pequeno.
+    O p-valor é a fração de permutações do alvo com métrica >= observada. Para
+    Spearman o nulo se concentra em 0.
     """
     null_scores = np.array(
         [_score(metric_name, rng.permutation(y_true), y_pred) for _ in range(n_permutations)]
@@ -249,12 +257,12 @@ def evaluate_sanity_gate(
     target_name : str
         Nome do alvo (para log e relatório).
     classification : bool
-        ``True`` para alvo binário (usa ROC-AUC); ``False`` para contínuo (R²).
+        ``True`` para alvo binário (usa ROC-AUC); ``False`` para contínuo (Spearman).
     ridge_alphas : Sequence[float], optional
         Grade de regularização do ``RidgeCV`` (validação cruzada leave-one-out
         eficiente no treino), by default :data:`DEFAULT_RIDGE_ALPHAS`. Com
         embeddings de alta dimensão e poucos exemplos, ``alpha`` fixo pequeno
-        sobreajusta e torna o R² do holdout fortemente negativo.
+        sobreajusta e degrada a previsão no holdout.
     n_bootstrap : int, optional
         Reamostragens do holdout para o IC, by default
         :data:`constants.defaults.DEFAULT_BOOTSTRAP_ITERATIONS`.
@@ -294,8 +302,9 @@ def evaluate_sanity_gate(
     arrays = [np.asarray(a, dtype=np.float64) for a in (x_train, y_train, x_holdout, y_holdout)]
     x_tr, y_tr, x_ho, y_ho = arrays
     _validate_inputs(x_tr, y_tr, x_ho, y_ho)
-    metric_name: MetricName = "roc_auc" if classification else "r2"
-    if classification and not (_has_two_classes(y_tr) and _has_two_classes(y_ho)):
+    metric_name: MetricName = "roc_auc" if classification else "spearman"
+    has_variation = _has_two_classes(y_tr) and _has_two_classes(y_ho)
+    if not has_variation:
         result = _degenerate_result(target_name, metric_name, x_tr.shape[0], x_ho.shape[0])
         logger.warning("Gate de sanidade '%s': %s.", target_name, result.reason)
         return result

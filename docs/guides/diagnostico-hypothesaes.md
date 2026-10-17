@@ -50,7 +50,7 @@ corpus rotulado ──► adapt_labeled_corpus ──► partições disjuntas (
    prompt v2 (regras curtas) ──► v1 vs v2 no G_eval (McNemar, Wilcoxon, IC) ──► rerun em G_disc
 ```
 
-1. **Gate de sanidade** (`diagnostics.sanity`): Ridge nos embeddings → alvo; AUC (binário) ou R²
+1. **Gate de sanidade** (`diagnostics.sanity`): Ridge nos embeddings → alvo; AUC (binário) ou Spearman
    (contínuo) no holdout, com IC por bootstrap e teste de permutação. Se o IC inferior não supera
    o acaso ou a permutação não é significativa, o fluxo **aborta** e registra o motivo no MLflow.
 2. **Hipóteses** (`diagnostics.hypotheses`): `generate_hypotheses` na partição de descoberta com

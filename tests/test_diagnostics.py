@@ -1792,7 +1792,7 @@ class TestEvaluateSanityGate:
         assert result.reason
 
     def test_continuous_target_uses_r2(self) -> None:
-        """Alvo contínuo usa R²."""
+        """Alvo contínuo usa a correlação de Spearman."""
         rng = np.random.default_rng(2)
         x = rng.normal(size=(500, 6))
         y = 2.0 * x[:, 1] + 0.1 * rng.normal(size=500)
@@ -1803,9 +1803,34 @@ class TestEvaluateSanityGate:
             n_bootstrap=200,
             n_permutations=200,
         )
-        assert result.metric_name == "r2"
+        assert result.metric_name == "spearman"
         assert result.go
         assert result.holdout_score > 0.9
+
+    def test_continuous_constant_target_is_no_go(self) -> None:
+        """Alvo contínuo constante é no-go (Spearman indefinido), sem exceção."""
+        rng = np.random.default_rng(4)
+        x = rng.normal(size=(50, 4))
+        result = evaluate_sanity_gate(
+            x[:30], np.ones(30), x[30:], np.ones(20), target_name="const", classification=False
+        )
+        assert not result.go
+        assert result.metric_name == "spearman"
+
+    def test_continuous_target_is_invariant_to_monotone_rescaling(self) -> None:
+        """Spearman não depende da escala do alvo: exp(y) mantém o mesmo veredito."""
+        rng = np.random.default_rng(5)
+        x = rng.normal(size=(500, 6))
+        y = x[:, 0] + 0.5 * rng.normal(size=500)
+        kwargs = {
+            "target_name": "t",
+            "classification": False,
+            "n_bootstrap": 100,
+            "n_permutations": 100,
+        }
+        base = evaluate_sanity_gate(*_split(x, y), **kwargs)
+        scaled = evaluate_sanity_gate(*_split(x, np.exp(3.0 * y)), **kwargs)
+        assert base.go and scaled.go
 
     def test_constant_target_is_no_go_without_fitting(self) -> None:
         """Alvo com uma única classe é no-go, sem exceção do sklearn."""
@@ -1910,7 +1935,7 @@ class TestAssertSanityGatePassed:
 
     def test_to_dict_is_serializable(self) -> None:
         """``to_dict`` expõe todos os campos (para o MLflow)."""
-        result = SanityGateResult("t", "r2", 0.1, 0.0, 0.2, 0.03, 5, 5, True, "ok")
+        result = SanityGateResult("t", "spearman", 0.1, 0.0, 0.2, 0.03, 5, 5, True, "ok")
         assert result.to_dict()["target_name"] == "t"
         assert set(result.to_dict()) >= {"holdout_score", "ci_lower", "permutation_pvalue", "go"}
 
