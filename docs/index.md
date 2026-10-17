@@ -26,5 +26,4 @@ A maior parte da literatura de análise de sentimentos em pt-BR compara paradigm
 ## Documentos de referência
 
 - [`projeto-mestrado-analise-sentimentos-ptbr.md`](https://github.com/luanfreitas5/sentimento-ptbr-llm/blob/main/projeto-mestrado-analise-sentimentos-ptbr.md) — documento mestre do desenho experimental.
-- [`PLANO-ELABORACAO.md`](https://github.com/luanfreitas5/sentimento-ptbr-llm/blob/main/PLANO-ELABORACAO.md) — plano de construção do repositório, pasta a pasta.
 - [Model Cards](https://github.com/luanfreitas5/sentimento-ptbr-llm/tree/main/reports/model_cards) e [Datasheet do corpus](https://github.com/luanfreitas5/sentimento-ptbr-llm/blob/main/reports/datasheets/datasheet_corpus_tweets.md) — documentação de IA responsável.

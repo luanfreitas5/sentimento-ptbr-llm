@@ -11,7 +11,7 @@ export PYTHONHASHSEED := 42
 	install-labeling install-collect install-nlp install-viz install-dvc install-app install-exploratory spacy-model nltk-data ollama \
 	update lock export \
 	lint typecheck security deadcode complexity docstrings modernize quality \
-	test smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
+	test test-ci install-ci smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
 	clean-gold clean-reports clean-outputs clean-notebooks \
 	ingest preprocess label label-hf label-hf-secondary label-openai compare consensus hypotheses features \
 	classical deep transformer llm evaluate report all \
@@ -106,8 +106,16 @@ modernize:  ## Detecta código redundante (refurb)
 quality: lint typecheck security deadcode complexity docstrings modernize   ## Roda toda a suíte de qualidade (espelha o CI)
 
 # --- Testes ----------------------------------------------------------------
-test:  ## Roda os testes com cobertura
+test:  ## Roda os testes com cobertura (sem extras: módulos com torch/openai são pulados e o fail_under de 80% pode falhar)
 	uv run pytest -m "not slow"
+
+install-ci:  ## Instala o ambiente de testes do CI (dev + PyTorch CPU + clientes LLM), espelhando tests.yml
+	uv sync --dev
+	uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+	uv pip install "openai>=3.8.0" "tiktoken>=0.14.0" "ollama>=0.3"
+
+test-ci:  ## Roda os testes como no CI (usa o ambiente de install-ci; atinge o fail_under de 80%)
+	uv run --no-sync pytest -m "not slow"
 
 smoke:  ## Roda apenas os smoke tests
 	uv run pytest -m smoke -q

@@ -1,4 +1,4 @@
-# Provedor de LLM usado pelo HypotheSAEs (etapa `hypothesaes_analysis`:
+# Provedor de LLM usado pelo HypotheSAEs (etapa `hypotheses`:
 # interpretação/anotação de neurônios, geração e avaliação de hipóteses),
 # via src/hypothesaes/llm_api.py::generate_completion.
 #

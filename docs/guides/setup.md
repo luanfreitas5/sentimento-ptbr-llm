@@ -52,6 +52,16 @@ make quality   # ruff + basedPyright + bandit/pip-audit + vulture + xenon + inte
 make test      # pytest -m "not slow", cobertura mínima de 80%
 ```
 
+!!! warning "`make test` x portão de cobertura"
+    Numa instalação padrão (`make install`) os extras opcionais (PyTorch, `openai`, `tiktoken`, `ollama`) não
+    estão presentes, e os testes que dependem deles são pulados via `pytest.importorskip`. A cobertura cai
+    abaixo do `fail_under = 80` por causa do **ambiente**, não de um teste quebrado. Para reproduzir o portão do CI:
+
+    ```bash
+    make install-ci   # dev + PyTorch CPU + clientes LLM (espelha .github/workflows/tests.yml)
+    make test-ci      # pytest -m "not slow" sem ressincronizar o ambiente
+    ```
+
 Se `make quality` e `make test` passarem, o ambiente está pronto para rodar o pipeline — ver o [guia de pipeline](pipeline.md).
 
 ## Ambiente containerizado (opcional)

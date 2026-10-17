@@ -262,7 +262,7 @@ def create_client(max_retries: int | None = None) -> Any:
     Lê ``OPENAI_KEY`` (obrigatória para requisições hospedadas pela
     OpenAI) e ``OPENAI_BASE_URL`` (opcional, para apontar a um servidor
     local/compatível, ex.: vLLM, ou o endpoint UnB usado pelas etapas
-    ``labeling`` e ``hypothesaes_analysis``). Clientes são cacheados por
+    ``labeling`` e ``hypotheses``). Clientes são cacheados por
     ``(api_key, base_url, max_retries)`` para evitar reconexões desnecessárias.
 
     Parameters

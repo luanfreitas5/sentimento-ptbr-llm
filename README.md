@@ -26,7 +26,7 @@ Este projeto desenvolve e avalia comparativamente um pipeline de análise de sen
 | Transformers (fine-tuning) | BERTimbau, RoBERTa pt-BR, DistilBERT pt-BR | Embeddings contextuais |
 | LLMs locais | Llama 3.1, Gemma 2 via Ollama/Hugging Face | Prompting zero-shot / few-shot / chain-of-thought |
 
-A rotulagem de todos os tweets é feita por dois LLMs independentes — um do Hugging Face (execução local) e outro via API OpenAI-compatível —, gerando as bases `tweets_data_huggingface` e `tweets_data_openai`, comparadas pela etapa `comparative_evaluation` (concordância, Kappa, confiança e divergências); as hipóteses do HypotheSAEs têm etapa própria (`hypotheses`). A execução local dos LLMs é particularmente relevante para dados de redes sociais, que envolvem restrições de privacidade e custo que desaconselham o uso de APIs proprietárias na nuvem. A métrica principal é o **F1-macro** (robusto ao desbalanceamento entre classes), complementado pelo **MCC**, testes de significância (McNemar, Wilcoxon, Friedman + post-hoc de Nemenyi), calibração de probabilidades e avaliação por slice — com ênfase em rigor metodológico, escalabilidade computacional e reprodutibilidade.
+A rotulagem usa um classificador do Hugging Face (`cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual`, revisão fixada, executado localmente em CPU ou GPU) sobre **todo** o corpus; esse rótulo é a única fonte que alimenta `features` e o treino. Um segundo classificador (`pysentimiento/bertweet-pt-sentiment`) rotula o mesmo corpus para a análise de consenso (`label_consensus`). Dois LLMs via API OpenAI-compatível (`gpt-6-luna` e `UnB-Llama-3.3-70B-Instruct`) rotulam apenas uma amostra de 1.000 tweets, formando os *gold sets* de referência. A etapa `comparative_evaluation` compara o Hugging Face com cada gold set (concordância, Kappa e divergências), e a etapa `hypotheses` gera hipóteses do HypotheSAEs sobre essas divergências. Os gold sets são rótulos de LLM, não de humanos: medem concordância, não acerto absoluto. O texto enviado à API é sanitizado (sem @menções e URLs, conforme a LGPD), e o rótulo de todo o corpus não depende de API proprietária. A métrica principal é o **F1-macro** (robusto ao desbalanceamento entre classes), complementado pelo **MCC**, testes de significância (McNemar, Wilcoxon, Friedman + post-hoc de Nemenyi), calibração de probabilidades e avaliação por slice — com ênfase em rigor metodológico, escalabilidade computacional e reprodutibilidade.
 
 ---
 
@@ -40,7 +40,6 @@ sentimento-ptbr-llm/
 │   └── config
 ├── .github/
 │   ├── workflows/
-│   │   ├── bump-version.yml
 │   │   ├── ci.yml
 │   │   ├── dependency-review.yml
 │   │   ├── docs.yml
@@ -107,7 +106,6 @@ sentimento-ptbr-llm/
 │   │   └── model_card_transformer.md
 │   ├── statistics/
 │   └── tables/
-├── scripts/                    # Utilitários de manutenção do repositório
 ├── src/                        # Código de produção — ver src/__init__.py para a lista de packages
 │   ├── config/                 # Configuração validada, ambiente, logging, caminhos
 │   ├── constants/               # Constantes, enums e valores padrão
@@ -141,7 +139,6 @@ sentimento-ptbr-llm/
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── CHANGELOG.md
-├── CLAUDE.md
 ├── Dockerfile
 ├── LICENSE
 ├── Makefile
@@ -221,6 +218,7 @@ Detalhes de cada estágio: [`docs/guides/pipeline.md`](docs/guides/pipeline.md).
 make quality   # ruff + basedPyright + bandit/pip-audit + vulture + xenon + interrogate + refurb
 make test      # pytest -m "not slow", cobertura mínima de 80%
 make test-all  # inclui os testes lentos
+make install-ci && make test-ci   # ambiente idêntico ao do CI (PyTorch CPU + clientes LLM): único que garante o fail_under de 80%
 make coverage  # relatório HTML em htmlcov/
 ```
 

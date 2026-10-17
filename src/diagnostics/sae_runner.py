@@ -93,7 +93,7 @@ def train_sae(**kwargs: Any) -> Any:
 def build_embedding_cache_name(model_name: str, n_texts: int) -> str:
     """Monta o prefixo de cache incluindo o modelo de embedding.
 
-    Corrige o cache do estágio ``hypothesaes_analysis``, que não distinguia o
+    Corrige o cache do modo ``patterns`` da etapa ``hypotheses``, que não distinguia o
     modelo de embedding e podia reutilizar vetores incompatíveis.
 
     Parameters

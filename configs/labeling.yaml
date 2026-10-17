@@ -4,7 +4,7 @@
 
 # A etapa `labeling` (src/pipelines/labeling.py) gera três bases, relacionadas pelo `id`:
 #   * `tweets_data_huggingface`: TODOS os tweets, rotulados por modelo do Hugging Face
-#     (única fonte que alimenta as etapas seguintes: features, treino, hypothesaes_analysis);
+#     (única fonte que alimenta as etapas seguintes: features, treino, hypotheses);
 #   * `gold_openai` e `gold_UnB-Llama-3.3-70B-Instruct`: a MESMA amostra do corpus,
 #     rotulada por LLMs via API OpenAI-compatível, que fazem o papel de gold sets
 #     (referência) na etapa `comparative_evaluation`.
@@ -18,7 +18,7 @@ prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
 # Rotulador PRIMÁRIO do Hugging Face (src/labeling/huggingface.py), via transformers:
 # XLM-RoBERTa treinado em tweets multilíngues (inclui português), classes
 # negative/neutral/positive. Rotula TODO o corpus e é a única fonte que alimenta as etapas
-# seguintes (features, treino, hypothesaes_analysis). É um encoder de ~278M de parâmetros,
+# seguintes (features, treino, hypotheses). É um encoder de ~278M de parâmetros,
 # roda em CPU ou em qualquer GPU, é determinístico e NÃO usa o `prompt_name`. A confiança é
 # a probabilidade softmax da classe escolhida. Para modelos de acesso restrito, defina
 # SENTIMENTO_HUGGINGFACE_TOKEN no .env. A memória da GPU é liberada a cada lote.
@@ -37,7 +37,7 @@ huggingface:
 # `huggingface`.
 huggingface_secondary:
   model: "pysentimiento/bertweet-pt-sentiment" # https://huggingface.co/pysentimiento/bertweet-pt-sentiment
-  revision: "main" # ATENÇÃO: fixe o SHA do commit do modelo para reprodutibilidade exata
+  revision: "726612815d49447cbfe3f55bbfc2993c1f5fad10" # SHA do commit (reprodutibilidade) # pragma: allowlist secret
   device: "auto"
   dtype: "auto"
   batch_size: 64

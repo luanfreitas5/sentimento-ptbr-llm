@@ -465,7 +465,7 @@ def _build_preprocessing_stage_kwargs(
 def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:
     """Valida e retorna ``configs/llm.yaml -> active_provider``.
 
-    Provedor usado pelo HypotheSAEs (etapa ``hypothesaes_analysis``); a
+    Provedor usado pelo HypotheSAEs (etapa ``hypotheses``); a
     rotulagem dos tweets (etapa ``labeling``) tem configuração própria em
     ``configs/labeling.yaml``.
 

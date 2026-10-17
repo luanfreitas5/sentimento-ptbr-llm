@@ -22,7 +22,7 @@ dados ficam num arquivo ``.meta.json`` ao lado da base.
 A rotulagem é incremental e retomável (``src/labeling/incremental.py``):
 tweets já rotulados são lidos do checkpoint, e uma falha deixa o progresso
 salvo. Depois de rotular, o estágio grava o corpus consumido pelas etapas
-seguintes (``features``, ``hypothesaes_analysis``;
+seguintes (``features``, ``hypotheses``;
 ``paths.labeled_corpus_file``), com o rótulo do modelo do Hugging Face.
 """
 
