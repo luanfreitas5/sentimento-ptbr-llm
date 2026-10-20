@@ -283,7 +283,7 @@ diag-compare:  ## Compara os prompts v1 e v2 no gold (GOLD=gold_openai|gold_unb)
 
 # --- Serviços auxiliares ----------------------------------------------------
 mlflow:  ## Sobe a interface do MLflow para inspecionar os experimentos
-	uv run mlflow ui --backend-store-uri mlruns
+	uv run mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
 
 app:  ## Sobe o dashboard Streamlit de resultados (requer: make install-app)
 	uv run streamlit run app/dashboard.py

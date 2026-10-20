@@ -18,7 +18,7 @@ reproducibility:
 
 experiment:
   name: "sentimento-ptbr-llm"
-  tracking_uri: "mlruns" # sobrescrito por MLFLOW_TRACKING_URI no .env, se definido
+  tracking_uri: "sqlite:///mlruns/mlflow.db" # sobrescrito por MLFLOW_TRACKING_URI no .env, se definido
   registry_stage_default: "Staging"
 
 labels:

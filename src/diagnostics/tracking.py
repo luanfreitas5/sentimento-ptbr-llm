@@ -45,7 +45,10 @@ def configure_mlflow(
     """
     import mlflow
 
-    mlflow.set_tracking_uri(paths.mlflow_tracking_dir.resolve().as_uri())
+    # O backend de arquivos (mlruns/) está em modo de manutenção: usa SQLite.
+    db_path = paths.mlflow_tracking_dir.resolve() / "mlflow.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    mlflow.set_tracking_uri(f"sqlite:///{db_path.as_posix()}")
     mlflow.set_experiment(experiment_name)
 
 

@@ -18,7 +18,7 @@ dashboard:
 
 mlflow_serving:
   enabled: false
-  registry_uri: "mlruns"
+  registry_uri: "sqlite:///mlruns/mlflow.db"
   model_name: "sentimento-ptbr-llm"
   stage: "Production"
 
