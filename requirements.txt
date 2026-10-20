@@ -428,7 +428,7 @@ mlflow==3.17.0
     # via sentimento-ptbr-llm
 mlflow-skinny==3.17.0
     # via mlflow
-mlflow-tracing==3.17.0
+mlflow-tracing==3.17.1
     # via mlflow
 mpmath==1.4.1
     # via sympy
