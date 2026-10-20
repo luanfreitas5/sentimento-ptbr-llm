@@ -4,8 +4,8 @@ As fontes (``huggingface``, ``huggingface_secondary``, ``gold_openai``, ``gold_u
 identificadores internos; nos relatórios o que importa é QUEM rotulou. Este módulo lê os modelos
 configurados em ``configs/labeling.yaml`` e os expõe de duas formas:
 
-* nome de exibição, para tabelas e gráficos, sem o prefixo da organização
-  (ex.: ``twitter-xlm-roberta-base-sentiment-multilingual``);
+* nome de exibição, para tabelas e gráficos: o ``alias`` curto do YAML (ex.: ``XLM-R``) ou, se
+  ausente, o nome do modelo sem o prefixo da organização;
 * ``slug``, seguro para nomes de arquivo e pastas (sem espaços nem caracteres especiais;
   ex.: ``gpt-6-luna``).
 """
@@ -67,6 +67,22 @@ def build_file_slug(name: str) -> str:
     return _UNSAFE_FILE_CHARACTERS.sub("-", name).strip("-")
 
 
+def _read_source_blocks(labeling_config: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    """Blocos de configuração do modelo de cada fonte; levanta ``DataValidationError`` se faltar."""
+    try:
+        return {
+            HUGGINGFACE_SOURCE: labeling_config["huggingface"],
+            HUGGINGFACE_SECONDARY_SOURCE: labeling_config["huggingface_secondary"],
+            "gold_openai": labeling_config["gold_sets"]["openai"],
+            "gold_unb": labeling_config["gold_sets"]["unb"],
+        }
+    except (KeyError, TypeError) as error:
+        raise DataValidationError(
+            schema_name="labeling_config",
+            detail=f"modelo das fontes de rotulagem ausente em labeling.yaml: {error}",
+        ) from error
+
+
 def resolve_source_model_names(labeling_config: Mapping[str, Any]) -> dict[str, str]:
     """Nome do modelo de cada fonte de rotulagem, a partir de ``configs/labeling.yaml``.
 
@@ -78,8 +94,8 @@ def resolve_source_model_names(labeling_config: Mapping[str, Any]) -> dict[str, 
     Returns
     -------
     dict[str, str]
-        Nome de exibição indexado pela fonte (``huggingface``, ``huggingface_secondary``,
-        ``gold_openai`` e ``gold_unb``).
+        ``alias`` (se definido) ou nome do modelo, indexado pela fonte (``huggingface``,
+        ``huggingface_secondary``, ``gold_openai`` e ``gold_unb``).
 
     Raises
     ------
@@ -96,19 +112,54 @@ def resolve_source_model_names(labeling_config: Mapping[str, Any]) -> dict[str, 
     >>> resolve_source_model_names(config)["gold_unb"]
     'd'
     """
+    blocks = _read_source_blocks(labeling_config)
     try:
-        model_ids = {
-            HUGGINGFACE_SOURCE: labeling_config["huggingface"]["model"],
-            HUGGINGFACE_SECONDARY_SOURCE: labeling_config["huggingface_secondary"]["model"],
-            "gold_openai": labeling_config["gold_sets"]["openai"]["model"],
-            "gold_unb": labeling_config["gold_sets"]["unb"]["model"],
+        return {
+            source: block.get("alias") or build_display_name(str(block["model"]))
+            for source, block in blocks.items()
         }
-    except (KeyError, TypeError) as error:
+    except (KeyError, AttributeError) as error:
         raise DataValidationError(
             schema_name="labeling_config",
             detail=f"modelo das fontes de rotulagem ausente em labeling.yaml: {error}",
         ) from error
-    return {source: build_display_name(str(model_id)) for source, model_id in model_ids.items()}
+
+
+def load_source_file_names(config_file: Path | None = None) -> dict[str, str]:
+    """Nome completo (sem apelido) do modelo de cada fonte, para pastas e arquivos.
+
+    Os apelidos servem a tabelas e gráficos; pastas e arquivos mantêm o nome completo para
+    permanecerem estáveis e inequívocos.
+
+    Parameters
+    ----------
+    config_file : Path | None, optional
+        Caminho alternativo do YAML de rotulagem, by default ``configs/labeling.yaml``.
+
+    Returns
+    -------
+    dict[str, str]
+        Nome do modelo sem o prefixo da organização, indexado pela fonte.
+
+    Raises
+    ------
+    DataValidationError
+        Se a configuração não definir o modelo de alguma fonte.
+
+    Examples
+    --------
+    >>> load_source_file_names()["gold_openai"]  # doctest: +SKIP
+    'gpt-6-luna'
+    """
+    path = config_file or CONFIGS_DIR / CONFIG_FILE_NAMES["labeling"]
+    blocks = _read_source_blocks(read_yaml(path))
+    try:
+        return {source: build_display_name(str(block["model"])) for source, block in blocks.items()}
+    except KeyError as error:
+        raise DataValidationError(
+            schema_name="labeling_config",
+            detail=f"modelo das fontes de rotulagem ausente em labeling.yaml: {error}",
+        ) from error
 
 
 def load_source_model_names(config_file: Path | None = None) -> dict[str, str]:

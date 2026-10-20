@@ -71,7 +71,11 @@ from evaluation.reference_agreement import (
 from exceptions.data import DataNotFoundError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
-from labeling.model_names import build_file_slug, load_source_model_names
+from labeling.model_names import (
+    build_file_slug,
+    load_source_file_names,
+    load_source_model_names,
+)
 from visualization.comparison import (
     plot_agreement_by_text_length,
     plot_class_distribution_by_model,
@@ -176,7 +180,8 @@ def build_comparison_subdir(
     prefix : str
         Prefixo configurado (``configs/evaluation.yaml -> llm_comparison.output_subdir``).
     model_names : Mapping[str, str]
-        Nome do modelo de cada fonte (ver :func:`labeling.model_names.load_source_model_names`).
+        Nome do modelo de cada fonte para pastas e arquivos, sem apelido
+        (ver :func:`labeling.model_names.load_source_file_names`).
     reference_name : str
         ``huggingface_secondary``, ``gold_openai`` ou ``gold_unb``.
 
@@ -631,7 +636,11 @@ def run_comparative_evaluation_stage(
         reference_name: run_reference_comparison(
             paths,
             reference_name,
-            output_subdir=build_comparison_subdir(output_subdir, names, reference_name),
+            output_subdir=build_comparison_subdir(
+                output_subdir,
+                load_source_file_names() if model_names is None else names,
+                reference_name,
+            ),
             model_names=names,
             **comparison_kwargs,
         )

@@ -28,7 +28,7 @@ from typing import Any
 from config.paths import ProjectPaths
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.json import write_json
-from labeling.model_names import load_source_model_names
+from labeling.model_names import load_source_file_names
 from pipelines.comparative_evaluation import (
     build_comparison_subdir,
     list_available_gold_names,
@@ -76,7 +76,7 @@ def _run_disagreement_mode(
     """Gera hipóteses sobre a discordância/incerteza entre o Hugging Face e cada gold set."""
     from diagnostics.model_disagreement import run_disagreement_hypotheses
 
-    model_names = load_source_model_names()
+    file_names = load_source_file_names()
     available = list_available_gold_names(paths)
     if not available:
         raise DataNotFoundError(
@@ -85,7 +85,7 @@ def _run_disagreement_mode(
         )
     summary: list[dict[str, Any]] = []
     for gold_name in available:
-        gold_subdir = build_comparison_subdir(output_subdir, model_names, gold_name)
+        gold_subdir = build_comparison_subdir(output_subdir, file_names, gold_name)
         outcomes = run_disagreement_hypotheses(
             load_comparison_frame(paths, gold_name),
             paths,

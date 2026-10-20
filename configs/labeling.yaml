@@ -24,6 +24,7 @@ prompt_name: "labeling_1_rubrica_few-shot_distribuicao_probabilidade"
 # SENTIMENTO_HUGGINGFACE_TOKEN no .env. A memória da GPU é liberada a cada lote.
 huggingface:
   model: "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual" # https://huggingface.co/cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual
+  alias: "XLM-R" # nome curto em tabelas, gráficos e pastas (opcional; padrão: nome do modelo)
   revision: "82107f4ccba672c9ab1eee538e727e462cad21de" # SHA do commit (reprodutibilidade) # pragma: allowlist secret
   device: "auto" # "auto" | "cpu" | "cuda" | "cuda:0" ...
   dtype: "auto" # "auto" | "float16" | "bfloat16" | "float32"
@@ -37,6 +38,7 @@ huggingface:
 # `huggingface`.
 huggingface_secondary:
   model: "pysentimiento/bertweet-pt-sentiment" # https://huggingface.co/pysentimiento/bertweet-pt-sentiment
+  alias: "BERTweet-pt"
   revision: "726612815d49447cbfe3f55bbfc2993c1f5fad10" # SHA do commit (reprodutibilidade) # pragma: allowlist secret
   device: "auto"
   dtype: "auto"
@@ -76,10 +78,12 @@ gold_sets:
   random_state: 42
   openai:
     model: "gpt-6-luna"
+    alias: "GPT-6"
     reasoning_effort: "low" # modelo de raciocínio: sem temperature; usa max_completion_tokens
     max_tokens: 2048 # inclui os tokens de raciocínio, por isso é maior que `openai.max_tokens`
   unb:
     model: "UnB-Llama-3.3-70B-Instruct"
+    alias: "UnB-Llama"
     reasoning_effort: null
     max_tokens: null # null = usa `openai.max_tokens`
 

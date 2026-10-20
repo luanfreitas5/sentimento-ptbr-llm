@@ -28,7 +28,7 @@ from exceptions.pipeline import (
     UnknownPipelineStageError,
 )
 from io_utils.json import read_json
-from labeling.model_names import load_source_model_names
+from labeling.model_names import load_source_file_names, load_source_model_names
 from pipelines import hypothesaes_analysis, training_deep_learning, workflow
 from pipelines.comparative_evaluation import (
     build_comparison_subdir,
@@ -663,7 +663,7 @@ class TestRunComparativeEvaluationStage:
         for gold_name, result in results.items():
             assert set(result.tables) == expected_tables
             assert all(path.is_file() for path in result.tables.values())
-            subdir = build_comparison_subdir("comparativo", load_source_model_names(), gold_name)
+            subdir = build_comparison_subdir("comparativo", load_source_file_names(), gold_name)
             assert result.metrics_path == pipeline_paths.reports_metrics_dir / f"{subdir}.json"
             assert result.metrics_path.is_file()
             assert (pipeline_paths.reports_tables_dir / subdir / "resumo_comparativo.md").is_file()
@@ -691,8 +691,9 @@ class TestRunComparativeEvaluationStage:
         matrix = pl.read_csv(result.tables["matriz_concordancia"])
         assert f"{reference}_positivo" in matrix.columns
         assert result.summary["models"] == {"primary": primary, "reference": reference}
-        assert primary in result.tables["distribuicao_classes"].parent.name
-        assert reference in result.figures[0].parent.name
+        file_names = load_source_file_names()
+        assert file_names["huggingface"] in result.tables["distribuicao_classes"].parent.name
+        assert file_names["gold_unb"] in result.figures[0].parent.name
 
     def test_agreement_metrics_match_the_synthetic_bases(
         self, pipeline_paths: ProjectPaths
@@ -748,7 +749,7 @@ class TestRunComparativeEvaluationStage:
         result = results["huggingface_secondary"]
         assert result.summary["agreement"]["n_tweets"] == 60 + _N_EXTRA_HF_TWEETS
         subdir = build_comparison_subdir(
-            "comparativo", load_source_model_names(), "huggingface_secondary"
+            "comparativo", load_source_file_names(), "huggingface_secondary"
         )
         assert result.metrics_path == pipeline_paths.reports_metrics_dir / f"{subdir}.json"
         assert all(path.is_file() for path in result.tables.values())
@@ -830,7 +831,7 @@ class TestRunHypothesesStage:
         assert captured == {"n_tweets": [60, 60], "targets": ("disagreement",)}
         assert [item["gold"] for item in summary] == ["gold_openai", "gold_unb"]
         assert summary[0]["status"] == "gate_reprovado"
-        subdir = build_comparison_subdir("comparativo", load_source_model_names(), "gold_unb")
+        subdir = build_comparison_subdir("comparativo", load_source_file_names(), "gold_unb")
         written = read_json(pipeline_paths.reports_metrics_dir / f"hipoteses_{subdir}.json")
         assert written[0]["target"] == "disagreement"
 

@@ -73,10 +73,10 @@ update:  ## Atualiza todas as dependências e sincroniza
 	uv lock --upgrade
 	uv sync --all-groups
 
-lock:
+lock:  ## Gera/atualiza o uv.lock
 	uv lock
 
-export:
+export:  ## Exporta requirements.txt (para quem usa pip)
 	uv export --no-hashes -o requirements.txt
 
 # --- Qualidade -------------------------------------------------------------
@@ -104,6 +104,8 @@ modernize:  ## Detecta código redundante (refurb)
 	uv run refurb src
 
 quality: lint typecheck security deadcode complexity docstrings modernize   ## Roda toda a suíte de qualidade (espelha o CI)
+
+check: quality test  ## Roda tudo o que o CI roda (qualidade + testes)
 
 # --- Testes ----------------------------------------------------------------
 test:  ## Roda os testes com cobertura (sem extras: módulos com torch/openai são pulados e o fail_under de 80% pode falhar)
@@ -171,24 +173,24 @@ clean:  ## Remove caches e artefatos temporários
 	rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov coverage.xml site
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
-cache:
+cache:  ## Limpa o cache do uv
 	uv cache clean
 
 # --- Jupyter ----------------------------------------------------------------
-jupyter:
+jupyter:  ## Abre o JupyterLab
 	uv run jupyter lab
 
-notebook:
+notebook:  ## Abre o Jupyter Notebook clássico
 	uv run jupyter notebook
 
 # --- Gerenciamento de pacotes -----------------------------------------------
-add:
+add:  ## Adiciona uma dependência (make add PKG=nome)
 	uv add $(PKG)
 
-remove:
+remove:  ## Remove uma dependência (make remove PKG=nome)
 	uv remove $(PKG)
 
-tree:
+tree:  ## Mostra a árvore de dependências
 	uv tree
 
 # --- Pipeline ---------------------------------------------------------------
