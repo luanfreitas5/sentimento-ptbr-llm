@@ -28,7 +28,7 @@ argon2-cffi-bindings==26.1.0
     # via argon2-cffi
 arrow==1.4.0
     # via isoduration
-ast-serialize==0.12.1
+ast-serialize==0.13.1
     # via mypy
 asttokens==3.0.2
     # via stack-data
