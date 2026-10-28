@@ -424,7 +424,7 @@ mkdocstrings==1.0.7 ; python_full_version >= '3.11'
     # via mkdocstrings-python
 mkdocstrings-python==2.0.9
     # via mkdocstrings
-mlflow==3.17.0
+mlflow==3.17.2
     # via sentimento-ptbr-llm
 mlflow-skinny==3.17.0
     # via mlflow
