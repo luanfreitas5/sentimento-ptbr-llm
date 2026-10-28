@@ -45,7 +45,7 @@ hypotheses:
   max_interpretation_tokens: 200
   n_scoring_examples: 100
   scoring_metric: f1
-  n_workers: 8 4                      # threads da interpretação
+  n_workers: 4                        # threads da interpretação
   n_workers_annotation: 8            # threads da anotação/pontuação (limitado por llm.max_concurrency)
   task_specific_instructions: |
     Os textos são tweets em português do Brasil sobre sentimento (positivo, neutro, negativo).
