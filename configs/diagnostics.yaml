@@ -45,8 +45,8 @@ hypotheses:
   max_interpretation_tokens: 200
   n_scoring_examples: 100
   scoring_metric: f1
-  n_workers: 8                        # threads da interpretação
-  n_workers_annotation: 64            # threads da anotação/pontuação (limitado por llm.max_concurrency)
+  n_workers: 8 4                      # threads da interpretação
+  n_workers_annotation: 8            # threads da anotação/pontuação (limitado por llm.max_concurrency)
   task_specific_instructions: |
     Os textos são tweets em português do Brasil sobre sentimento (positivo, neutro, negativo).
     Gere hipóteses ESPECÍFICAS e verificáveis (evite "expressa emoção" ou "fala de algo").
@@ -60,16 +60,16 @@ llm:
   # via OPENAI_BASE_URL/OPENAI_KEY no .env) ou "ollama" (local).
   # Pode ser sobrescrito na CLI com --llm-provider.
   provider: ollama # "openai" ou "ollama"
-  ollama_base_url: http://localhost:11434
+  ollama_base_url: http://localhost:11435   # túnel: ssh -L 11435:localhost:11434 usuario@pc-remoto
   openai_base_url: null               # null = usa OPENAI_BASE_URL do .env (endpoint UnB)
   # Um modelo por provedor e papel; vale o do `provider` ativo.
   interpreter_model_openai: UnB-Llama-3.3-70B-Instruct
   annotator_model_openai: UnB-Llama-3.3-70B-Instruct
   # ATENÇÃO: llama3.2:1b NÃO segue o formato de anotação (smoke test: 0/6 respostas parseáveis).
-  interpreter_model_ollama: gemma2:9b
-  annotator_model_ollama: gemma2:9b
-  max_concurrency: 64                 # limite de requisições simultâneas (semáforo)
-  request_timeout_seconds: 120
+  interpreter_model_ollama: qwen3:30b-a3b-instruct-2507
+  annotator_model_ollama: qwen3:30b-a3b-instruct-2507
+  max_concurrency: 8                 # limite de requisições simultâneas (semáforo)
+  request_timeout_seconds: 300
   max_retries: 3
   # Anti-429 (só provedor "openai"/UnB): sem teto fixo (null) as threads disparam em paralelo;
   # ao receber 429 há pausa global (Retry-After) e o ritmo cai sozinho (AIMD), voltando após sucessos.

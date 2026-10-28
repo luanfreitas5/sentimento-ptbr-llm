@@ -124,14 +124,14 @@ constraint-dependencies = ["gitpython>=3.1.58", "numba>=0.57.1"]
 # no pip-audit até que exista uma versão corrigida.
 
 [[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
-torchaudio = { index = "pytorch-cu128" }
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+torchaudio = { index = "pytorch-cu126" }
 
 # --- Extras opcionais (ative por projeto: uv sync --extra name, etc.) -------
 [project.optional-dependencies]
