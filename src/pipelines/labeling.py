@@ -49,6 +49,7 @@ from io_utils.csv import write_csv
 from io_utils.json import write_json
 from labeling.checkpoint import build_checkpoint_path
 from labeling.confidence import flag_low_confidence_predictions
+from labeling.extra_sources import build_extra_source_path, is_extra_source
 from labeling.incremental import BatchClassifier, run_incremental_labeling
 from labeling.manual import apply_human_validation_labels, select_samples_for_human_validation
 from labeling.validation import evaluate_against_gold_set
@@ -116,12 +117,14 @@ def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
     paths : ProjectPaths
         Caminhos resolvidos do projeto.
     source_name : str
-        ``huggingface``, ``gold_openai`` ou ``gold_unb``.
+        ``huggingface``, ``huggingface_secondary``, ``huggingface_extra:<modelo>``,
+        ``gold_openai`` ou ``gold_unb``.
 
     Returns
     -------
     Path
-        ``paths.huggingface_labeled_file``, ``paths.gold_openai_file`` ou
+        ``paths.huggingface_labeled_file``, ``paths.huggingface_secondary_file``,
+        ``data/gold/tweets_data_<modelo>.parquet``, ``paths.gold_openai_file`` ou
         ``paths.gold_unb_file``.
 
     Raises
@@ -142,6 +145,8 @@ def resolve_labeled_source_path(paths: ProjectPaths, source_name: str) -> Path:
     }
     if source_name in known_paths:
         return known_paths[source_name]
+    if is_extra_source(source_name):
+        return build_extra_source_path(paths, source_name)
     raise InvalidConfigurationError(
         f"fonte de rotulagem desconhecida: '{source_name}'. Válidas: {list(LABEL_SOURCE_NAMES)}"
     )

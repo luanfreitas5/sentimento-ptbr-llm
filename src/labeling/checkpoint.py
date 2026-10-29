@@ -54,7 +54,8 @@ def build_checkpoint_path(
     True
     """
     fingerprint = calculate_text_hash(f"{model_name}|{temperature}|{prompt_template}")
-    return directory / f"{source_name}_{fingerprint[:_FINGERPRINT_LENGTH]}.jsonl"
+    safe_name = source_name.replace(":", "_")
+    return directory / f"{safe_name}_{fingerprint[:_FINGERPRINT_LENGTH]}.jsonl"
 
 
 def read_labeling_checkpoint(checkpoint_path: Path) -> dict[str, tuple[str, float]]:

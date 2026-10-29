@@ -27,7 +27,7 @@ from exceptions.pipeline import (
     PipelineStageError,
     UnknownPipelineStageError,
 )
-from io_utils.json import read_json
+from io_utils.json import read_json, write_json
 from labeling.model_names import load_source_file_names, load_source_model_names
 from pipelines import hypothesaes_analysis, training_deep_learning, workflow
 from pipelines.comparative_evaluation import (
@@ -766,8 +766,40 @@ class TestRunComparativeEvaluationStage:
 
         results = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
 
-        assert set(results) == {"huggingface_secondary", "gold_openai", "gold_unb"}
+        assert set(results) == {
+            "huggingface_secondary",
+            "gold_openai",
+            "gold_unb",
+            "huggingface_secondary_vs_gold_openai",
+            "huggingface_secondary_vs_gold_unb",
+        }
         assert results["huggingface_secondary"].summary["agreement"]["n_tweets"] == 60
+
+    def test_compares_every_extra_huggingface_model_with_the_primary_and_the_gold_sets(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Bases ``tweets_data_<modelo>.parquet`` entram como modelos do Hugging Face."""
+        _write_comparison_bases(pipeline_paths)
+        hf_ids = [str(index) for index in range(60 + _N_EXTRA_HF_TWEETS)]
+        extra_path = pipeline_paths.data_gold_dir / "tweets_data_FinBERT-PT-BR.parquet"
+        _write_labeled_base(extra_path, hf_ids, _LABEL_CYCLE_GOLD, -0.1)
+        write_json({"model": "lucas-leme/FinBERT-PT-BR"}, extra_path.with_suffix(".meta.json"))
+        source = "huggingface_extra:FinBERT-PT-BR"
+
+        results = run_comparative_evaluation_stage(pipeline_paths, n_bootstrap=30)
+
+        assert set(results) == {
+            source,
+            "gold_openai",
+            "gold_unb",
+            f"{source}_vs_gold_openai",
+            f"{source}_vs_gold_unb",
+        }
+        vs_gold = results[f"{source}_vs_gold_unb"]
+        assert vs_gold.summary["models"]["primary"] == "FinBERT-PT-BR"
+        assert vs_gold.summary["agreement"]["n_tweets"] == 60
+        assert vs_gold.metrics_path.name.startswith("comparativo_FinBERT-PT-BR_vs_")
+        assert results[source].summary["agreement"]["n_tweets"] == 60
 
     def test_raises_with_guidance_when_no_gold_set_exists(
         self, pipeline_paths: ProjectPaths

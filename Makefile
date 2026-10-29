@@ -13,7 +13,7 @@ export PYTHONHASHSEED := 42
 	lint typecheck security deadcode complexity docstrings modernize quality \
 	test test-ci install-ci smoke test-all coverage hooks pre-commit update-hooks release docs docs-serve docs-deploy profile clean cache jupyter notebook add remove tree \
 	clean-gold clean-reports clean-outputs clean-notebooks \
-	ingest preprocess label label-hf label-hf-secondary label-openai compare consensus hypotheses features \
+	ingest preprocess label label-hf label-hf-secondary label-hf-extra label-openai compare consensus hypotheses features \
 	classical deep transformer llm evaluate report all \
 	patterns diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
 	mlflow app \
@@ -55,7 +55,7 @@ nltk-data:  ## Baixa o corpus de stopwords do nltk (enriquece a lista curada em 
 	uv run python -m nltk.downloader stopwords
 
 ollama:  ## Baixa o modelo llama3.2 para uso local via Ollama (requer: make install-hypothesaes)
-	uv run ollama pull llama3.2
+	ollama pull llama3.2:1b
 
 install-viz:  ## Instala os extras de visualização (wordcloud, networkx, umap-learn)
 	uv sync --extra viz --dev
@@ -214,6 +214,9 @@ label-hf:  ## [3] Rotula TODOS os tweets com o modelo do Hugging Face (base twee
 
 label-hf-secondary:  ## [3] Rotula todo o corpus com o 2º modelo do Hugging Face (pysentimiento; retoma do checkpoint)
 	$(RUN) --stage labeling --label-source huggingface_secondary
+
+label-hf-extra:  ## [3] Rotula todo o corpus com os modelos adicionais do Hugging Face (labeling.yaml -> huggingface_extra; retoma do checkpoint)
+	$(RUN) --stage labeling --label-source huggingface_extra
 
 label-gold-openai:  ## [3] Gold set da amostra via API com gpt-6-luna, effort low (requer OPENAI_BASE_URL/OPENAI_KEY no .env; retoma do checkpoint)
 	$(RUN) --stage labeling --label-source gold_openai

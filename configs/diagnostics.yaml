@@ -66,8 +66,8 @@ llm:
   interpreter_model_openai: UnB-Llama-3.3-70B-Instruct
   annotator_model_openai: UnB-Llama-3.3-70B-Instruct
   # ATENÇÃO: llama3.2:1b NÃO segue o formato de anotação (smoke test: 0/6 respostas parseáveis).
-  interpreter_model_ollama: qwen3:30b-a3b-instruct-2507
-  annotator_model_ollama: qwen3:30b-a3b-instruct-2507
+  interpreter_model_ollama: llama3.2:1b
+  annotator_model_ollama: llama3.2:1b
   max_concurrency: 8                 # limite de requisições simultâneas (semáforo)
   request_timeout_seconds: 300
   max_retries: 3

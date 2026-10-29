@@ -12,6 +12,9 @@ Modules
 huggingface
     Rotulagem via classificador de sentimento local do Hugging Face Hub (base
     ``tweets_data_huggingface``, ver ``configs/labeling.yaml -> huggingface``).
+extra_sources
+    Descoberta das bases ``tweets_data_<modelo>.parquet`` de modelos adicionais do Hugging
+    Face em ``data/gold`` (somente leitura), comparadas na etapa ``comparative_evaluation``.
 openai_labeler
     Rotulagem via API OpenAI-compatível (Chat Completions), com limitador de taxa
     contra HTTP 429, timeout e retentativa; resposta inutilizável vira ``indefinido``

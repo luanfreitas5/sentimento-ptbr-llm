@@ -51,6 +51,14 @@ _MODEL_LABEL_TO_PROJECT_LABEL: dict[str, str] = {
     "pos": POSITIVE_LABEL,
     "positive": POSITIVE_LABEL,
     "positivo": POSITIVE_LABEL,
+    # modelos de 5 classes (escala de estrelas ou "muito"): várias saídas por classe do projeto
+    "very negative": NEGATIVE_LABEL,
+    "1 star": NEGATIVE_LABEL,
+    "2 stars": NEGATIVE_LABEL,
+    "3 stars": NEUTRAL_LABEL,
+    "4 stars": POSITIVE_LABEL,
+    "5 stars": POSITIVE_LABEL,
+    "very positive": POSITIVE_LABEL,
 }
 
 
@@ -70,7 +78,8 @@ class HuggingFaceModel:
         Nome do modelo no Hugging Face Hub.
     class_labels : list[str]
         Classe do projeto (``negativo``/``neutro``/``positivo``) de cada saída
-        (logit) do modelo, na ordem dos índices do modelo.
+        (logit) do modelo, na ordem dos índices do modelo. Em modelos de cinco classes a
+        probabilidade da classe do projeto é a soma das saídas que a compartilham.
     """
 
     model: Any
@@ -131,7 +140,8 @@ def _map_model_labels(id2label: dict[int, str], model_name: str) -> list[str]:
     Returns
     -------
     list[str]
-        Classe do projeto para cada índice de saída do modelo.
+        Classe do projeto para cada índice de saída do modelo; modelos de cinco classes
+        (ex.: estrelas) repetem a classe do projeto em mais de uma saída.
 
     Raises
     ------
@@ -153,9 +163,9 @@ def _map_model_labels(id2label: dict[int, str], model_name: str) -> list[str]:
                 f"a negativo/neutro/positivo; id2label={id2label}"
             )
         class_labels.append(project_label)
-    if sorted(class_labels) != sorted([NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL]):
+    if set(class_labels) != {NEGATIVE_LABEL, NEUTRAL_LABEL, POSITIVE_LABEL}:
         raise ModelError(
-            f"O modelo '{model_name}' deve ter exatamente as classes negativo/neutro/positivo; "
+            f"O modelo '{model_name}' deve ter as classes negativo, neutro e positivo; "
             f"recebido: {class_labels}"
         )
     return class_labels
@@ -355,8 +365,11 @@ def create_huggingface_batch_classifier(
         release_gpu_memory()
         results: list[LabelPrediction | None] = []
         for text_probabilities in probabilities:
-            best_index = max(range(len(text_probabilities)), key=text_probabilities.__getitem__)
-            results.append((hf_model.class_labels[best_index], text_probabilities[best_index]))
+            class_probabilities: dict[str, float] = {}
+            for label, probability in zip(hf_model.class_labels, text_probabilities, strict=True):
+                class_probabilities[label] = class_probabilities.get(label, 0.0) + probability
+            best_label = max(class_probabilities, key=class_probabilities.__getitem__)
+            results.append((best_label, class_probabilities[best_label]))
         return results
 
     return classify_batch

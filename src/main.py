@@ -53,6 +53,7 @@ from exceptions.configuration import InvalidConfigurationError
 from hypothesaes.llm_api import LLM_PROVIDER_NAMES
 from hypothesaes.utils import load_prompt_template
 from io_utils.yaml import read_yaml
+from labeling.extra_sources import EXTRA_SOURCE_PREFIX, read_extra_model_configs
 from labeling.huggingface import open_huggingface_classifier
 from labeling.openai_labeler import create_openai_batch_classifier
 from models.persistence import load_classifier
@@ -71,6 +72,7 @@ logger = logging.getLogger(__name__)
 _ALL_STAGES_OPTION = "all"
 _STAGE_CHOICES: tuple[str, ...] = (*STAGE_REGISTRY, _ALL_STAGES_OPTION)
 _ALL_SOURCES_OPTION = "all"
+_EXTRA_SOURCES_OPTION = "huggingface_extra"
 _LOG_LEVEL_CHOICES: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 # Mapeia cada modelo de deep learning/Transformer para a seção/subseção
@@ -168,13 +170,14 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--label-source",
         default=_ALL_SOURCES_OPTION,
-        choices=[*LABEL_SOURCE_NAMES, _ALL_SOURCES_OPTION],
+        type=_parse_label_source,
         help=(
             "Fonte(s) de rotulagem da etapa `labeling`: `huggingface` (modelo do Hugging Face, "
-            "todos os tweets), `huggingface_secondary` (segundo modelo do Hugging Face, só na "
-            "amostra dos gold sets), `gold_openai` (gpt-6-luna) e `gold_unb` "
-            "(UnB-Llama-3.3-70B-Instruct) — gold sets via API, sobre uma amostra do corpus — "
-            "ou `all` (as quatro, em sequência)."
+            "todos os tweets), `huggingface_secondary` (segundo modelo do Hugging Face, todos "
+            "os tweets), `huggingface_extra` (todos os modelos adicionais de "
+            "`labeling.yaml -> huggingface_extra`) ou `huggingface_extra:<modelo>` (um só), "
+            "`gold_openai` (gpt-6-luna) e `gold_unb` (UnB-Llama-3.3-70B-Instruct) — gold sets "
+            "via API, sobre uma amostra do corpus — ou `all` (todas, em sequência)."
         ),
     )
     parser.add_argument(
@@ -493,17 +496,29 @@ def _resolve_active_llm_provider(llm_config: dict[str, Any]) -> str:
     return provider
 
 
+def _parse_label_source(value: str) -> str:
+    """Valida ``--label-source``: fonte conhecida, ``huggingface_extra[:<modelo>]`` ou ``all``."""
+    valid = (*LABEL_SOURCE_NAMES, _EXTRA_SOURCES_OPTION, _ALL_SOURCES_OPTION)
+    if value in valid or value.startswith(EXTRA_SOURCE_PREFIX):
+        return value
+    raise argparse.ArgumentTypeError(
+        f"fonte inválida: '{value}' (escolha entre {', '.join(valid)} ou "
+        f"{EXTRA_SOURCE_PREFIX}<modelo>)"
+    )
+
+
 def _build_huggingface_source(
     labeling_config: dict[str, Any],
     settings: Settings,
     source_name: str = HUGGINGFACE_SOURCE,
+    hf_config: dict[str, Any] | None = None,
 ) -> LabelingSource:
     """Monta uma fonte do Hugging Face, carregada só quando executada.
 
     ``huggingface`` (primário) e ``huggingface_secondary`` rotulam todos os tweets; só o primário
     alimenta as etapas seguintes, e o consenso restringe ambos à amostra dos gold sets.
     """
-    hf_config = labeling_config[source_name]
+    hf_config = hf_config if hf_config is not None else labeling_config[source_name]
     gold_config = labeling_config["gold_sets"]
     return LabelingSource(
         name=source_name,
@@ -597,16 +612,40 @@ def _build_labeling_sources(
     Returns
     -------
     list[LabelingSource]
-        Fontes a executar, na ordem ``huggingface`` -> ``huggingface_secondary`` -> ``gold_openai``
-        -> ``gold_unb``.
+        Fontes a executar, na ordem ``huggingface`` -> ``huggingface_secondary`` -> modelos
+        adicionais -> ``gold_openai`` -> ``gold_unb``.
+
+    Raises
+    ------
+    InvalidConfigurationError
+        Se ``--label-source`` pedir um modelo adicional ausente de ``labeling.yaml``.
     """
-    requested = (
-        LABEL_SOURCE_NAMES if args.label_source == _ALL_SOURCES_OPTION else (args.label_source,)
-    )
+    extra_configs = read_extra_model_configs(labeling_config)
+    if args.label_source == _ALL_SOURCES_OPTION:
+        requested = (*LABEL_SOURCE_NAMES, *extra_configs)
+    elif args.label_source == _EXTRA_SOURCES_OPTION:
+        requested = tuple(extra_configs)
+    else:
+        requested = (args.label_source,)
+    unknown = [
+        name
+        for name in requested
+        if name.startswith(EXTRA_SOURCE_PREFIX) and name not in extra_configs
+    ]
+    if unknown:
+        raise InvalidConfigurationError(
+            f"modelo adicional ausente de labeling.yaml -> huggingface_extra: {unknown}; "
+            f"configurados: {list(extra_configs)}"
+        )
     sources: list[LabelingSource] = []
     sources.extend(
         _build_huggingface_source(labeling_config, settings, name)
         for name in (HUGGINGFACE_SOURCE, HUGGINGFACE_SECONDARY_SOURCE)
+        if name in requested
+    )
+    sources.extend(
+        _build_huggingface_source(labeling_config, settings, name, extra_configs[name])
+        for name in extra_configs
         if name in requested
     )
     sources.extend(

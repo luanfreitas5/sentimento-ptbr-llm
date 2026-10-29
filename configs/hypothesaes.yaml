@@ -49,7 +49,7 @@ llm:
   interpreter_model_openai: "UnB-Llama-3.3-70B-Instruct"
   interpreter_model_ollama: "llama3.2:1b"
   annotator_model_openai: "UnB-Llama-3.3-70B-Instruct"
-  annotator_model_ollama: "gemma2:9b"
+  annotator_model_ollama: "llama3.2:1b"
   n_examples_for_interpretation: 12
   max_words_per_example: 60
   max_interpretation_tokens: 200

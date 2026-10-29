@@ -11,6 +11,7 @@ import pytest
 
 from config.paths import load_project_paths
 from config.settings import create_settings, load_general_config
+from exceptions.configuration import InvalidConfigurationError
 from main import (
     _STAGE_KWARGS_BUILDERS,
     _build_comparative_evaluation_stage_kwargs,
@@ -67,15 +68,14 @@ class TestBuildLabelingStageKwargs:
     """Testes de :func:`main._build_labeling_stage_kwargs`."""
 
     def test_builds_all_sources_by_default_in_order(self) -> None:
-        """Sem ``--label-source``, as quatro fontes são montadas (Hugging Face antes dos gold)."""
+        """Sem ``--label-source``, todas as fontes são montadas (Hugging Face antes dos gold)."""
         kwargs = _build_kwargs(_build_labeling_stage_kwargs, ["--stage", "labeling"])
 
-        assert [source.name for source in kwargs["sources"]] == [
-            "huggingface",
-            "huggingface_secondary",
-            "gold_openai",
-            "gold_unb",
-        ]
+        names = [source.name for source in kwargs["sources"]]
+        assert names[:2] == ["huggingface", "huggingface_secondary"]
+        assert names[-2:] == ["gold_openai", "gold_unb"]
+        assert len(names) > 4
+        assert all(name.startswith("huggingface_extra:") for name in names[2:-2])
         assert "downstream_source" not in kwargs
         assert kwargs["low_confidence_threshold"] == 0.5
 
@@ -86,6 +86,35 @@ class TestBuildLabelingStageKwargs:
             _build_labeling_stage_kwargs, ["--stage", "labeling", "--label-source", source_name]
         )
         assert [source.name for source in kwargs["sources"]] == [source_name]
+
+    def test_label_source_huggingface_extra_selects_every_additional_model(self) -> None:
+        """``huggingface_extra`` monta só os modelos adicionais de ``labeling.yaml``."""
+        kwargs = _build_kwargs(
+            _build_labeling_stage_kwargs,
+            ["--stage", "labeling", "--label-source", "huggingface_extra"],
+        )
+
+        sources = kwargs["sources"]
+        assert sources
+        assert all(source.name.startswith("huggingface_extra:") for source in sources)
+        assert all(
+            source.sample_size is None and source.prompt_template == "" for source in sources
+        )
+        assert all("@" in source.model_name for source in sources)  # revisão fixada
+
+    def test_label_source_accepts_a_single_additional_model(self) -> None:
+        """``huggingface_extra:<modelo>`` roda só aquele modelo; um desconhecido é recusado."""
+        kwargs = _build_kwargs(
+            _build_labeling_stage_kwargs,
+            ["--stage", "labeling", "--label-source", "huggingface_extra:FinBERT-PT-BR"],
+        )
+        assert [source.name for source in kwargs["sources"]] == ["huggingface_extra:FinBERT-PT-BR"]
+
+        with pytest.raises(InvalidConfigurationError, match=r"ausente de labeling\.yaml"):
+            _build_kwargs(
+                _build_labeling_stage_kwargs,
+                ["--stage", "labeling", "--label-source", "huggingface_extra:inexistente"],
+            )
 
     def test_sources_use_models_and_prompt_from_config(self) -> None:
         """Modelos e prompt vêm de ``configs/labeling.yaml``; só os gold sets usam o prompt."""

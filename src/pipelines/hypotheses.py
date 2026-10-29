@@ -6,8 +6,9 @@ descreve padrões associados a um alvo derivado. Hipóteses sobre pseudo-rótulo
 descrevem o comportamento dos modelos, nunca a verdade; só o gold set mede
 acerto. Três modos, selecionados por ``mode``:
 
-* ``disagreement`` (padrão): alvos de discordância/incerteza entre o modelo do
-  Hugging Face e cada gold set (``gold_openai``/``gold_unb``)
+* ``disagreement`` (padrão): alvos de discordância/incerteza entre cada modelo do
+  Hugging Face (primário, secundário e adicionais) e cada gold set
+  (``gold_openai``/``gold_unb``)
   (:func:`diagnostics.model_disagreement.run_disagreement_hypotheses`);
 * ``patterns``: descoberta de padrões e candidatos a inconsistência de
   rotulagem nos rótulos de baixa confiança
@@ -28,10 +29,12 @@ from typing import Any
 from config.paths import ProjectPaths
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.json import write_json
+from labeling.extra_sources import load_extra_model_names
 from labeling.model_names import load_source_file_names
 from pipelines.comparative_evaluation import (
     build_comparison_subdir,
     list_available_gold_names,
+    list_available_model_names,
     load_comparison_frame,
 )
 from pipelines.diagnostics_analysis import run_diagnostics_stage
@@ -73,10 +76,10 @@ def _run_disagreement_mode(
     random_seed: int,
     track: bool,
 ) -> list[dict[str, Any]]:
-    """Gera hipóteses sobre a discordância/incerteza entre o Hugging Face e cada gold set."""
+    """Gera hipóteses sobre a discordância/incerteza de cada modelo do Hugging Face e gold set."""
     from diagnostics.model_disagreement import run_disagreement_hypotheses
 
-    file_names = load_source_file_names()
+    file_names = {**load_extra_model_names(paths), **load_source_file_names()}
     available = list_available_gold_names(paths)
     if not available:
         raise DataNotFoundError(
@@ -84,29 +87,33 @@ def _run_disagreement_mode(
             "`make label-gold-unb`"
         )
     summary: list[dict[str, Any]] = []
-    for gold_name in available:
-        gold_subdir = build_comparison_subdir(output_subdir, file_names, gold_name)
-        outcomes = run_disagreement_hypotheses(
-            load_comparison_frame(paths, gold_name),
-            paths,
-            output_dir=paths.reports_tables_dir / gold_subdir,
-            targets=targets,
-            top_tweets_per_hypothesis=top_tweets_per_hypothesis,
-            config_file=config_file,
-            random_seed=random_seed,
-            track=track,
-        )
-        gold_summary = [{"gold": gold_name} | _summarize_outcome(o) for o in outcomes]
-        write_json(gold_summary, paths.reports_metrics_dir / f"hipoteses_{gold_subdir}.json")
-        for item in gold_summary:
-            logger.info(
-                "Hipóteses '%s' (%s): %s — %s.",
-                item["target"],
-                gold_name,
-                item["status"],
-                item["detail"],
+    for model_name in list_available_model_names(paths):
+        for gold_name in available:
+            pair_subdir = build_comparison_subdir(output_subdir, file_names, gold_name, model_name)
+            outcomes = run_disagreement_hypotheses(
+                load_comparison_frame(paths, gold_name, model_name),
+                paths,
+                output_dir=paths.reports_tables_dir / pair_subdir,
+                targets=targets,
+                top_tweets_per_hypothesis=top_tweets_per_hypothesis,
+                config_file=config_file,
+                random_seed=random_seed,
+                track=track,
             )
-        summary.extend(gold_summary)
+            pair_summary = [
+                {"model": model_name, "gold": gold_name} | _summarize_outcome(o) for o in outcomes
+            ]
+            write_json(pair_summary, paths.reports_metrics_dir / f"hipoteses_{pair_subdir}.json")
+            for item in pair_summary:
+                logger.info(
+                    "Hipóteses '%s' (%s × %s): %s — %s.",
+                    item["target"],
+                    model_name,
+                    gold_name,
+                    item["status"],
+                    item["detail"],
+                )
+            summary.extend(pair_summary)
     return summary
 
 

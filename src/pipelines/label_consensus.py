@@ -1,9 +1,10 @@
 """Consenso de rotulagem entre os modelos do Hugging Face e os gold sets.
 
 Implementa o estágio ``label_consensus`` de ``configs/config.yaml -> stages``. A etapa lê as
-bases rotuladas já geradas pela etapa ``labeling`` — ``tweets_data_huggingface`` e
-``tweets_data_huggingface_secondary`` (ambas sobre todo o corpus, restritas à amostra quando há
-gold set), ``gold_openai`` e ``gold_unb`` — e, sobre os MESMOS tweets:
+bases rotuladas já geradas pela etapa ``labeling`` — ``tweets_data_huggingface``,
+``tweets_data_huggingface_secondary`` e os modelos adicionais ``tweets_data_<modelo>``
+(todas sobre todo o corpus, restritas à amostra quando há gold set), ``gold_openai`` e
+``gold_unb`` — e, sobre os MESMOS tweets:
 
 1. une as bases pelo ``id`` e valida os contratos de dados;
 2. conta os votos por classe de cada tweet e define a classe e o nível de consenso
@@ -40,6 +41,7 @@ from evaluation.label_consensus import (
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
+from labeling.extra_sources import load_extra_model_names, map_extra_source_paths
 from labeling.model_names import load_source_model_names
 from visualization.consensus import plot_consensus_by_class, plot_pairwise_kappa_heatmap
 from visualization.theme import apply_project_theme, save_figure
@@ -80,6 +82,7 @@ def _resolve_source_paths(paths: ProjectPaths) -> dict[str, Path]:
     return {
         HUGGINGFACE_SOURCE: paths.huggingface_labeled_file,
         HUGGINGFACE_SECONDARY_SOURCE: paths.huggingface_secondary_file,
+        **map_extra_source_paths(paths),
         "gold_openai": paths.gold_openai_file,
         "gold_unb": paths.gold_unb_file,
     }
@@ -88,10 +91,10 @@ def _resolve_source_paths(paths: ProjectPaths) -> dict[str, Path]:
 def load_consensus_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
     """Lê as bases rotuladas disponíveis; os modelos do Hugging Face são restritos à amostra gold.
 
-    Os dois modelos do Hugging Face cobrem todo o corpus, enquanto os gold sets cobrem só a
-    amostra. Havendo gold set, as bases do Hugging Face são filtradas para os ``id`` do primeiro
-    gold encontrado, para que todos os rotuladores avaliem os MESMOS tweets; sem gold set, a
-    análise cobre o corpus inteiro (apenas os dois modelos do Hugging Face).
+    Os modelos do Hugging Face (primário, secundário e adicionais) cobrem todo o corpus, enquanto
+    os gold sets cobrem só a amostra. Havendo gold set, as bases do Hugging Face são filtradas
+    para os ``id`` do primeiro gold encontrado, para que todos os rotuladores avaliem os MESMOS
+    tweets; sem gold set, a análise cobre o corpus inteiro (apenas os modelos do Hugging Face).
 
     Parameters
     ----------
@@ -124,8 +127,8 @@ def load_consensus_sources(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
         )
     gold_names = [name for name in available if name in GOLD_SOURCE_NAMES]
     if gold_names:
-        for name in (HUGGINGFACE_SOURCE, HUGGINGFACE_SECONDARY_SOURCE):
-            if name in available:
+        for name in available:
+            if name not in GOLD_SOURCE_NAMES:
                 available[name] = _restrict_to_sample(
                     available[name], available[gold_names[0]], gold_names[0], name
                 )
@@ -267,7 +270,10 @@ def run_label_consensus_stage(
     --------
     >>> run_label_consensus_stage(paths)  # doctest: +SKIP
     """
-    names = model_names if model_names is not None else load_source_model_names()
+    names = {
+        **load_extra_model_names(paths),
+        **(model_names if model_names is not None else load_source_model_names()),
+    }
     sources = {names[source]: base for source, base in load_consensus_sources(paths).items()}
     source_names = list(sources)
     frame = build_consensus_frame(sources)

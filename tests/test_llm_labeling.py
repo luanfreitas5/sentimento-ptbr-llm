@@ -765,8 +765,38 @@ class TestHuggingFaceLabeler:
 
     def test_map_model_labels_rejects_missing_class(self) -> None:
         """Um modelo binário (sem neutro) é recusado: o projeto exige as três classes."""
-        with pytest.raises(ModelError, match="exatamente"):
+        with pytest.raises(ModelError, match="deve ter as classes"):
             _map_model_labels({0: "NEG", 1: "POS"}, "m")
+
+    def test_map_model_labels_accepts_five_class_star_models(self) -> None:
+        """Modelos de estrelas repetem a classe do projeto em mais de uma saída."""
+        id2label = {0: "1 star", 1: "2 stars", 2: "3 stars", 3: "4 stars", 4: "5 stars"}
+
+        assert _map_model_labels(id2label, "m") == [
+            "negativo",
+            "negativo",
+            "neutro",
+            "positivo",
+            "positivo",
+        ]
+
+    def test_classifier_sums_probabilities_of_outputs_sharing_a_class(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Em cinco classes, a confiança é a soma das saídas da classe vencedora."""
+        hf_model = _build_fake_model()
+        hf_model.class_labels = ["negativo", "negativo", "neutro", "positivo", "positivo"]
+        monkeypatch.setattr(
+            huggingface,
+            "_predict_probabilities",
+            lambda *args, **kwargs: [[0.25, 0.25, 0.3, 0.1, 0.1]],
+        )
+        monkeypatch.setattr(huggingface, "release_gpu_memory", lambda: True)
+
+        label, confidence = huggingface.create_huggingface_batch_classifier(hf_model)(["x"])[0]
+
+        assert label == "negativo"
+        assert confidence == pytest.approx(0.5)
 
     def test_classifier_picks_argmax_class_with_its_probability(
         self, monkeypatch: pytest.MonkeyPatch

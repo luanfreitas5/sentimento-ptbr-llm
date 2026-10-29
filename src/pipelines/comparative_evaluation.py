@@ -2,15 +2,17 @@
 
 Implementa o estágio ``comparative_evaluation`` de ``configs/config.yaml ->
 stages``. Assim como em ``label_consensus``, a etapa roda com o que estiver
-disponível: compara ``tweets_data_huggingface`` (modelo primário) com cada base
-de referência já gerada — o segundo modelo do Hugging Face
-(``huggingface_secondary``) e/ou os gold sets (``gold_openai`` e ``gold_unb``) —,
-com ou sem gold set. Executada diretamente (``make compare``), faz sozinha, para
-cada referência, todo o fluxo, sem passos manuais intermediários:
+disponível, tratando os modelos do Hugging Face como uma lista: o primário
+(``tweets_data_huggingface``), o secundário (``huggingface_secondary``) e os modelos
+adicionais (``tweets_data_<modelo>.parquet`` em ``data/gold``, ver
+:mod:`labeling.extra_sources`). Cada modelo é comparado com cada gold set
+(``gold_openai`` e ``gold_unb``) e o primário também com cada um dos demais modelos do
+Hugging Face, com ou sem gold set. Executada diretamente (``make compare``), faz
+sozinha, para cada par, todo o fluxo, sem passos manuais intermediários:
 
-1. carrega ``tweets_data_huggingface`` e a referência; havendo gold set, as bases
-   do Hugging Face são restritas aos tweets da amostra do gold set, e sem gold
-   set a comparação entre os dois modelos do Hugging Face cobre o corpus inteiro;
+1. carrega as duas bases do par; havendo gold set, as bases do Hugging Face são
+   restritas aos tweets da amostra do gold set, e sem gold set a comparação entre
+   modelos do Hugging Face cobre o corpus inteiro;
 2. valida os contratos de dados e une as bases pelo ``id`` do tweet (as duas
    precisam conter exatamente os mesmos tweets);
 3. calcula concordância (com IC por bootstrap), Kappa de Cohen (simples e
@@ -71,6 +73,11 @@ from evaluation.reference_agreement import (
 from exceptions.data import DataNotFoundError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
+from labeling.extra_sources import (
+    is_extra_source,
+    load_extra_model_names,
+    map_extra_source_paths,
+)
 from labeling.model_names import (
     build_file_slug,
     load_source_file_names,
@@ -152,9 +159,16 @@ def resolve_gold_path(paths: ProjectPaths, gold_name: str) -> Path:
 
 
 def resolve_reference_path(paths: ProjectPaths, reference_name: str) -> Path:
-    """Arquivo de uma base de referência: ``huggingface_secondary`` ou um gold set."""
+    """Arquivo de uma base de referência: modelo do Hugging Face (não primário) ou gold set."""
     if reference_name == HUGGINGFACE_SECONDARY_SOURCE:
         return paths.huggingface_secondary_file
+    if is_extra_source(reference_name):
+        extra_paths = map_extra_source_paths(paths)
+        if reference_name not in extra_paths:
+            raise DataNotFoundError(
+                f"base adicional desconhecida '{reference_name}'; disponíveis: {list(extra_paths)}"
+            )
+        return extra_paths[reference_name]
     return resolve_gold_path(paths, reference_name)
 
 
@@ -164,14 +178,78 @@ def list_available_gold_names(paths: ProjectPaths) -> list[str]:
 
 
 def list_available_reference_names(paths: ProjectPaths) -> list[str]:
-    """Bases de referência já geradas: segundo modelo do Hugging Face e gold sets."""
+    """Bases de referência já geradas: demais modelos do Hugging Face e gold sets."""
+    names = [*REFERENCE_SOURCE_NAMES, *map_extra_source_paths(paths)]
+    return [name for name in names if resolve_reference_path(paths, name).is_file()]
+
+
+def list_available_model_names(paths: ProjectPaths) -> list[str]:
+    """Modelos do Hugging Face já rotulados: primário, secundário e adicionais.
+
+    O primário sempre consta (a ausência da base é avisada ao carregá-la); os demais só
+    constam quando o arquivo existe.
+    """
+    others = [
+        name
+        for name in (HUGGINGFACE_SECONDARY_SOURCE, *map_extra_source_paths(paths))
+        if resolve_reference_path(paths, name).is_file()
+    ]
+    return [HUGGINGFACE_SOURCE, *others]
+
+
+def plan_comparison_pairs(paths: ProjectPaths) -> list[tuple[str, str]]:
+    """Pares ``(modelo do Hugging Face, referência)`` a comparar.
+
+    Cada modelo do Hugging Face é comparado com cada gold set já gerado; o primário também é
+    comparado com cada um dos demais modelos do Hugging Face.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Pares na ordem: primário contra os demais modelos, depois cada modelo contra cada gold.
+
+    Examples
+    --------
+    >>> plan_comparison_pairs(paths)  # doctest: +SKIP
+    [('huggingface', 'huggingface_secondary'), ('huggingface', 'gold_openai'), ...]
+    """
+    models = list_available_model_names(paths)
+    golds = list_available_gold_names(paths)
     return [
-        name for name in REFERENCE_SOURCE_NAMES if resolve_reference_path(paths, name).is_file()
+        *((HUGGINGFACE_SOURCE, other) for other in models[1:]),
+        *((model, gold) for model in models for gold in golds),
     ]
 
 
+def resolve_model_path(paths: ProjectPaths, model_name: str) -> Path:
+    """Arquivo da base de um modelo do Hugging Face (primário, secundário ou adicional)."""
+    if model_name == HUGGINGFACE_SOURCE:
+        return paths.huggingface_labeled_file
+    return resolve_reference_path(paths, model_name)
+
+
+def build_pair_key(model_name: str, reference_name: str) -> str:
+    """Chave de um par no resultado da etapa: a referência, se o modelo é o primário."""
+    if model_name == HUGGINGFACE_SOURCE:
+        return reference_name
+    return f"{model_name}_vs_{reference_name}"
+
+
+def _merge_extra_names(names: Mapping[str, str], paths: ProjectPaths) -> dict[str, str]:
+    """Acrescenta aos nomes configurados os dos modelos adicionais do Hugging Face."""
+    return {**load_extra_model_names(paths), **names}
+
+
 def build_comparison_subdir(
-    prefix: str, model_names: Mapping[str, str], reference_name: str
+    prefix: str,
+    model_names: Mapping[str, str],
+    reference_name: str,
+    model_name: str = HUGGINGFACE_SOURCE,
 ) -> str:
     """Nome da subpasta/JSON de uma comparação, com os nomes dos modelos comparados.
 
@@ -183,12 +261,14 @@ def build_comparison_subdir(
         Nome do modelo de cada fonte para pastas e arquivos, sem apelido
         (ver :func:`labeling.model_names.load_source_file_names`).
     reference_name : str
-        ``huggingface_secondary``, ``gold_openai`` ou ``gold_unb``.
+        ``huggingface_secondary``, ``gold_openai``, ``gold_unb`` ou uma base adicional.
+    model_name : str, optional
+        Fonte do modelo do Hugging Face comparado, by default ``huggingface`` (o primário).
 
     Returns
     -------
     str
-        ``<prefixo>_<modelo primário>_vs_<modelo de referência>``.
+        ``<prefixo>_<modelo do Hugging Face>_vs_<modelo de referência>``.
 
     Examples
     --------
@@ -196,7 +276,7 @@ def build_comparison_subdir(
     >>> build_comparison_subdir("comparativo", names, "gold_unb")
     'comparativo_modelo-a_vs_Modelo-B'
     """
-    primary_slug = build_file_slug(model_names[HUGGINGFACE_SOURCE])
+    primary_slug = build_file_slug(model_names[model_name])
     reference_slug = build_file_slug(model_names[reference_name])
     return f"{prefix}_{primary_slug}_vs_{reference_slug}"
 
@@ -231,8 +311,10 @@ def _resolve_sample_ids(
     return read_dataset_file(resolve_gold_path(paths, gold_names[0]))["id"].to_list()
 
 
-def load_comparison_frame(paths: ProjectPaths, reference_name: str) -> pl.DataFrame:
-    """Une o Hugging Face primário e uma base de referência pelo ``id``.
+def load_comparison_frame(
+    paths: ProjectPaths, reference_name: str, model_name: str = HUGGINGFACE_SOURCE
+) -> pl.DataFrame:
+    """Une um modelo do Hugging Face (por padrão, o primário) e uma referência pelo ``id``.
 
     Um gold set rotula só uma amostra do corpus; o Hugging Face (todos os tweets) é filtrado
     para essa amostra antes da união. Para ``huggingface_secondary`` (também sobre todo o
@@ -245,7 +327,10 @@ def load_comparison_frame(paths: ProjectPaths, reference_name: str) -> pl.DataFr
     paths : ProjectPaths
         Caminhos resolvidos do projeto.
     reference_name : str
-        ``huggingface_secondary``, ``gold_openai`` ou ``gold_unb``.
+        ``huggingface_secondary``, ``gold_openai``, ``gold_unb`` ou uma base adicional.
+    model_name : str, optional
+        Fonte do modelo do Hugging Face comparado (``huggingface``, ``huggingface_secondary``
+        ou uma base adicional), by default ``huggingface``.
 
     Returns
     -------
@@ -266,11 +351,11 @@ def load_comparison_frame(paths: ProjectPaths, reference_name: str) -> pl.DataFr
     reference_base = load_labeled_source(
         resolve_reference_path(paths, reference_name), reference_name
     )
-    hf_base = load_labeled_source(paths.huggingface_labeled_file, HUGGINGFACE_SOURCE)
+    hf_base = load_labeled_source(resolve_model_path(paths, model_name), model_name)
     sample_ids = _resolve_sample_ids(paths, reference_name, reference_base)
     if sample_ids is not None:
         hf_base = hf_base.filter(pl.col("id").is_in(sample_ids))
-        if reference_name == HUGGINGFACE_SECONDARY_SOURCE:
+        if reference_name not in GOLD_SOURCE_NAMES:
             reference_base = reference_base.filter(pl.col("id").is_in(sample_ids))
     return build_comparison_frame(hf_base, reference_base)
 
@@ -357,7 +442,7 @@ def _save_figures(
 
 def _build_markdown_disclaimer(reference_name: str, primary: str, reference: str) -> list[str]:
     """Ressalva de interpretação: nenhuma das bases é rotulada por humanos."""
-    if reference_name == HUGGINGFACE_SECONDARY_SOURCE:
+    if reference_name not in GOLD_SOURCE_NAMES:
         return [
             f"{primary} e {reference} são modelos do Hugging Face (não há rotulagem humana): estes",
             "números medem a concordância entre os dois modelos, não o acerto absoluto.",
@@ -414,6 +499,7 @@ def run_reference_comparison(
     *,
     output_subdir: str,
     model_names: Mapping[str, str] | None = None,
+    model_name: str = HUGGINGFACE_SOURCE,
     random_seed: int = 42,
     n_bootstrap: int = 1000,
     confidence_level: float = 0.95,
@@ -423,7 +509,7 @@ def run_reference_comparison(
     n_length_bins: int = 5,
     examples_per_transition: int = 3,
 ) -> ComparativeEvaluationResult:
-    """Executa toda a avaliação comparativa entre o Hugging Face e uma base de referência.
+    """Executa toda a avaliação comparativa entre um modelo do Hugging Face e uma referência.
 
     Parameters
     ----------
@@ -436,7 +522,9 @@ def run_reference_comparison(
         ``reports/metrics``.
     model_names : Mapping[str, str] | None, optional
         Nome do modelo de cada fonte, exibido em tabelas e gráficos; ``None`` lê
-        ``configs/labeling.yaml``, by default None.
+        ``configs/labeling.yaml``, by default None. Os modelos adicionais são acrescentados.
+    model_name : str, optional
+        Fonte do modelo do Hugging Face comparado, by default ``huggingface`` (o primário).
     random_seed : int, optional
         Semente do bootstrap, by default 42.
     n_bootstrap : int, optional
@@ -472,9 +560,11 @@ def run_reference_comparison(
     ...     paths, "gold_unb", output_subdir="comparativo_modelo-a_vs_modelo-b"
     ... )  # doctest: +SKIP
     """
-    names = model_names if model_names is not None else load_source_model_names()
-    primary_label, reference_label = names[HUGGINGFACE_SOURCE], names[reference_name]
-    frame = load_comparison_frame(paths, reference_name)
+    names = _merge_extra_names(
+        model_names if model_names is not None else load_source_model_names(), paths
+    )
+    primary_label, reference_label = names[model_name], names[reference_name]
+    frame = load_comparison_frame(paths, reference_name, model_name)
     logger.info("Comparando %d tweet(s): %s × %s.", frame.height, primary_label, reference_label)
 
     tables_dir = paths.reports_tables_dir / output_subdir
@@ -589,11 +679,13 @@ def run_comparative_evaluation_stage(
     model_names: Mapping[str, str] | None = None,
     **comparison_kwargs: Any,
 ) -> dict[str, ComparativeEvaluationResult]:
-    """Compara o Hugging Face primário com cada base de referência já gerada.
+    """Compara cada modelo do Hugging Face com os gold sets e o primário com os demais modelos.
 
-    As referências são o segundo modelo do Hugging Face (``huggingface_secondary``) e os gold
-    sets (``gold_openai`` e ``gold_unb``); as ausentes são avisadas no log e dispensadas, como
-    em ``label_consensus``. A comparação entre os modelos do Hugging Face roda mesmo sem gold set.
+    Os modelos do Hugging Face são o primário, o secundário (``huggingface_secondary``) e os
+    adicionais (``tweets_data_<modelo>.parquet``, ver :mod:`labeling.extra_sources`); os gold
+    sets são ``gold_openai`` e ``gold_unb``. Os pares com base ausente são avisados no log e
+    dispensados, como em ``label_consensus``. A comparação entre modelos do Hugging Face roda
+    mesmo sem gold set.
 
     Parameters
     ----------
@@ -612,7 +704,8 @@ def run_comparative_evaluation_stage(
     Returns
     -------
     dict[str, ComparativeEvaluationResult]
-        Resultado por base de referência comparada.
+        Resultado por par comparado; a chave é a referência quando o modelo é o primário
+        (ex.: ``gold_unb``) e ``<modelo>_vs_<referência>`` nos demais.
 
     Raises
     ------
@@ -623,26 +716,31 @@ def run_comparative_evaluation_stage(
     --------
     >>> run_comparative_evaluation_stage(paths)  # doctest: +SKIP
     """
-    names = model_names if model_names is not None else load_source_model_names()
-    available = list_available_reference_names(paths)
-    if not available:
+    names = _merge_extra_names(
+        model_names if model_names is not None else load_source_model_names(), paths
+    )
+    file_names = _merge_extra_names(
+        load_source_file_names() if model_names is None else names, paths
+    )
+    pairs = plan_comparison_pairs(paths)
+    if not pairs:
         raise DataNotFoundError(
             "nenhuma base de referência encontrada; gere-as com `make label-hf-secondary`, "
             "`make label-gold-openai` e/ou `make label-gold-unb`"
         )
-    for missing in set(REFERENCE_SOURCE_NAMES) - set(available):
+    available = set(list_available_reference_names(paths))
+    for missing in sorted(set(REFERENCE_SOURCE_NAMES) - available):
         logger.warning("Base '%s' ainda não gerada: comparação dispensada.", missing)
     return {
-        reference_name: run_reference_comparison(
+        build_pair_key(model_name, reference_name): run_reference_comparison(
             paths,
             reference_name,
             output_subdir=build_comparison_subdir(
-                output_subdir,
-                load_source_file_names() if model_names is None else names,
-                reference_name,
+                output_subdir, file_names, reference_name, model_name
             ),
             model_names=names,
+            model_name=model_name,
             **comparison_kwargs,
         )
-        for reference_name in available
+        for model_name, reference_name in pairs
     }

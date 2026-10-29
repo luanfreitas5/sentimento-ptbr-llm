@@ -18,6 +18,7 @@ from evaluation.label_consensus import (
     summarize_consensus_levels,
 )
 from exceptions.data import DataNotFoundError, DataValidationError, EmptyDatasetError
+from io_utils.json import write_json
 from labeling.model_names import load_source_model_names
 from pipelines.label_consensus import run_label_consensus_stage
 from pipelines.workflow import STAGE_REGISTRY
@@ -239,6 +240,33 @@ def _write_consensus_bases(paths: ProjectPaths, sources: dict[str, pl.DataFrame]
 
 class TestRunLabelConsensusStage:
     """Testes de :func:`pipelines.label_consensus.run_label_consensus_stage`."""
+
+    def test_includes_additional_huggingface_models_as_raters(
+        self,
+        pipeline_paths: ProjectPaths,  # noqa: F811
+        sources: dict[str, pl.DataFrame],
+    ) -> None:
+        """Bases ``tweets_data_<modelo>`` entram como rotuladores, restritas à amostra gold."""
+        _write_consensus_bases(pipeline_paths, sources)
+        extra = pipeline_paths.data_gold_dir / "tweets_data_FinBERT-PT-BR.parquet"
+        write_dataset(
+            pl.concat(
+                [
+                    sources["a"],
+                    _build_source([_NEU] * 4).with_columns(
+                        (pl.col("id").cast(pl.Int64) + 100).cast(pl.String).alias("id")
+                    ),
+                ]
+            ),
+            extra,
+        )
+        write_json({"model": "lucas-leme/FinBERT-PT-BR"}, extra.with_suffix(".meta.json"))
+
+        result = run_label_consensus_stage(pipeline_paths, n_bootstrap=30)
+
+        assert "FinBERT-PT-BR" in result.summary["sources"]
+        assert len(result.summary["sources"]) == 5
+        assert result.consensus_frame.height == 6
 
     def test_writes_tables_figures_and_metrics(
         self,

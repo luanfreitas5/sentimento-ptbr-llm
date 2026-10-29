@@ -68,9 +68,10 @@ ablation:
 evaluate:
   llm_max_test_samples: 500
 
-# Etapa `comparative_evaluation` (src/pipelines/comparative_evaluation.py): compara as
-# a base `tweets_data_huggingface` com cada gold set (`gold_openai`, `gold_unb`) pelo `id`
-# do tweet, restrita à amostra do gold set.
+# Etapa `comparative_evaluation` (src/pipelines/comparative_evaluation.py): compara cada modelo do
+# Hugging Face (primário `tweets_data_huggingface`, secundário e as bases adicionais
+# `data/gold/tweets_data_*.parquet`) com cada gold set (`gold_openai`, `gold_unb`) pelo `id` do
+# tweet, restrita à amostra do gold set; o primário também é comparado com os demais modelos.
 llm_comparison:
   output_subdir: "comparativo" # prefixo; cada referência grava em <prefixo>_<modelo primário>_vs_<modelo de referência> (reports/tables, figures, metrics)
   random_seed: 42
