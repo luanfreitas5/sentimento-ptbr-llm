@@ -47,13 +47,13 @@ llm:
   # "ollama": servidor local em configs/llm.yaml -> backends.ollama.base_url;
   #           modelo deve estar previamente baixado (`ollama pull <nome>`).
   interpreter_model_openai: "UnB-Llama-3.3-70B-Instruct"
-  interpreter_model_ollama: "llama3.2:1b"
+  interpreter_model_ollama: "qwen2.5:7b-instruct"
   annotator_model_openai: "UnB-Llama-3.3-70B-Instruct"
-  annotator_model_ollama: "llama3.2:1b"
+  annotator_model_ollama: "qwen2.5:7b-instruct"
   n_examples_for_interpretation: 12
   max_words_per_example: 60
   max_interpretation_tokens: 200
-  n_workers: 8
+  n_workers: 4
   # Nome do template em prompts/ (sem a extensão .txt), usado como
   # task_specific_instructions na interpretação de neurônios.
   task_specific_instructions_prompt_name: "hypothesaes_1_rubrica_few-shot_distribuicao_probabilidade"

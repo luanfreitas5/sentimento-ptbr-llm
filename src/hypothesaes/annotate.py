@@ -268,7 +268,7 @@ def _run_annotation_attempts(
 def annotate_single_text(
     text: str,
     concept: str,
-    annotate_prompt_name: str = "annotate",
+    annotate_prompt_name: str = "annotate-simple",
     model: str = "gpt-5-mini",
     parse_fn: Callable[[str], int | None] = parse_completion,
     system_prompt_name: str | None = None,
@@ -290,7 +290,8 @@ def annotate_single_text(
     concept : str
         Conceito/hipótese em linguagem natural.
     annotate_prompt_name : str, optional
-        Nome do template de prompt em ``prompts/``, by default "annotate".
+        Nome do template de prompt em ``prompts/``, by default "annotate-simple"
+        (~60 tokens, só Yes/No; o ``annotate`` completo tem ~650 tokens e é lento em CPU).
     model : str, optional
         Modelo usado na anotação, by default "gpt-5-mini".
     parse_fn : Callable[[str], int | None], optional
