@@ -60,7 +60,7 @@ llm:
   # via OPENAI_BASE_URL/OPENAI_KEY no .env) ou "ollama" (local).
   # Pode ser sobrescrito na CLI com --llm-provider.
   provider: ollama # "openai" ou "ollama"
-  ollama_base_url: http://localhost:11435   # túnel: ssh -L 11435:localhost:11434 usuario@pc-remoto
+  ollama_base_url: http://localhost:11434
   openai_base_url: null               # null = usa OPENAI_BASE_URL do .env (endpoint UnB)
   # Um modelo por provedor e papel; vale o do `provider` ativo.
   interpreter_model_openai: UnB-Llama-3.3-70B-Instruct
