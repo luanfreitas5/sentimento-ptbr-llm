@@ -202,6 +202,14 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Dispensa a etapa `hypotheses` (útil em `--stage all` sem LLM/GPU).",
     )
     parser.add_argument(
+        "--force-hypotheses",
+        action="store_true",
+        help=(
+            "Refaz todos os pares da etapa `hypotheses` (modo `disagreement`), ignorando os "
+            "resumos já concluídos em `reports/metrics/hipoteses_*.json`."
+        ),
+    )
+    parser.add_argument(
         "--hypotheses-mode",
         default="disagreement",
         choices=HYPOTHESES_MODES,
@@ -518,24 +526,26 @@ def _build_huggingface_source(
     ``huggingface`` (primário) e ``huggingface_secondary`` rotulam todos os tweets; só o primário
     alimenta as etapas seguintes, e o consenso restringe ambos à amostra dos gold sets.
     """
-    hf_config = hf_config if hf_config is not None else labeling_config[source_name]
+    resolved_config: dict[str, Any] = (
+        hf_config if hf_config is not None else labeling_config[source_name]
+    )
     gold_config = labeling_config["gold_sets"]
     return LabelingSource(
         name=source_name,
-        model_name=f"{hf_config['model']}@{hf_config['revision']}",
+        model_name=f"{resolved_config['model']}@{resolved_config['revision']}",
         # classificador encoder ajustado: não usa prompt nem amostragem (determinístico)
         prompt_name="nenhum",
         prompt_template="",
         temperature=0.0,
-        batch_size=hf_config["batch_size"],
+        batch_size=resolved_config["batch_size"],
         open_classifier=partial(
             open_huggingface_classifier,
-            model_name=hf_config["model"],
-            device=hf_config["device"],
-            dtype=hf_config["dtype"],
+            model_name=resolved_config["model"],
+            device=resolved_config["device"],
+            dtype=resolved_config["dtype"],
             token=settings.huggingface_token,
-            revision=hf_config["revision"],
-            max_input_tokens=hf_config["max_input_tokens"],
+            revision=resolved_config["revision"],
+            max_input_tokens=resolved_config["max_input_tokens"],
         ),
         sample_seed=gold_config["random_state"],
     )
@@ -592,6 +602,47 @@ def _build_gold_source(
     )
 
 
+def _resolve_requested_sources(
+    label_source: str, extra_configs: dict[str, dict[str, Any]]
+) -> tuple[str, ...]:
+    """Expande ``--label-source`` nos nomes das fontes a executar.
+
+    Parameters
+    ----------
+    label_source : str
+        Valor de ``--label-source`` (fonte, ``huggingface_extra[:<modelo>]`` ou ``all``).
+    extra_configs : dict[str, dict[str, Any]]
+        Modelos adicionais configurados em ``labeling.yaml``, indexados pelo nome da fonte.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Nomes das fontes pedidas.
+
+    Raises
+    ------
+    InvalidConfigurationError
+        Se o valor pedir um modelo adicional ausente de ``labeling.yaml``.
+    """
+    if label_source == _ALL_SOURCES_OPTION:
+        requested = (*LABEL_SOURCE_NAMES, *extra_configs)
+    elif label_source == _EXTRA_SOURCES_OPTION:
+        requested = tuple(extra_configs)
+    else:
+        requested = (label_source,)
+    unknown = [
+        name
+        for name in requested
+        if name.startswith(EXTRA_SOURCE_PREFIX) and name not in extra_configs
+    ]
+    if unknown:
+        raise InvalidConfigurationError(
+            f"modelo adicional ausente de labeling.yaml -> huggingface_extra: {unknown}; "
+            f"configurados: {list(extra_configs)}"
+        )
+    return requested
+
+
 def _build_labeling_sources(
     labeling_config: dict[str, Any], settings: Settings, args: argparse.Namespace
 ) -> list[LabelingSource]:
@@ -621,22 +672,7 @@ def _build_labeling_sources(
         Se ``--label-source`` pedir um modelo adicional ausente de ``labeling.yaml``.
     """
     extra_configs = read_extra_model_configs(labeling_config)
-    if args.label_source == _ALL_SOURCES_OPTION:
-        requested = (*LABEL_SOURCE_NAMES, *extra_configs)
-    elif args.label_source == _EXTRA_SOURCES_OPTION:
-        requested = tuple(extra_configs)
-    else:
-        requested = (args.label_source,)
-    unknown = [
-        name
-        for name in requested
-        if name.startswith(EXTRA_SOURCE_PREFIX) and name not in extra_configs
-    ]
-    if unknown:
-        raise InvalidConfigurationError(
-            f"modelo adicional ausente de labeling.yaml -> huggingface_extra: {unknown}; "
-            f"configurados: {list(extra_configs)}"
-        )
+    requested = _resolve_requested_sources(args.label_source, extra_configs)
     sources: list[LabelingSource] = []
     sources.extend(
         _build_huggingface_source(labeling_config, settings, name)
@@ -1217,6 +1253,7 @@ def _build_hypotheses_stage_kwargs(
         "paths": paths,
         "mode": args.hypotheses_mode,
         "skip": args.skip_hypotheses,
+        "resume": not args.force_hypotheses,
         "output_subdir": comparison_config["output_subdir"],
         "targets": tuple(hypotheses_config["targets"]),
         "top_tweets_per_hypothesis": hypotheses_config["top_tweets_per_hypothesis"],

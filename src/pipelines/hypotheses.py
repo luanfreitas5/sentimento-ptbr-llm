@@ -28,7 +28,7 @@ from typing import Any
 
 from config.paths import ProjectPaths
 from exceptions.data import DataNotFoundError, DataValidationError
-from io_utils.json import write_json
+from io_utils.json import read_json, write_json
 from labeling.extra_sources import load_extra_model_names
 from labeling.model_names import load_source_file_names
 from pipelines.comparative_evaluation import (
@@ -57,6 +57,35 @@ def _summarize_outcome(outcome: Any) -> dict[str, Any]:
     }
 
 
+def _load_completed_pair_summary(
+    summary_path: Path, targets: Sequence[str]
+) -> list[dict[str, Any]] | None:
+    """Lê o resumo de um par já processado, se todos os alvos pedidos foram concluídos.
+
+    Parameters
+    ----------
+    summary_path : Path
+        JSON gravado por uma execução anterior (``hipoteses_<par>.json``).
+    targets : Sequence[str]
+        Alvos pedidos na execução atual.
+
+    Returns
+    -------
+    list[dict[str, Any]] | None
+        O resumo salvo, ou ``None`` se o arquivo não existe, está ilegível ou algum alvo
+        pedido não tem status ``concluido`` (o par é então reprocessado).
+    """
+    if not summary_path.is_file():
+        return None
+    try:
+        saved = read_json(summary_path)
+    except (OSError, ValueError):
+        logger.warning("Resumo ilegível em '%s'; o par será reprocessado.", summary_path)
+        return None
+    done = {item.get("target") for item in saved if item.get("status") == "concluido"}
+    return saved if set(targets) <= done else None
+
+
 def _run_patterns_mode(patterns_kwargs: Mapping[str, Any] | None) -> Any:
     """Delega ao estágio de padrões/inconsistências; exige os argumentos já montados."""
     if patterns_kwargs is None:
@@ -75,8 +104,13 @@ def _run_disagreement_mode(
     config_file: Path | None,
     random_seed: int,
     track: bool,
+    resume: bool,
 ) -> list[dict[str, Any]]:
-    """Gera hipóteses sobre a discordância/incerteza de cada modelo do Hugging Face e gold set."""
+    """Gera hipóteses sobre a discordância/incerteza de cada modelo do Hugging Face e gold set.
+
+    Com ``resume``, pares cujo resumo já registra todos os alvos como ``concluido`` são
+    pulados, de modo que uma execução interrompida continua de onde parou.
+    """
     from diagnostics.model_disagreement import run_disagreement_hypotheses
 
     file_names = {**load_extra_model_names(paths), **load_source_file_names()}
@@ -90,6 +124,19 @@ def _run_disagreement_mode(
     for model_name in list_available_model_names(paths):
         for gold_name in available:
             pair_subdir = build_comparison_subdir(output_subdir, file_names, gold_name, model_name)
+            summary_path = paths.reports_metrics_dir / f"hipoteses_{pair_subdir}.json"
+            if resume:
+                saved = _load_completed_pair_summary(summary_path, targets)
+                if saved is not None:
+                    logger.info(
+                        "Par %s × %s já concluído; reaproveitando '%s' (use --force-hypotheses "
+                        "para refazer).",
+                        model_name,
+                        gold_name,
+                        summary_path.name,
+                    )
+                    summary.extend(saved)
+                    continue
             outcomes = run_disagreement_hypotheses(
                 load_comparison_frame(paths, gold_name, model_name),
                 paths,
@@ -103,7 +150,7 @@ def _run_disagreement_mode(
             pair_summary = [
                 {"model": model_name, "gold": gold_name} | _summarize_outcome(o) for o in outcomes
             ]
-            write_json(pair_summary, paths.reports_metrics_dir / f"hipoteses_{pair_subdir}.json")
+            write_json(pair_summary, summary_path)
             for item in pair_summary:
                 logger.info(
                     "Hipóteses '%s' (%s × %s): %s — %s.",
@@ -128,6 +175,7 @@ def run_hypotheses_stage(
     diagnostics_config_file: Path | None = None,
     random_seed: int = 42,
     track_with_mlflow: bool = True,
+    resume: bool = True,
     patterns_kwargs: Mapping[str, Any] | None = None,
     diagnostics_kwargs: Mapping[str, Any] | None = None,
 ) -> Any:
@@ -154,6 +202,9 @@ def run_hypotheses_stage(
         Semente do modo ``disagreement``, by default 42.
     track_with_mlflow : bool, optional
         Se registra cada alvo no MLflow (modo ``disagreement``), by default True.
+    resume : bool, optional
+        Se pula os pares modelo × gold já concluídos em execução anterior (modo
+        ``disagreement``), by default True.
     patterns_kwargs : Mapping[str, Any] | None, optional
         Argumentos de :func:`pipelines.hypothesaes_analysis.run_hypothesaes_analysis_stage`
         (modo ``patterns``), by default None.
@@ -202,4 +253,5 @@ def run_hypotheses_stage(
         config_file=diagnostics_config_file,
         random_seed=random_seed,
         track=track_with_mlflow,
+        resume=resume,
     )

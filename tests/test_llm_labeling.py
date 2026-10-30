@@ -793,8 +793,10 @@ class TestHuggingFaceLabeler:
         )
         monkeypatch.setattr(huggingface, "release_gpu_memory", lambda: True)
 
-        label, confidence = huggingface.create_huggingface_batch_classifier(hf_model)(["x"])[0]
+        result = huggingface.create_huggingface_batch_classifier(hf_model)(["x"])[0]
 
+        assert result is not None
+        label, confidence = result
         assert label == "negativo"
         assert confidence == pytest.approx(0.5)
 
