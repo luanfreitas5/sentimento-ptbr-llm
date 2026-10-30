@@ -57,6 +57,46 @@ def _summarize_outcome(outcome: Any) -> dict[str, Any]:
     }
 
 
+def _name_matches(name: str, requested: Sequence[str]) -> bool:
+    """Indica se ``name`` casa (nome completo ou sufixo após ``:``) com algum pedido."""
+    return name in requested or name.rsplit(":", maxsplit=1)[-1] in requested
+
+
+def _select_names(
+    available: Sequence[str], requested: Sequence[str] | None, kind: str
+) -> list[str]:
+    """Restringe ``available`` aos nomes pedidos (nome completo ou sufixo após ``:``).
+
+    Parameters
+    ----------
+    available : Sequence[str]
+        Nomes disponíveis (modelos ou gold sets).
+    requested : Sequence[str] | None
+        Filtro pedido; ``None`` ou vazio mantém todos.
+    kind : str
+        Rótulo usado na mensagem de erro (``modelo`` ou ``gold set``).
+
+    Returns
+    -------
+    list[str]
+        Nomes disponíveis que casam com o filtro, na ordem original.
+
+    Raises
+    ------
+    DataValidationError
+        Se algum nome pedido não casar com nenhum disponível.
+    """
+    if not requested:
+        return list(available)
+    unknown = [r for r in requested if not any(_name_matches(a, [r]) for a in available)]
+    if unknown:
+        raise DataValidationError(
+            schema_name="HypothesesStage",
+            detail=f"{kind} desconhecido(s) {unknown}; disponíveis: {list(available)}",
+        )
+    return [a for a in available if _name_matches(a, requested)]
+
+
 def _load_completed_pair_summary(
     summary_path: Path, targets: Sequence[str]
 ) -> list[dict[str, Any]] | None:
@@ -86,6 +126,19 @@ def _load_completed_pair_summary(
     return saved if set(targets) <= done else None
 
 
+def _log_pair_summary(pair_summary: Sequence[Mapping[str, Any]]) -> None:
+    """Registra no log o status de cada alvo de um par modelo × gold set."""
+    for item in pair_summary:
+        logger.info(
+            "Hipóteses '%s' (%s × %s): %s — %s.",
+            item["target"],
+            item["model"],
+            item["gold"],
+            item["status"],
+            item["detail"],
+        )
+
+
 def _run_patterns_mode(patterns_kwargs: Mapping[str, Any] | None) -> Any:
     """Delega ao estágio de padrões/inconsistências; exige os argumentos já montados."""
     if patterns_kwargs is None:
@@ -105,6 +158,8 @@ def _run_disagreement_mode(
     random_seed: int,
     track: bool,
     resume: bool,
+    models: Sequence[str] | None = None,
+    golds: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Gera hipóteses sobre a discordância/incerteza de cada modelo do Hugging Face e gold set.
 
@@ -121,22 +176,23 @@ def _run_disagreement_mode(
             "`make label-gold-unb`"
         )
     summary: list[dict[str, Any]] = []
-    for model_name in list_available_model_names(paths):
-        for gold_name in available:
+    selected_models = _select_names(list_available_model_names(paths), models, "modelo")
+    selected_golds = _select_names(available, golds, "gold set")
+    for model_name in selected_models:
+        for gold_name in selected_golds:
             pair_subdir = build_comparison_subdir(output_subdir, file_names, gold_name, model_name)
             summary_path = paths.reports_metrics_dir / f"hipoteses_{pair_subdir}.json"
-            if resume:
-                saved = _load_completed_pair_summary(summary_path, targets)
-                if saved is not None:
-                    logger.info(
-                        "Par %s × %s já concluído; reaproveitando '%s' (use --force-hypotheses "
-                        "para refazer).",
-                        model_name,
-                        gold_name,
-                        summary_path.name,
-                    )
-                    summary.extend(saved)
-                    continue
+            saved = _load_completed_pair_summary(summary_path, targets) if resume else None
+            if saved is not None:
+                logger.info(
+                    "Par %s × %s já concluído; reaproveitando '%s' (use --force-hypotheses "
+                    "para refazer).",
+                    model_name,
+                    gold_name,
+                    summary_path.name,
+                )
+                summary.extend(saved)
+                continue
             outcomes = run_disagreement_hypotheses(
                 load_comparison_frame(paths, gold_name, model_name),
                 paths,
@@ -151,15 +207,7 @@ def _run_disagreement_mode(
                 {"model": model_name, "gold": gold_name} | _summarize_outcome(o) for o in outcomes
             ]
             write_json(pair_summary, summary_path)
-            for item in pair_summary:
-                logger.info(
-                    "Hipóteses '%s' (%s × %s): %s — %s.",
-                    item["target"],
-                    model_name,
-                    gold_name,
-                    item["status"],
-                    item["detail"],
-                )
+            _log_pair_summary(pair_summary)
             summary.extend(pair_summary)
     return summary
 
@@ -176,6 +224,8 @@ def run_hypotheses_stage(
     random_seed: int = 42,
     track_with_mlflow: bool = True,
     resume: bool = True,
+    models: Sequence[str] | None = None,
+    golds: Sequence[str] | None = None,
     patterns_kwargs: Mapping[str, Any] | None = None,
     diagnostics_kwargs: Mapping[str, Any] | None = None,
 ) -> Any:
@@ -205,6 +255,13 @@ def run_hypotheses_stage(
     resume : bool, optional
         Se pula os pares modelo × gold já concluídos em execução anterior (modo
         ``disagreement``), by default True.
+    models : Sequence[str] | None, optional
+        Restringe os modelos do Hugging Face (nome completo, ex.:
+        ``huggingface_extra:FinBERT-PT-BR``, ou só o sufixo, ex.: ``FinBERT-PT-BR``);
+        ``None`` usa todos (modo ``disagreement``), by default None.
+    golds : Sequence[str] | None, optional
+        Restringe os gold sets (ex.: ``gold_openai``); ``None`` usa todos (modo ``disagreement``),
+        by default None.
     patterns_kwargs : Mapping[str, Any] | None, optional
         Argumentos de :func:`pipelines.hypothesaes_analysis.run_hypothesaes_analysis_stage`
         (modo ``patterns``), by default None.
@@ -254,4 +311,6 @@ def run_hypotheses_stage(
         random_seed=random_seed,
         track=track_with_mlflow,
         resume=resume,
+        models=models,
+        golds=golds,
     )

@@ -210,6 +210,27 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--hypotheses-models",
+        nargs="+",
+        default=None,
+        metavar="MODELO",
+        help=(
+            "Restringe os modelos do Hugging Face da etapa `hypotheses` (modo `disagreement`): "
+            "nome completo (ex.: huggingface_extra:FinBERT-PT-BR) ou só o sufixo (FinBERT-PT-BR). "
+            "Padrão: todos."
+        ),
+    )
+    parser.add_argument(
+        "--hypotheses-golds",
+        nargs="+",
+        default=None,
+        metavar="GOLD",
+        help=(
+            "Restringe os gold sets da etapa `hypotheses` (modo `disagreement`), "
+            "ex.: gold_openai. Padrão: todos."
+        ),
+    )
+    parser.add_argument(
         "--hypotheses-mode",
         default="disagreement",
         choices=HYPOTHESES_MODES,
@@ -1254,6 +1275,8 @@ def _build_hypotheses_stage_kwargs(
         "mode": args.hypotheses_mode,
         "skip": args.skip_hypotheses,
         "resume": not args.force_hypotheses,
+        "models": args.hypotheses_models,
+        "golds": args.hypotheses_golds,
         "output_subdir": comparison_config["output_subdir"],
         "targets": tuple(hypotheses_config["targets"]),
         "top_tweets_per_hypothesis": hypotheses_config["top_tweets_per_hypothesis"],

@@ -34,3 +34,26 @@ def test_load_completed_pair_summary_handles_missing_and_corrupt_file(tmp_path):
     bad = tmp_path / "ruim.json"
     bad.write_text("{", encoding="utf-8")
     assert _load_completed_pair_summary(bad, ("disagreement",)) is None
+
+
+def test_select_names_filters_by_full_name_or_suffix():
+    """O filtro aceita o nome completo ou o sufixo após ':' e preserva a ordem original."""
+    from pipelines.hypotheses import _select_names
+
+    available = ["huggingface", "huggingface_extra:FinBERT-PT-BR", "huggingface_extra:bertweet"]
+    assert _select_names(available, None, "modelo") == available
+    assert _select_names(available, ["FinBERT-PT-BR", "huggingface"], "modelo") == [
+        "huggingface",
+        "huggingface_extra:FinBERT-PT-BR",
+    ]
+
+
+def test_select_names_rejects_unknown_name():
+    """Nome pedido que não existe gera erro claro em vez de pular em silêncio."""
+    import pytest
+
+    from exceptions.data import DataValidationError
+    from pipelines.hypotheses import _select_names
+
+    with pytest.raises(DataValidationError):
+        _select_names(["gold_openai"], ["gold_xyz"], "gold set")
