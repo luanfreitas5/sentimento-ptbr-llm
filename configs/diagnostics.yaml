@@ -19,7 +19,7 @@ splits:
   validation_size: 0.1
 
 embedding:
-  model_name: neuralmind/bert-base-portuguese-cased
+  model_name: sentence-transformers/paraphrase-multilingual-mpnet-base-v2
   batch_size: 128
 
 sae:
