@@ -99,7 +99,7 @@ confidence:
 # (`--label-source gold_openai` / `gold_unb`): o endpoint vem de OPENAI_BASE_URL/OPENAI_KEY,
 # então troque o `.env` entre as execuções se os modelos estiverem em endpoints diferentes.
 gold_sets:
-  sample_size: 1000 # tweets da amostra (limitada ao tamanho do corpus)
+  sample_size: 2000 # tweets da amostra (limitada ao tamanho do corpus)
   random_state: 42
   openai:
     model: "gpt-6-luna"
