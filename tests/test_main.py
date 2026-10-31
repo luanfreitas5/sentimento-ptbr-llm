@@ -143,7 +143,7 @@ class TestBuildLabelingStageKwargs:
         assert sources["gold_unb"].reasoning_effort is None
         for gold_name in ("gold_openai", "gold_unb"):
             assert "{{TEXTO}}" in sources[gold_name].prompt_template
-            assert sources[gold_name].sample_size == 1000
+            assert sources[gold_name].sample_size == 2000
         assert sources["gold_openai"].sample_seed == sources["gold_unb"].sample_seed
 
     def test_does_not_load_the_huggingface_model_while_building(self) -> None:
