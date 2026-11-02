@@ -101,6 +101,7 @@ from diagnostics.sae_runner import (
     assign_partitions,
     build_embedding_cache_name,
     prepare_discovery_data,
+    shorten_name,
 )
 from diagnostics.sampling import (
     HUMAN_LABEL_COLUMN,
@@ -1532,6 +1533,19 @@ class TestCacheName:
         second = build_embedding_cache_name("outro/modelo", 100)
         assert first != second
         assert first == "diagnostics_neuralmind-bert-base-portuguese-cased_100texts"
+
+    def test_long_model_name_is_shortened_deterministically(self) -> None:
+        """Nomes longos são limitados, únicos e estáveis."""
+        long_a = build_embedding_cache_name("sentence-transformers/" + "a" * 80, 5)
+        long_b = build_embedding_cache_name("sentence-transformers/" + "a" * 79 + "b", 5)
+        assert len(long_a) <= 12 + 40 + 9
+        assert long_a != long_b
+        assert long_a == build_embedding_cache_name("sentence-transformers/" + "a" * 80, 5)
+
+    def test_shorten_name_keeps_short_names(self) -> None:
+        """Nomes dentro do limite não mudam; os longos respeitam o limite."""
+        assert shorten_name("curto", 20) == "curto"
+        assert len(shorten_name("x" * 100, 20)) == 20
 
 
 class TestAssignPartitions:

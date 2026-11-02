@@ -633,6 +633,21 @@ def _write_comparison_bases(paths: ProjectPaths, n_tweets: int = 60) -> None:
     _write_labeled_base(paths.gold_unb_file, gold_ids, _LABEL_CYCLE_GOLD, -0.1)
 
 
+class TestBuildComparisonSubdir:
+    """Nome da pasta do par limita cada modelo para evitar caminhos longos."""
+
+    def test_long_model_names_are_shortened_and_distinct(self) -> None:
+        """Slugs acima do limite são truncados com hash; os curtos ficam intactos."""
+        names = {"huggingface": "m" * 60, "gold_openai": "gpt-6-luna", "gold_unb": "n" * 60}
+        first = build_comparison_subdir("comparativo", names, "gold_openai")
+        second = build_comparison_subdir(
+            "comparativo", {**names, "huggingface": "m" * 59 + "x"}, "gold_openai"
+        )
+        assert first.endswith("_vs_gpt-6-luna")
+        assert len(first) <= len("comparativo_") + 32 + len("_vs_gpt-6-luna")
+        assert first != second
+
+
 class TestRunComparativeEvaluationStage:
     """Testes de :func:`pipelines.comparative_evaluation.run_comparative_evaluation_stage`."""
 

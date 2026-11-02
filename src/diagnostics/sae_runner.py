@@ -25,7 +25,7 @@ from data.splitter import create_stratified_split
 from diagnostics.settings import DiagnosticsSettings
 from exceptions.data import EmptyDatasetError
 from schemas.diagnostics import list_model_label_columns
-from utils.hashing import calculate_text_hash
+from utils.hashing import calculate_text_hash, shorten_name
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,10 @@ def train_sae(**kwargs: Any) -> Any:
     return _train_sae(**kwargs)
 
 
+MAX_MODEL_SLUG_LENGTH = 40
+MAX_HYPOTHESES_CACHE_NAME_LENGTH = 80
+
+
 def build_embedding_cache_name(model_name: str, n_texts: int) -> str:
     """Monta o prefixo de cache incluindo o modelo de embedding.
 
@@ -113,7 +117,7 @@ def build_embedding_cache_name(model_name: str, n_texts: int) -> str:
     >>> build_embedding_cache_name("org/modelo-x", 10)
     'diagnostics_org-modelo-x_10texts'
     """
-    slug = re.sub(r"[^A-Za-z0-9]+", "-", model_name).strip("-")
+    slug = shorten_name(re.sub(r"[^A-Za-z0-9]+", "-", model_name).strip("-"), MAX_MODEL_SLUG_LENGTH)
     return f"diagnostics_{slug}_{n_texts}texts"
 
 

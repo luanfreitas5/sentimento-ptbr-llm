@@ -43,9 +43,11 @@ from diagnostics.cost import estimate_hypothesis_generation_cost, format_cost_re
 from diagnostics.sae_runner import (
     DISCOVERY_PARTITION,
     HOLDOUT_PARTITION,
+    MAX_HYPOTHESES_CACHE_NAME_LENGTH,
     PARTITION_COLUMN,
     DiscoveryData,
     prepare_discovery_data,
+    shorten_name,
 )
 from diagnostics.sanity import SanityGateResult, assert_sanity_gate_passed, evaluate_sanity_gate
 from diagnostics.settings import (
@@ -397,8 +399,11 @@ def _execute_target(
         sae=discovery.sae,
         **build_generation_kwargs(
             settings,
-            cache_name="_".join(
-                [discovery.cache_name, *Path(settings.data.output_dir).parts[1:], target_slug]
+            cache_name=shorten_name(
+                "_".join(
+                    [discovery.cache_name, *Path(settings.data.output_dir).parts[1:], target_slug]
+                ),
+                MAX_HYPOTHESES_CACHE_NAME_LENGTH,
             ),
             classification=classification,
         ),

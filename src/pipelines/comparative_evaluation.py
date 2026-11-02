@@ -83,6 +83,7 @@ from labeling.model_names import (
     load_source_file_names,
     load_source_model_names,
 )
+from utils.hashing import shorten_name
 from visualization.comparison import (
     plot_agreement_by_text_length,
     plot_class_distribution_by_model,
@@ -98,6 +99,9 @@ from visualization.reference_agreement import (
 from visualization.theme import apply_project_theme, save_figure
 
 logger = logging.getLogger(__name__)
+
+# Limite por modelo no nome da pasta "comparativo_<A>_vs_<B>" (caminhos longos quebram no Windows).
+MAX_MODEL_SLUG_LENGTH = 32
 
 _SUMMARY_MARKDOWN_FILE_NAME = "resumo_comparativo.md"
 
@@ -268,7 +272,9 @@ def build_comparison_subdir(
     Returns
     -------
     str
-        ``<prefixo>_<modelo do Hugging Face>_vs_<modelo de referência>``.
+        ``<prefixo>_<modelo do Hugging Face>_vs_<modelo de referência>``; cada slug de modelo
+        é limitado a ``MAX_MODEL_SLUG_LENGTH`` caracteres (truncado + hash) para evitar
+        caminhos longos.
 
     Examples
     --------
@@ -276,8 +282,10 @@ def build_comparison_subdir(
     >>> build_comparison_subdir("comparativo", names, "gold_unb")
     'comparativo_modelo-a_vs_Modelo-B'
     """
-    primary_slug = build_file_slug(model_names[model_name])
-    reference_slug = build_file_slug(model_names[reference_name])
+    primary_slug = shorten_name(build_file_slug(model_names[model_name]), MAX_MODEL_SLUG_LENGTH)
+    reference_slug = shorten_name(
+        build_file_slug(model_names[reference_name]), MAX_MODEL_SLUG_LENGTH
+    )
     return f"{prefix}_{primary_slug}_vs_{reference_slug}"
 
 
