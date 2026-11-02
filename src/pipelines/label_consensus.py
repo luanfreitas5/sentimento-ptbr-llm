@@ -41,7 +41,7 @@ from evaluation.label_consensus import (
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
-from labeling.extra_sources import load_extra_model_names, map_extra_source_paths
+from labeling.extra_sources import load_extra_display_names, map_extra_source_paths
 from labeling.model_names import load_source_model_names
 from visualization.consensus import plot_consensus_by_class, plot_pairwise_kappa_heatmap
 from visualization.theme import apply_project_theme, save_figure
@@ -271,7 +271,7 @@ def run_label_consensus_stage(
     >>> run_label_consensus_stage(paths)  # doctest: +SKIP
     """
     names = {
-        **load_extra_model_names(paths),
+        **load_extra_display_names(paths),
         **(model_names if model_names is not None else load_source_model_names()),
     }
     sources = {names[source]: base for source, base in load_consensus_sources(paths).items()}

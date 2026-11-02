@@ -75,6 +75,7 @@ from io_utils.csv import write_csv
 from io_utils.json import write_json
 from labeling.extra_sources import (
     is_extra_source,
+    load_extra_display_names,
     load_extra_model_names,
     map_extra_source_paths,
 )
@@ -244,9 +245,16 @@ def build_pair_key(model_name: str, reference_name: str) -> str:
     return f"{model_name}_vs_{reference_name}"
 
 
-def _merge_extra_names(names: Mapping[str, str], paths: ProjectPaths) -> dict[str, str]:
-    """Acrescenta aos nomes configurados os dos modelos adicionais do Hugging Face."""
-    return {**load_extra_model_names(paths), **names}
+def _merge_extra_names(
+    names: Mapping[str, str], paths: ProjectPaths, *, use_alias: bool = True
+) -> dict[str, str]:
+    """Acrescenta aos nomes configurados os dos modelos adicionais do Hugging Face.
+
+    Com ``use_alias`` entram os apelidos (tabelas e gráficos); sem ele, os nomes completos
+    (pastas e arquivos).
+    """
+    extra = load_extra_display_names(paths) if use_alias else load_extra_model_names(paths)
+    return {**extra, **names}
 
 
 def build_comparison_subdir(
@@ -728,7 +736,7 @@ def run_comparative_evaluation_stage(
         model_names if model_names is not None else load_source_model_names(), paths
     )
     file_names = _merge_extra_names(
-        load_source_file_names() if model_names is None else names, paths
+        load_source_file_names() if model_names is None else names, paths, use_alias=False
     )
     pairs = plan_comparison_pairs(paths)
     if not pairs:

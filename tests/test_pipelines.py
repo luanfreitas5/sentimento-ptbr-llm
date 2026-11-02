@@ -815,7 +815,7 @@ class TestRunComparativeEvaluationStage:
             f"{source}_vs_gold_unb",
         }
         vs_gold = results[f"{source}_vs_gold_unb"]
-        assert vs_gold.summary["models"]["primary"] == "FinBERT-PT-BR"
+        assert vs_gold.summary["models"]["primary"] == "FinBERT-PT"
         assert vs_gold.summary["agreement"]["n_tweets"] == 60
         assert vs_gold.metrics_path.name.startswith("comparativo_FinBERT-PT-BR_vs_")
         assert results[source].summary["agreement"]["n_tweets"] == 60

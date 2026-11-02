@@ -18,9 +18,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from config.paths import ProjectPaths
+from config.constants import CONFIG_FILE_NAMES
+from config.paths import CONFIGS_DIR, ProjectPaths
 from exceptions.configuration import InvalidConfigurationError
 from io_utils.json import read_json
+from io_utils.yaml import read_yaml
 from labeling.model_names import build_display_name
 
 logger = logging.getLogger(__name__)
@@ -111,6 +113,43 @@ def load_extra_model_names(paths: ProjectPaths) -> dict[str, str]:
             logger.warning("Metadados ausentes para %s: usando o nome do arquivo.", path.name)
         names[source_name] = build_display_name(model_id)
     return names
+
+
+def load_extra_display_names(
+    paths: ProjectPaths, config_file: Path | None = None
+) -> dict[str, str]:
+    """Nome de exibição (apelido) de cada base adicional, para tabelas e gráficos.
+
+    O ``alias`` vem de ``configs/labeling.yaml -> huggingface_extra.models``; sem apelido
+    (ou sem entrada na configuração), vale o nome de :func:`load_extra_model_names`. Pastas e
+    arquivos continuam usando o nome completo.
+
+    Parameters
+    ----------
+    paths : ProjectPaths
+        Caminhos resolvidos do projeto.
+    config_file : Path | None, optional
+        Caminho alternativo do YAML de rotulagem, by default ``configs/labeling.yaml``.
+
+    Returns
+    -------
+    dict[str, str]
+        Apelido (ou nome do modelo), indexado pelo identificador da fonte.
+
+    Examples
+    --------
+    >>> load_extra_display_names(paths)  # doctest: +SKIP
+    {'huggingface_extra:FinBERT-PT-BR': 'FinBERT-PT'}
+    """
+    names = load_extra_model_names(paths)
+    path = config_file or CONFIGS_DIR / CONFIG_FILE_NAMES["labeling"]
+    entries = (read_yaml(path).get("huggingface_extra") or {}).get("models", [])
+    aliases = {
+        build_extra_source_name(str(entry["model"])): entry["alias"]
+        for entry in entries
+        if entry.get("model") and entry.get("alias")
+    }
+    return {source: aliases.get(source, name) for source, name in names.items()}
 
 
 def build_extra_source_name(model_id: str) -> str:

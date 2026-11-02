@@ -264,7 +264,7 @@ class TestRunLabelConsensusStage:
 
         result = run_label_consensus_stage(pipeline_paths, n_bootstrap=30)
 
-        assert "FinBERT-PT-BR" in result.summary["sources"]
+        assert "FinBERT-PT" in result.summary["sources"]
         assert len(result.summary["sources"]) == 5
         assert result.consensus_frame.height == 6
 
