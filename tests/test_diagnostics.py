@@ -2447,6 +2447,19 @@ class TestBuildTargets:
         with pytest.raises(DataValidationError, match="ao menos dois modelos"):
             build_disagreement_target(diagnostic_corpus, model_columns=["lab_a"])
 
+    def test_disagreement_error_points_to_pair_corpus(self) -> None:
+        """A mensagem indica o corpus de par (--corpus) quando só há um modelo."""
+        df = pl.DataFrame(
+            {
+                "id": ["1"],
+                "text_normalized": ["a"],
+                "agreement_score": [0.9],
+                "lab_huggingface": ["positivo"],
+            }
+        )
+        with pytest.raises(DataValidationError, match="--corpus reports/tables"):
+            build_disagreement_target(df)
+
     def test_disagreement_with_three_models(self) -> None:
         """Com três modelos, qualquer rótulo distinto marca discordância."""
         df = pl.DataFrame(

@@ -272,11 +272,11 @@ diagnostics:  ## Camada de diagnóstico via main.py (STEP=hypotheses|validation|
 install-hypothesaes:  ## Instala os extras do HypotheSAEs (torch + sentence-transformers + openai + ollama)
 	uv sync --extra hypothesaes --dev
 
-diag-dry-run:  ## Estima chamadas/custo do alvo (TARGET=disagreement|uncertainty|pseudo_label|gold_error), sem rede
-	$(DIAG).hypotheses --target $(TARGET) --dry-run
+diag-dry-run:  ## Estima chamadas/custo do alvo (TARGET=...; disagreement exige CORPUS=reports/tables/<par>/corpus_diagnostico.parquet), sem rede
+	$(DIAG).hypotheses --target $(TARGET) $(if $(CORPUS),--corpus $(CORPUS)) --dry-run
 
-diag-hypotheses:  ## Gate de sanidade + hipóteses HypotheSAEs para o alvo (TARGET=...)
-	$(DIAG).hypotheses --target $(TARGET)
+diag-hypotheses:  ## Gate de sanidade + hipóteses HypotheSAEs para o alvo (TARGET=...; CORPUS=... opcional)
+	$(DIAG).hypotheses --target $(TARGET) $(if $(CORPUS),--corpus $(CORPUS))
 
 diag-validate:  ## Valida as hipóteses no holdout (Bonferroni) e gera reports/tables/para_rotular.csv
 	$(DIAG).validation --target $(TARGET)

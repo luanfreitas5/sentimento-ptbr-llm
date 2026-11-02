@@ -13,9 +13,9 @@ Fluxo por alvo (ver ``docs/guides/diagnostico-hypothesaes.md``):
 
 Uso::
 
-    PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --dry-run
-    PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement
-    PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --llm-provider ollama
+    PYTHONPATH=src python -m diagnostics.hypotheses --target uncertainty --dry-run
+    PYTHONPATH=src python -m diagnostics.hypotheses --target uncertainty
+    PYTHONPATH=src python -m diagnostics.hypotheses --target uncertainty --llm-provider ollama
 
 O método de geração (``openai`` = UnB-Llama-3.3-70B-Instruct; ``ollama`` = local)
 é escolhido em ``configs/diagnostics.yaml -> llm.provider`` ou por ``--llm-provider``.

@@ -11,8 +11,8 @@ Também gera a amostra estratificada por conceito para rotulagem humana
 
 Uso::
 
-    PYTHONPATH=src python -m diagnostics.validation --target disagreement --dry-run
-    PYTHONPATH=src python -m diagnostics.validation --target disagreement
+    PYTHONPATH=src python -m diagnostics.validation --target uncertainty --dry-run
+    PYTHONPATH=src python -m diagnostics.validation --target uncertainty
     PYTHONPATH=src python -m diagnostics.validation --target disagreement \
         --output-dir diagnostics/<par> --model-columns lab_huggingface lab_openai \
         --corpus reports/tables/<par>/corpus_diagnostico.parquet

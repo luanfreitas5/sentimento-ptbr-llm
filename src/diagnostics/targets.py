@@ -193,7 +193,13 @@ def build_disagreement_target(
     if len(columns) < 2:
         raise DataValidationError(
             schema_name="DiagnosticCorpusSchema",
-            detail="o alvo de discordância exige ao menos dois modelos (colunas lab_*)",
+            detail=(
+                "o alvo de discordância exige ao menos dois modelos (colunas lab_*), "
+                f"mas o corpus tem {len(columns)}: {columns or 'nenhuma'}. O corpus rotulado "
+                "padrão traz só o Hugging Face; use um corpus de par modelo × gold set, ex.: "
+                "--corpus reports/tables/comparativo_<modelo>_vs_<gold>/corpus_diagnostico.parquet "
+                "(gerado por 'make compare'), ou rode 'make hypotheses MODE=disagreement'"
+            ),
         )
     _require_model_columns(corpus, columns)
     eligible = corpus.drop_nulls(subset=columns)

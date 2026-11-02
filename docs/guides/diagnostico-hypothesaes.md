@@ -71,11 +71,21 @@ corpus rotulado ──► adapt_labeled_corpus ──► partições disjuntas (
 
 ```bash
 make install-hypothesaes                    # torch + sentence-transformers + openai
-make diag-dry-run TARGET=disagreement       # estima chamadas/custo, sem rede
-make diag-hypotheses TARGET=disagreement    # gate + hipóteses (+ MLflow)
-make diag-validate TARGET=disagreement      # Bonferroni/FDR + reports/tables/diagnostics/para_rotular.csv
+make diag-dry-run TARGET=uncertainty        # estima chamadas/custo, sem rede
+make diag-hypotheses TARGET=uncertainty     # gate + hipóteses (+ MLflow)
+make diag-validate TARGET=uncertainty       # Bonferroni/FDR + reports/tables/diagnostics/para_rotular.csv
 make diag-compare GOLD=gold_unb          # v1 vs v2 no gold
 ```
+
+!!! warning "`TARGET=disagreement` exige um corpus de par"
+    O corpus rotulado padrão tem só `lab_huggingface`, e o alvo precisa de ao menos dois `lab_*`.
+    Gere os pares com `make compare` e passe um deles em `CORPUS=`:
+
+    ```bash
+    make diag-dry-run TARGET=disagreement CORPUS=reports/tables/<par>/corpus_diagnostico.parquet
+    ```
+
+    Ou rode todos os pares pelo orquestrador: `make hypotheses MODE=disagreement`.
 
 No modo `disagreement` da etapa `hypotheses`, cada par modelo × gold set grava em
 `reports/interpretability/diagnostics/<par>/` (sem sobrescrever os outros pares). Para validar
@@ -85,16 +95,16 @@ um par no holdout, aponte a descoberta e o corpus dele:
 PYTHONPATH=src python -m diagnostics.validation --target disagreement     --output-dir diagnostics/<par> --model-columns lab_huggingface lab_openai     --corpus reports/tables/<par>/corpus_diagnostico.parquet
 ```
 
-Equivalente sem `make`: `PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --dry-run`.
+Equivalente sem `make`: `PYTHONPATH=src python -m diagnostics.hypotheses --target uncertainty --dry-run`.
 `src/` não está no `sys.path` do venv (o projeto usa `package = false`), por isso o `PYTHONPATH=src`.
 
 Também há o estágio `diagnostics` no orquestrador (`src/main.py`), que dispensa o `PYTHONPATH`:
 
 ```bash
-uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-target disagreement --dry-run
-uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step validation --diagnostics-target disagreement
+uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-target uncertainty --dry-run
+uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step validation --diagnostics-target uncertainty
 uv run python src/main.py --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step comparison --diagnostics-gold gold_unb
-make diagnostics STEP=validation TARGET=disagreement DRY_RUN=--dry-run
+make diagnostics STEP=validation TARGET=uncertainty DRY_RUN=--dry-run
 ```
 
 O estágio é **opt-in**: está registrado em `STAGE_REGISTRY`, mas fora de
