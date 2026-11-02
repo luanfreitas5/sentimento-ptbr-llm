@@ -31,6 +31,7 @@ from io_utils.json import read_json, write_json
 from labeling.model_names import load_source_file_names, load_source_model_names
 from pipelines import hypothesaes_analysis, training_deep_learning, workflow
 from pipelines.comparative_evaluation import (
+    MAX_MODEL_SLUG_LENGTH,
     build_comparison_subdir,
     run_comparative_evaluation_stage,
 )
@@ -42,6 +43,7 @@ from pipelines.preprocessing import run_preprocessing_stage
 from pipelines.training_classical import run_training_classical_stage
 from pipelines.training_deep_learning import run_training_deep_learning_stage
 from pipelines.workflow import run_full_workflow, run_pipeline_stage
+from utils.hashing import shorten_name
 
 
 @pytest.fixture
@@ -707,8 +709,10 @@ class TestRunComparativeEvaluationStage:
         assert f"{reference}_positivo" in matrix.columns
         assert result.summary["models"] == {"primary": primary, "reference": reference}
         file_names = load_source_file_names()
-        assert file_names["huggingface"] in result.tables["distribuicao_classes"].parent.name
-        assert file_names["gold_unb"] in result.figures[0].parent.name
+        primary_slug = shorten_name(file_names["huggingface"], MAX_MODEL_SLUG_LENGTH)
+        reference_slug = shorten_name(file_names["gold_unb"], MAX_MODEL_SLUG_LENGTH)
+        assert primary_slug in result.tables["distribuicao_classes"].parent.name
+        assert reference_slug in result.figures[0].parent.name
 
     def test_agreement_metrics_match_the_synthetic_bases(
         self, pipeline_paths: ProjectPaths

@@ -178,21 +178,25 @@ def _run_disagreement_mode(
     summary: list[dict[str, Any]] = []
     selected_models = _select_names(list_available_model_names(paths), models, "modelo")
     selected_golds = _select_names(available, golds, "gold set")
+    total_pairs = len(selected_models) * len(selected_golds)
+    pair_index = 0
     for model_name in selected_models:
         for gold_name in selected_golds:
+            pair_index += 1
+            pair_label = f"[{pair_index}/{total_pairs}] {model_name} × {gold_name}"
             pair_subdir = build_comparison_subdir(output_subdir, file_names, gold_name, model_name)
             summary_path = paths.reports_metrics_dir / f"hipoteses_{pair_subdir}.json"
             saved = _load_completed_pair_summary(summary_path, targets) if resume else None
             if saved is not None:
                 logger.info(
-                    "Par %s × %s já concluído; reaproveitando '%s' (use --force-hypotheses "
+                    "Par %s já concluído; reaproveitando '%s' (use --force-hypotheses "
                     "para refazer).",
-                    model_name,
-                    gold_name,
+                    pair_label,
                     summary_path.name,
                 )
                 summary.extend(saved)
                 continue
+            logger.info("Processando hipóteses do par %s.", pair_label)
             outcomes = run_disagreement_hypotheses(
                 load_comparison_frame(paths, gold_name, model_name),
                 paths,
