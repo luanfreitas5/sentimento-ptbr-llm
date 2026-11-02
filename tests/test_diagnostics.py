@@ -14,6 +14,7 @@ import pytest
 import yaml
 from hypothesis import given
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
 import main
 from config.settings import load_general_config
@@ -2704,6 +2705,124 @@ class TestValidateHypotheses:
         )
         assert result["bonferroni_threshold"].to_list() == [pytest.approx(0.05)] * 2
         assert result["survives"].to_list() == [True, False]
+        assert result["correction"].to_list() == ["bonferroni"] * 2
+
+    @staticmethod
+    def _scored_with_pvalues(pvalues: list[float]) -> pd.DataFrame:
+        """Tabela de ``score_hypotheses`` falsa, só com os p-valores relevantes."""
+        n = len(pvalues)
+        return pd.DataFrame(
+            {
+                "hypothesis": [f"h{i}" for i in range(n)],
+                "separation_score": [0.1] * n,
+                "separation_pval": [0.5] * n,
+                "regression_coef": [1.0] * n,
+                "regression_pval": pvalues,
+                "feature_prevalence": [0.2] * n,
+            }
+        )
+
+    def test_fdr_keeps_more_survivors_than_bonferroni(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Benjamini-Hochberg é menos conservador: p=0,03 passa no FDR mas não no Bonferroni."""
+        scored = self._scored_with_pvalues([0.001, 0.03, 0.04, 0.9])
+        monkeypatch.setattr(validation, "score_hypotheses", lambda **_: ({}, scored))
+        annotations = {f"h{i}": np.array([1, 0]) for i in range(4)}
+        common = {"classification": True, "corrected_pval_threshold": 0.1}
+
+        bonferroni = validate_hypotheses(annotations, np.array([1, 0]), **common)
+        fdr = validate_hypotheses(annotations, np.array([1, 0]), correction="fdr_bh", **common)
+
+        assert bonferroni["survives"].to_list() == [True, False, False, False]
+        assert fdr["survives"].to_list() == [True, True, True, False]
+        assert fdr["correction"].to_list() == ["fdr_bh"] * 4
+        assert "bonferroni_threshold" not in fdr.columns
+        # p ajustado do BH é monotônico e nunca menor que o p original
+        adjusted = fdr["regression_pval_adjusted"].to_numpy()
+        assert (adjusted >= fdr["regression_pval"].to_numpy()).all()
+        assert (adjusted <= 1.0).all()
+
+    def test_unknown_correction_is_rejected(self) -> None:
+        """Método de correção inválido falha antes de qualquer cálculo."""
+        with pytest.raises(ValueError, match="correção desconhecida"):
+            validate_hypotheses(
+                {"h": np.array([1, 0])},
+                np.array([1, 0]),
+                classification=True,
+                corrected_pval_threshold=0.1,
+                correction="holm",
+            )
+
+
+class TestPerPairOutputDir:
+    """Cada par modelo × gold set grava as hipóteses em subpasta própria."""
+
+    def test_with_output_dir_returns_a_copy(self, diagnostics_settings: Any) -> None:
+        """A cópia troca só ``data.output_dir``; a configuração original não muda."""
+        original = diagnostics_settings.data.output_dir
+        copy = diagnostics_settings.with_output_dir("diagnostics/par_a")
+
+        assert copy.data.output_dir == "diagnostics/par_a"
+        assert diagnostics_settings.data.output_dir == original
+        assert copy.data.model_columns == diagnostics_settings.data.model_columns
+
+    def test_correction_is_validated(self, diagnostics_settings: Any) -> None:
+        """``validation.correction`` só aceita ``bonferroni`` ou ``fdr_bh``."""
+        with pytest.raises(ValidationError):
+            diagnostics_settings.validation.__class__(correction="holm")
+
+    def test_validation_cli_accepts_output_dir(self) -> None:
+        """A CLI de validação e a de hipóteses expõem ``--output-dir``."""
+        args = validation.parse_arguments(["--target", "disagreement", "--output-dir", "d/par"])
+        assert args.output_dir == "d/par"
+        args = hypotheses.parse_arguments(["--target", "disagreement", "--output-dir", "d/par"])
+        assert args.output_dir == "d/par"
+
+    def test_validation_reads_and_writes_inside_the_pair_dir(
+        self,
+        diagnostic_corpus_large: pl.DataFrame,
+        diagnostics_settings: Any,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Descoberta, validação, amostra e chave ficam sob o ``output_dir`` do par."""
+        paths = _fake_paths(tmp_path)
+        settings = diagnostics_settings.with_output_dir("diagnostics/par_a")
+        pair_dir = paths.reports_interpretability_dir / "diagnostics" / "par_a"
+        pair_dir.mkdir(parents=True)
+        pl.DataFrame({"hypothesis": ["h1", "h2"], "selection_score": [0.9, 0.5]}).write_parquet(
+            pair_dir / "disagreement.parquet"
+        )
+        scored = pd.DataFrame(
+            {
+                "hypothesis": ["h1", "h2"],
+                "separation_score": [0.3, 0.2],
+                "separation_pval": [0.01, 0.02],
+                "regression_coef": [1.0, 0.5],
+                "regression_pval": [0.001, 0.9],
+                "feature_prevalence": [0.5, 0.5],
+            }
+        )
+        monkeypatch.setattr(validation, "score_hypotheses", lambda **_: ({}, scored))
+        monkeypatch.setenv(settings.sampling.salt_env_var, "sal-de-teste")
+
+        outcome = run_validation_stage(
+            "disagreement",
+            diagnostic_corpus_large,
+            settings,
+            paths,
+            track=False,
+            client=_AlwaysYesClient(),  # type: ignore[arg-type]
+        )
+
+        assert (pair_dir / "disagreement_validacao.csv").is_file()
+        assert outcome.sample_path == paths.reports_tables_dir / "diagnostics" / "par_a" / (
+            "para_rotular.csv"
+        )
+        assert (
+            paths.data_silver_dir / "diagnostics" / "par_a" / "para_rotular_chave.parquet"
+        ).is_file()
 
 
 class TestHoldoutRows:

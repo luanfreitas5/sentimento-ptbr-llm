@@ -94,7 +94,8 @@ targets:
   gold_error: {model_column: lab_huggingface}
 
 validation:
-  corrected_pval_threshold: 0.1       # alfa antes de Bonferroni
+  corrected_pval_threshold: 0.1       # alfa antes da correção de múltiplas comparações
+  correction: fdr_bh                  # bonferroni (conservador) | fdr_bh (Benjamini-Hochberg)
   top_k_concepts: 10
   max_tweets_per_run: 500             # subamostra do holdout a anotar (N tweets x C conceitos)
   max_annotation_calls: 10000         # trava de segurança contra explosão de chamadas

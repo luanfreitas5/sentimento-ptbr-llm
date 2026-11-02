@@ -397,7 +397,9 @@ def _execute_target(
         sae=discovery.sae,
         **build_generation_kwargs(
             settings,
-            cache_name=f"{discovery.cache_name}_{target_slug}",
+            cache_name="_".join(
+                [discovery.cache_name, *Path(settings.data.output_dir).parts[1:], target_slug]
+            ),
             classification=classification,
         ),
     )
@@ -687,6 +689,10 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=("openai", "ollama"),
         help="Método de geração das hipóteses (padrão: llm.provider de diagnostics.yaml).",
     )
+    parser.add_argument(
+        "--output-dir",
+        help="Subpasta de reports/interpretability/ das saídas (ex.: diagnostics/<par>).",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Só estima chamadas e custo.")
     parser.add_argument("--no-mlflow", action="store_true", help="Não registra no MLflow.")
     return parser.parse_args(argv)
@@ -725,6 +731,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         settings = settings.model_copy(
             update={"llm": settings.llm.model_copy(update={"provider": args.llm_provider})}
         )
+    if args.output_dir:
+        settings = settings.with_output_dir(args.output_dir)
     logger.info(
         "Geração de hipóteses via '%s' (modelo: %s).",
         settings.llm.provider,

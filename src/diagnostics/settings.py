@@ -147,9 +147,10 @@ class PricingSettings(_Strict):
 
 
 class ValidationSettings(_Strict):
-    """Validação das hipóteses no holdout (Bonferroni)."""
+    """Validação das hipóteses no holdout (correção de múltiplas comparações)."""
 
     corrected_pval_threshold: float = Field(gt=0, lt=1, default=0.1)
+    correction: Literal["bonferroni", "fdr_bh"] = "bonferroni"
     top_k_concepts: int = Field(gt=0, default=10)
     max_tweets_per_run: int = Field(gt=0, default=500)
     max_annotation_calls: int = Field(gt=0, default=10_000)
@@ -199,6 +200,29 @@ class DiagnosticsSettings(_Strict):
     sampling: SamplingSettings = SamplingSettings()
     prompts: PromptSettings
     comparison: ComparisonSettings = ComparisonSettings()
+
+    def with_output_dir(self, output_dir: str) -> "DiagnosticsSettings":
+        """Devolve uma cópia que grava as saídas em outra subpasta de ``reports/interpretability/``.
+
+        Parameters
+        ----------
+        output_dir : str
+            Subpasta relativa (ex.: ``diagnostics/comparativo_modelo_vs_gold``); permite que cada
+            par modelo × gold set tenha as próprias hipóteses sem sobrescrever as dos demais.
+
+        Returns
+        -------
+        DiagnosticsSettings
+            Cópia com ``data.output_dir`` substituído; a instância original não é alterada.
+
+        Examples
+        --------
+        >>> settings.with_output_dir("diagnostics/par_a").data.output_dir  # doctest: +SKIP
+        'diagnostics/par_a'
+        """
+        return self.model_copy(
+            update={"data": self.data.model_copy(update={"output_dir": output_dir})}
+        )
 
 
 def load_diagnostics_settings(

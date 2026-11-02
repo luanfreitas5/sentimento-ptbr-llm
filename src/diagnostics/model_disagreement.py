@@ -288,7 +288,8 @@ def run_disagreement_hypotheses(
     O SAE é treinado uma única vez (:func:`diagnostics.sae_runner.prepare_discovery_data`) e
     reutilizado entre os alvos; descoberta e validação usam partições disjuntas com semente fixa
     (``configs/diagnostics.yaml``). O corpus de diagnóstico (texto normalizado) é gravado em
-    ``output_dir`` para auditoria.
+    ``output_dir`` para auditoria. As tabelas de hipóteses vão para
+    ``reports/interpretability/<data.output_dir>/<output_dir.name>/``.
 
     Parameters
     ----------
@@ -336,6 +337,9 @@ def run_disagreement_hypotheses(
     settings = load_diagnostics_settings(config_file or DEFAULT_DIAGNOSTICS_CONFIG_FILE)
     if random_seed is not None:
         settings = settings.model_copy(update={"random_seed": random_seed})
+    # Cada par modelo e gold set grava em subpasta própria (o nome do diretório de evidências
+    # identifica o par); sem isso, os pares sobrescreveriam `disagreement.parquet`.
+    settings = settings.with_output_dir(f"{settings.data.output_dir}/{output_dir.name}")
 
     corpus = build_diagnostic_corpus(comparison_frame)
     output_dir.mkdir(parents=True, exist_ok=True)

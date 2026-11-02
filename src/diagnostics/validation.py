@@ -1,9 +1,11 @@
-"""Validação das hipóteses no holdout (partição disjunta) com Bonferroni.
+"""Validação das hipóteses no holdout (partição disjunta) com correção de múltiplas comparações.
 
 Pega os top-k conceitos gerados na descoberta, anota uma **subamostra** do
 holdout (``teste``) com eles via LLM (assíncrono, com cache) e valida cada
 hipótese com ``score_hypotheses``: uma hipótese "sobrevive" se o p-valor da
-regressão for menor que ``alfa / nº de hipóteses`` (Bonferroni, alfa = 0,1).
+regressão ajustado for menor que ``alfa`` (0,1). O ajuste é escolhido em
+``validation.correction``: ``bonferroni`` (controla a taxa de erro por família) ou
+``fdr_bh`` (Benjamini-Hochberg, controla a proporção esperada de falsas descobertas).
 Também gera a amostra estratificada por conceito para rotulagem humana
 (``para_rotular.csv``, sem identificadores).
 
@@ -11,6 +13,9 @@ Uso::
 
     PYTHONPATH=src python -m diagnostics.validation --target disagreement --dry-run
     PYTHONPATH=src python -m diagnostics.validation --target disagreement
+    PYTHONPATH=src python -m diagnostics.validation --target disagreement \
+        --output-dir diagnostics/<par> --model-columns lab_huggingface lab_openai \
+        --corpus reports/tables/<par>/corpus_diagnostico.parquet
 
 Hipóteses sobre pseudo-rótulo descrevem o comportamento do modelo, não a
 verdade: só o gold set mede acerto.
@@ -26,6 +31,7 @@ from typing import Any, cast
 
 import numpy as np
 import polars as pl
+from statsmodels.stats.multitest import multipletests
 
 from config.environment import configure_environment_variables
 from config.logging import configure_logging
@@ -219,8 +225,9 @@ def validate_hypotheses(
     *,
     classification: bool,
     corrected_pval_threshold: float,
+    correction: str = "bonferroni",
 ) -> pl.DataFrame:
-    """Valida hipóteses anotadas no holdout, marcando as que sobrevivem ao Bonferroni.
+    """Valida hipóteses anotadas no holdout, marcando as que sobrevivem à correção.
 
     Parameters
     ----------
@@ -232,29 +239,48 @@ def validate_hypotheses(
         ``True`` para alvo binário.
     corrected_pval_threshold : float
         Alfa antes da correção (0,1).
+    correction : {"bonferroni", "fdr_bh"}, optional
+        Método de correção de múltiplas comparações, by default ``"bonferroni"``.
 
     Returns
     -------
     pl.DataFrame
         ``hypothesis``, ``separation_score``, ``separation_pval``, ``regression_coef``,
-        ``regression_pval``, ``feature_prevalence``, ``bonferroni_threshold`` e ``survives``.
+        ``regression_pval``, ``feature_prevalence``, ``regression_pval_adjusted``, ``correction``
+        e ``survives``; com Bonferroni inclui também ``bonferroni_threshold`` (alfa / nº de testes).
+
+    Raises
+    ------
+    ValueError
+        Se ``correction`` não for ``bonferroni`` nem ``fdr_bh``.
 
     Examples
     --------
     >>> validate_hypotheses(annotations, y, classification=True, corrected_pval_threshold=0.1)
     ... # doctest: +SKIP
     """
+    if correction not in ("bonferroni", "fdr_bh"):
+        raise ValueError(f"correção desconhecida '{correction}'; use 'bonferroni' ou 'fdr_bh'")
     _, scored = score_hypotheses(
         hypothesis_annotations=annotations,
         y_true=y_true,
         classification=classification,
         corrected_pval_threshold=corrected_pval_threshold,
     )
-    threshold = corrected_pval_threshold / len(annotations)
-    return pl.from_pandas(scored).with_columns(
-        pl.lit(threshold).alias("bonferroni_threshold"),
-        (pl.col("regression_pval") < threshold).alias("survives"),
+    table = pl.from_pandas(scored)
+    reject, adjusted, _, _ = multipletests(
+        table["regression_pval"].to_numpy(), alpha=corrected_pval_threshold, method=correction
     )
+    table = table.with_columns(
+        pl.Series("regression_pval_adjusted", adjusted),
+        pl.lit(correction).alias("correction"),
+        pl.Series("survives", reject),
+    )
+    if correction == "bonferroni":
+        table = table.with_columns(
+            pl.lit(corrected_pval_threshold / len(annotations)).alias("bonferroni_threshold")
+        )
+    return table
 
 
 def _discovery_table_path(paths: ProjectPaths, settings: DiagnosticsSettings, slug: str) -> Path:
@@ -390,7 +416,8 @@ def run_validation_stage(
                 "top_k": len(concepts),
                 "n_tweets": subsample.height,
                 "annotator_model": settings.llm.annotator_model,
-                "bonferroni_alpha": settings.validation.corrected_pval_threshold,
+                "correction": settings.validation.correction,
+                "correction_alpha": settings.validation.corrected_pval_threshold,
             },
         )
     with context:
@@ -402,12 +429,18 @@ def run_validation_stage(
             subsample["target"].to_numpy(),
             classification=target_name != "uncertainty",
             corrected_pval_threshold=settings.validation.corrected_pval_threshold,
+            correction=settings.validation.correction,
         ).with_columns(pl.lit(slug).alias("target"), pl.lit("holdout").alias("partition"))
         output_dir = paths.reports_interpretability_dir / settings.data.output_dir
         write_parquet(validated, output_dir / f"{slug}_validacao.parquet")
         write_csv(validated, output_dir / f"{slug}_validacao.csv")
         n_survivors = int(validated["survives"].sum())
-        logger.info("%d/%d hipóteses sobrevivem ao Bonferroni.", n_survivors, validated.height)
+        logger.info(
+            "%d/%d hipóteses sobrevivem à correção '%s'.",
+            n_survivors,
+            validated.height,
+            settings.validation.correction,
+        )
         sample_path = _write_sample(subsample, result.annotations, validated, settings, paths)
         if track:
             log_diagnostics_metrics(
@@ -444,12 +477,12 @@ def _write_sample(
     )
     if sample.is_empty():
         return None
-    sample_path = paths.reports_tables_dir / SAMPLE_FILE_NAME
+    sample_path = paths.reports_tables_dir / settings.data.output_dir / SAMPLE_FILE_NAME
     write_labeling_sample(
         sample,
         key,
         sample_csv=sample_path,
-        key_parquet=paths.data_silver_dir / "diagnostics" / SAMPLE_KEY_FILE_NAME,
+        key_parquet=paths.data_silver_dir / settings.data.output_dir / SAMPLE_KEY_FILE_NAME,
     )
     return sample_path
 
@@ -474,7 +507,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         prog="python -m diagnostics.validation",
-        description="Valida hipóteses no holdout (Bonferroni) e gera a amostra para rotulagem.",
+        description="Valida hipóteses no holdout (Bonferroni/FDR) e gera a amostra para rotulagem.",
     )
     parser.add_argument("--target", required=True, choices=TARGET_NAMES)
     parser.add_argument("--model-column")
@@ -482,6 +515,10 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--label")
     parser.add_argument("--corpus", type=Path, help="Parquet já no contrato de diagnóstico.")
     parser.add_argument("--config", type=Path, default=DEFAULT_DIAGNOSTICS_CONFIG_FILE)
+    parser.add_argument(
+        "--output-dir",
+        help="Subpasta de reports/interpretability/ da descoberta (ex.: diagnostics/<par>).",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-mlflow", action="store_true")
     return parser.parse_args(argv)
@@ -509,6 +546,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_environment_variables()
     configure_logging()
     settings = load_diagnostics_settings(args.config)
+    if args.output_dir:
+        settings = settings.with_output_dir(args.output_dir)
     paths = load_project_paths()
     corpus = load_diagnostic_corpus(settings, paths, args.corpus)
     target_arguments = resolve_target_arguments(args.target, args, settings)

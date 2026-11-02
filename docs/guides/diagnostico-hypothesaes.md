@@ -43,7 +43,7 @@ corpus rotulado ──► adapt_labeled_corpus ──► partições disjuntas (
                                               │
    por alvo:  gate de sanidade (Ridge) ──► generate_hypotheses (treino) ──► estatísticas dos neurônios
                                               │
-   validação: top-10 conceitos ──► anotar subamostra do holdout ──► score_hypotheses + Bonferroni
+   validação: top-10 conceitos ──► anotar subamostra do holdout ──► score_hypotheses + Bonferroni/FDR
                                               │
    amostra estratificada (~20/conceito) ──► para_rotular.csv ──► rotulagem humana ──► gold_eval
                                               │
@@ -59,7 +59,9 @@ corpus rotulado ──► adapt_labeled_corpus ──► partições disjuntas (
    Essas três últimas são calculadas sobre as **ativações do SAE** (sem chamadas de LLM); medem o
    neurônio, não a fidelidade da frase.
 3. **Validação** (`diagnostics.validation`): anota uma subamostra do holdout e aplica
-   `score_hypotheses`; a hipótese sobrevive se `regression_pval < 0,1 / nº de hipóteses`.
+   `score_hypotheses`; a hipótese sobrevive se o p-valor da regressão, ajustado por
+   `validation.correction` (`fdr_bh` = Benjamini-Hochberg, `bonferroni` = alfa / nº de hipóteses),
+   ficar abaixo de `validation.corrected_pval_threshold` (0,1).
 4. **Rotulagem humana** (`diagnostics.sampling`, `diagnostics.gold_eval`): o CSV sai **sem
    identificadores**; o mapeamento `sample_id → id` fica em arquivo separado, fora do git.
    Depois de rotulado, MCC e macro-F1 por conceito e por modelo saem com IC bootstrap.
@@ -71,8 +73,16 @@ corpus rotulado ──► adapt_labeled_corpus ──► partições disjuntas (
 make install-hypothesaes                    # torch + sentence-transformers + openai
 make diag-dry-run TARGET=disagreement       # estima chamadas/custo, sem rede
 make diag-hypotheses TARGET=disagreement    # gate + hipóteses (+ MLflow)
-make diag-validate TARGET=disagreement      # Bonferroni + reports/tables/para_rotular.csv
+make diag-validate TARGET=disagreement      # Bonferroni/FDR + reports/tables/diagnostics/para_rotular.csv
 make diag-compare GOLD=gold_unb          # v1 vs v2 no gold
+```
+
+No modo `disagreement` da etapa `hypotheses`, cada par modelo × gold set grava em
+`reports/interpretability/diagnostics/<par>/` (sem sobrescrever os outros pares). Para validar
+um par no holdout, aponte a descoberta e o corpus dele:
+
+```bash
+PYTHONPATH=src python -m diagnostics.validation --target disagreement     --output-dir diagnostics/<par> --model-columns lab_huggingface lab_openai     --corpus reports/tables/<par>/corpus_diagnostico.parquet
 ```
 
 Equivalente sem `make`: `PYTHONPATH=src python -m diagnostics.hypotheses --target disagreement --dry-run`.

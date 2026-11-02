@@ -9,7 +9,7 @@
 # low_confidence.score_threshold), candidatos a inconsistência de rotulagem.
 
 embedding:
-  model_name: "neuralmind/bert-base-portuguese-cased" # BERTimbau
+  model_name: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
   batch_size: 128
 
 sae:

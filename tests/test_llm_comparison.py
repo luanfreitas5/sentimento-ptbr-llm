@@ -645,6 +645,38 @@ class TestModelDisagreementHypotheses:
         assert outcomes[1].evidence_path is not None and outcomes[1].evidence_path.is_file()
         assert (tmp_path / "saida" / "corpus_diagnostico.parquet").is_file()
 
+    def test_each_pair_writes_hypotheses_to_its_own_subdirectory(
+        self,
+        frame: pl.DataFrame,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """O ``output_dir`` do par vira subpasta de ``data.output_dir`` (sem sobrescrever)."""
+        discovery = _build_discovery(np.tile(np.array([[0.4, 0.0]]), (6, 1)), frame)
+        monkeypatch.setattr(model_disagreement, "prepare_discovery_data", lambda *args: discovery)
+        seen: list[str] = []
+
+        def _fake_target_run(target: str, corpus: Any, disc: Any, settings: Any, *a: Any, **k: Any):
+            seen.append(settings.data.output_dir)
+            return SimpleNamespace(
+                hypotheses=pl.DataFrame({"hypothesis": ["h"], "neuron_idx": [0]}),
+                output_path=tmp_path / "x.parquet",
+            )
+
+        monkeypatch.setattr(model_disagreement, "run_target_diagnostics", _fake_target_run)
+
+        for pair in ("par_a", "par_b"):
+            run_disagreement_hypotheses(
+                frame,
+                SimpleNamespace(),  # type: ignore[arg-type]
+                output_dir=tmp_path / pair,
+                targets=("disagreement",),
+                top_tweets_per_hypothesis=1,
+                track=False,
+            )
+
+        assert seen == ["diagnostics/par_a", "diagnostics/par_b"]
+
     def test_run_rejects_unknown_targets(self, frame: pl.DataFrame, tmp_path: Path) -> None:
         """Só ``disagreement`` e ``uncertainty`` são alvos válidos desta etapa."""
         with pytest.raises(DataValidationError, match="alvos inválidos"):
