@@ -99,6 +99,7 @@ openai:
 
 confidence:
   low_confidence_threshold: 0.5 # abaixo disso, candidato à validação humana
+  discordance_threshold: 0.3 # acima disso, discordância entre rotuladores sinalizada (padrão de confidence.py)
 
 # Gold sets: amostra do corpus normalizado rotulada por dois LLMs da API OpenAI-compatível.
 # `openai` (gpt-6-luna) é a referência PRIMÁRIA e `unb` a SECUNDÁRIA.

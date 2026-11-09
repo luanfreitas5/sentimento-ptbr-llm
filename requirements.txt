@@ -2,17 +2,17 @@
 #    uv export --no-hashes -o requirements.txt
 aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.14.4
+aiohttp==3.14.5
     # via mlflow
 aiosignal==1.4.0
     # via aiohttp
-alembic==1.20.0
+alembic==1.20.1
     # via mlflow
 annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
-anyio==4.15.1
+anyio==4.16.0
     # via
     #   httpx
     #   jupyter-server
@@ -28,11 +28,11 @@ argon2-cffi-bindings==26.1.0
     # via argon2-cffi
 arrow==1.4.0
     # via isoduration
-ast-serialize==0.12.1
+ast-serialize==0.13.1
     # via mypy
 asttokens==3.0.2
     # via stack-data
-async-lru==2.3.0
+async-lru==2.4.0
     # via jupyterlab
 async-timeout==5.0.1 ; python_full_version < '3.11'
     # via aiohttp
@@ -48,7 +48,9 @@ babel==2.18.0
     # via
     #   jupyterlab-server
     #   mkdocs-material
-backrefs==8.1
+backrefs==8.1 ; python_full_version < '3.11'
+    # via mkdocs-material
+backrefs==8.2 ; python_full_version >= '3.11'
     # via mkdocs-material
 bandit==1.9.4
 basedpyright==1.40.2
@@ -65,14 +67,16 @@ boolean-py==5.0
     # via license-expression
 cachecontrol==0.14.4
     # via pip-audit
-cachetools==7.2.1
+cachetools==7.3.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
-certifi==2026.7.22
+certifi==2026.10.23
     # via
+    #   databricks-sdk
     #   httpcore
     #   httpx
+    #   markitdown
     #   requests
 cffi==2.1.1
     # via
@@ -86,7 +90,7 @@ charset-normalizer==3.5.2
     #   commitizen
     #   markitdown
     #   requests
-click==8.5.0
+click==8.5.1
     # via
     #   flask
     #   interrogate
@@ -111,20 +115,22 @@ colorama==0.4.6
     #   pytest
     #   radon
     #   tqdm
-coloredlogs==15.0.1
+coloredlogs==15.0.1 ; python_full_version < '3.11'
     # via onnxruntime
 comm==0.2.3
     # via
     #   ipykernel
     #   ipywidgets
-commitizen==4.19.2
+commitizen==4.19.3
 contourpy==1.3.2 ; python_full_version < '3.11'
     # via matplotlib
 contourpy==1.3.3 ; python_full_version == '3.11.*'
     # via matplotlib
 contourpy==1.4.0 ; python_full_version >= '3.12'
     # via matplotlib
-coverage==7.16.2
+coverage==7.16.2 ; python_full_version < '3.11'
+    # via pytest-cov
+coverage==7.17.2 ; python_full_version >= '3.11'
     # via pytest-cov
 cryptography==50.0.2
     # via
@@ -134,7 +140,7 @@ cycler==0.12.1
     # via matplotlib
 cyclonedx-python-lib==11.12.0
     # via pip-audit
-databricks-sdk==0.151.0
+databricks-sdk==0.163.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
@@ -152,7 +158,7 @@ defusedxml==0.7.1
 deprecated==1.3.1
     # via commitizen
 detect-secrets==1.5.0
-distlib==0.4.3
+distlib==0.4.4
     # via virtualenv
 docker==7.2.0
     # via mlflow
@@ -164,11 +170,16 @@ exceptiongroup==1.3.1 ; python_full_version < '3.11'
     #   pytest
 executing==2.3.0
     # via stack-data
-fastapi==0.143.0
+fastapi==0.162.2
     # via mlflow-skinny
-fastjsonschema==2.22.2
+fastjsonschema==2.22.3
     # via nbformat
-filelock==4.1.0
+filelock==4.1.0 ; python_full_version < '3.11'
+    # via
+    #   cachecontrol
+    #   python-discovery
+    #   virtualenv
+filelock==4.2.10 ; python_full_version >= '3.11'
     # via
     #   cachecontrol
     #   python-discovery
@@ -183,7 +194,7 @@ flatbuffers==25.12.19
     # via onnxruntime
 fonttools==4.65.0 ; python_full_version < '3.11'
     # via matplotlib
-fonttools==4.66.1 ; python_full_version >= '3.11'
+fonttools==4.68.0 ; python_full_version >= '3.11'
     # via matplotlib
 formulaic==1.2.2
     # via statsmodels
@@ -197,13 +208,13 @@ ghp-import==2.1.0
     # via mkdocs
 gitdb==4.0.12
     # via gitpython
-gitpython==3.2.0
+gitpython==3.2.1
     # via mlflow-skinny
-google-auth==2.61.0
+google-auth==2.62.1
     # via databricks-sdk
-graphene==3.4.3
+graphene==3.4
     # via mlflow
-graphql-core==3.2.13
+graphql-core==3.2.14
     # via
     #   graphene
     #   graphql-relay
@@ -213,7 +224,7 @@ greenlet==3.5.6 ; (python_full_version < '3.11' and platform_machine == 'AMD64')
     # via sqlalchemy
 griffelib==2.3.0 ; python_full_version < '3.11'
     # via mkdocstrings-python
-griffelib==2.3.2 ; python_full_version >= '3.11'
+griffelib==2.4.1 ; python_full_version >= '3.11'
     # via mkdocstrings-python
 gunicorn==26.2.0 ; sys_platform != 'win32'
     # via mlflow
@@ -225,11 +236,12 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via jupyterlab
-huey==3.4.0
+huey==3.5.4
     # via mlflow
-humanfriendly==10.0
+humanfriendly==10.0 ; python_full_version < '3.11'
     # via coloredlogs
-hypothesis==6.168.5
+hypothesis==6.168.5 ; python_full_version < '3.11'
+hypothesis==6.170.15 ; python_full_version >= '3.11'
 identify==2.6.20
     # via pre-commit
 idna==3.20
@@ -239,7 +251,9 @@ idna==3.20
     #   jsonschema
     #   requests
     #   yarl
-importlib-metadata==9.0.1
+importlib-metadata==9.0.1 ; python_full_version < '3.11'
+    # via mlflow-skinny
+importlib-metadata==10.1.0 ; python_full_version >= '3.11'
     # via mlflow-skinny
 iniconfig==2.3.1
     # via pytest
@@ -255,7 +269,7 @@ ipython==8.39.0 ; python_full_version < '3.11'
     #   ipykernel
     #   ipywidgets
     #   nbqa
-ipython==9.17.1 ; python_full_version >= '3.11'
+ipython==9.18.1 ; python_full_version >= '3.11'
     # via
     #   ipykernel
     #   ipywidgets
@@ -267,7 +281,7 @@ isoduration==20.11.0
     # via jsonschema
 itsdangerous==2.2.0
     # via flask
-jedi==0.20.0
+jedi==0.20.1
     # via ipython
 jinja2==3.1.6
     # via
@@ -287,7 +301,7 @@ joblib==1.6.0
     #   sentimento-ptbr-llm
 json5==0.17.3
     # via jupyterlab-server
-jsonpointer==3.2.1
+jsonpointer==3.10
     # via jsonschema
 jsonschema==4.26.0
     # via
@@ -296,7 +310,7 @@ jsonschema==4.26.0
     #   nbformat
 jsonschema-specifications==2025.9.1
     # via jsonschema
-jupyter-builder==1.2.3
+jupyter-builder==1.2.4
     # via jupyterlab
 jupyter-client==8.10.0
     # via
@@ -325,7 +339,7 @@ jupyter-server==2.21.1
     #   notebook-shim
 jupyter-server-terminals==0.5.4
     # via jupyter-server
-jupyterlab==4.6.4
+jupyterlab==4.6.6
 jupyterlab-pygments==0.3.0
     # via nbconvert
 jupyterlab-server==2.28.1
@@ -350,7 +364,7 @@ magika==1.0.3
     # via markitdown
 mako==1.4.3
     # via alembic
-mando==0.8.2
+mando==0.7.1
     # via radon
 markdown==3.10.3 ; python_full_version < '3.11'
     # via
@@ -359,7 +373,7 @@ markdown==3.10.3 ; python_full_version < '3.11'
     #   mkdocs-material
     #   mkdocstrings
     #   pymdown-extensions
-markdown==3.11 ; python_full_version >= '3.11'
+markdown==3.11.3 ; python_full_version >= '3.11'
     # via
     #   mkdocs
     #   mkdocs-autorefs
@@ -370,7 +384,7 @@ markdown-it-py==4.2.0
     # via rich
 markdownify==1.2.3
     # via markitdown
-markitdown==0.1.8
+markitdown==0.1.9
     # via sentimento-ptbr-llm
 markupsafe==3.0.4
     # via
@@ -402,55 +416,66 @@ mergedeep==1.3.4
     # via
     #   mkdocs
     #   mkdocs-get-deps
-mistune==3.3.4
+mistune==3.4.0
     # via nbconvert
 mkdocs==1.6.1
     # via
     #   mkdocs-autorefs
     #   mkdocs-material
     #   mkdocstrings
-mkdocs-autorefs==1.4.4
+mkdocs-autorefs==1.4.4 ; python_full_version < '3.11'
+    # via
+    #   mkdocstrings
+    #   mkdocstrings-python
+mkdocs-autorefs==1.4.5 ; python_full_version >= '3.11'
     # via
     #   mkdocstrings
     #   mkdocstrings-python
 mkdocs-get-deps==0.2.2
     # via mkdocs
-mkdocs-material==9.7.7
+mkdocs-material==9.7.7 ; python_full_version < '3.11'
+mkdocs-material==9.8.1 ; python_full_version >= '3.11'
 mkdocs-material-extensions==1.3.1
     # via mkdocs-material
 mkdocstrings==1.0.6 ; python_full_version < '3.11'
     # via mkdocstrings-python
-mkdocstrings==1.0.7 ; python_full_version >= '3.11'
+mkdocstrings==1.0.8 ; python_full_version >= '3.11'
     # via mkdocstrings-python
-mkdocstrings-python==2.0.9
+mkdocstrings-python==2.0.9 ; python_full_version < '3.11'
     # via mkdocstrings
-mlflow==3.17.0
+mkdocstrings-python==2.0.10 ; python_full_version >= '3.11'
+    # via mkdocstrings
+mlflow==3.18.0
     # via sentimento-ptbr-llm
-mlflow-skinny==3.17.0
+mlflow-skinny==3.18.0
     # via mlflow
-mlflow-tracing==3.17.0
+mlflow-tracing==3.18.0
     # via mlflow
-mpmath==1.4.1
+mpmath==1.3.0 ; python_full_version < '3.11'
     # via sympy
-msgpack==1.2.3
+msgpack==1.2.4
     # via cachecontrol
-multidict==7.1.0
+multidict==7.1.0 ; python_full_version < '3.11'
     # via
     #   aiohttp
     #   yarl
-mypy==2.4.0
+multidict==7.2.1 ; python_full_version >= '3.11'
+    # via
+    #   aiohttp
+    #   yarl
+mypy==2.4.1
     # via refurb
-mypy-extensions==1.1.0
+mypy-extensions==1.2.0
     # via
     #   mypy
     #   typing-inspect
-narwhals==2.27.1
+narwhals==2.28.0
     # via
     #   formulaic
     #   scikit-learn
 nbclient==0.11.0
     # via nbconvert
-nbconvert==7.17.1
+nbconvert==7.17.2
     # via jupyter-server
 nbformat==5.11.1
     # via
@@ -458,23 +483,23 @@ nbformat==5.11.1
     #   nbclient
     #   nbconvert
     #   nbstripout
-nbqa==1.9.1
+nbqa==1.9.1 ; python_full_version < '3.11'
+nbqa==1.10.0 ; python_full_version >= '3.11'
 nbstripout==0.9.1
 nest-asyncio2==1.7.4
     # via ipykernel
-nodeenv==1.11.0
+nodeenv==1.12.0
     # via pre-commit
 nodejs-wheel-binaries==24.19.0
     # via basedpyright
 notebook-shim==0.2.4
     # via jupyterlab
-numba==0.68.0 ; python_full_version < '3.12'
+numba==0.68.1 ; python_full_version < '3.12'
     # via shap
 numpy==2.2.6 ; python_full_version < '3.11'
     # via
     #   contourpy
     #   formulaic
-    #   magika
     #   matplotlib
     #   mlflow
     #   numba
@@ -494,7 +519,6 @@ numpy==2.4.6 ; python_full_version == '3.11.*'
     # via
     #   contourpy
     #   formulaic
-    #   magika
     #   matplotlib
     #   mlflow
     #   numba
@@ -514,7 +538,6 @@ numpy==2.5.4 ; python_full_version >= '3.12'
     # via
     #   contourpy
     #   formulaic
-    #   magika
     #   matplotlib
     #   mlflow
     #   numba
@@ -532,28 +555,30 @@ numpy==2.5.4 ; python_full_version >= '3.12'
     #   xgboost
 nvidia-ml-py==13.615.71 ; sys_platform != 'darwin'
     # via scalene
-nvidia-nccl-cu12==2.28.9 ; python_full_version < '3.12' and sys_platform == 'linux'
+nvidia-nccl-cu12==2.29.3 ; python_full_version < '3.12' and sys_platform == 'linux'
     # via xgboost
 nvidia-nccl-cu13==2.32.3 ; python_full_version >= '3.12' and sys_platform == 'linux'
     # via xgboost
-onnxruntime==1.20.1
+onnxruntime==1.23.2 ; python_full_version < '3.11'
     # via magika
-opentelemetry-api==1.45.1
+onnxruntime==1.31.1 ; python_full_version >= '3.11'
+    # via magika
+opentelemetry-api==1.45.2
     # via
     #   fastapi
     #   mlflow-skinny
     #   mlflow-tracing
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-proto==1.45.1
+opentelemetry-proto==1.45.2
     # via
     #   mlflow-skinny
     #   mlflow-tracing
-opentelemetry-sdk==1.45.1
+opentelemetry-sdk==1.45.2
     # via
     #   mlflow-skinny
     #   mlflow-tracing
-opentelemetry-semantic-conventions==0.66b1
+opentelemetry-semantic-conventions==0.66b2
     # via opentelemetry-sdk
 overrides==7.7.0 ; python_full_version < '3.12'
     # via jupyter-server
@@ -592,7 +617,7 @@ pandas==2.3.3 ; python_full_version < '3.11'
     #   sentimento-ptbr-llm
     #   shap
     #   statsmodels
-pandas==3.0.6 ; python_full_version >= '3.11'
+pandas==3.1.1 ; python_full_version >= '3.11'
     # via
     #   formulaic
     #   mlflow
@@ -600,7 +625,7 @@ pandas==3.0.6 ; python_full_version >= '3.11'
     #   sentimento-ptbr-llm
     #   shap
     #   statsmodels
-pandera==0.34.1
+pandera==0.35.0
     # via sentimento-ptbr-llm
 pandocfilters==1.5.1
     # via nbconvert
@@ -614,34 +639,51 @@ patsy==1.0.3
     # via statsmodels
 pexpect==4.9.0 ; sys_platform != 'emscripten' and sys_platform != 'win32'
     # via ipython
-pillow==12.3.0
+pillow==12.3.0 ; python_full_version < '3.11'
     # via
     #   matplotlib
     #   python-pptx
-pip==26.2.1
+pillow==13.0.0 ; python_full_version >= '3.11'
+    # via
+    #   matplotlib
+    #   python-pptx
+pip==26.3
     # via pip-api
 pip-api==0.0.35
     # via pip-audit
 pip-audit==2.10.1
 pip-requirements-parser==32.0.1
     # via pip-audit
-platformdirs==4.12.4
+platformdirs==4.12.4 ; python_full_version < '3.11'
     # via
     #   jupyter-core
     #   mkdocs-get-deps
     #   pip-audit
     #   virtualenv
-pluggy==1.6.0
+platformdirs==4.14.5 ; python_full_version >= '3.11'
+    # via
+    #   jupyter-core
+    #   mkdocs-get-deps
+    #   pip-audit
+    #   virtualenv
+pluggy==1.7.0
     # via
     #   pytest
     #   pytest-cov
-polars==2.0.0
+polars==2.0.0 ; python_full_version < '3.11'
     # via
     #   pandera
     #   sentimento-ptbr-llm
-polars-runtime-32==2.0.0
+polars==2.1.0 ; python_full_version >= '3.11'
+    # via
+    #   pandera
+    #   sentimento-ptbr-llm
+polars-runtime-32==2.0.0 ; python_full_version < '3.11'
     # via polars
-pre-commit==4.6.2
+polars-runtime-32==2.1.0 ; python_full_version >= '3.11'
+    # via polars
+pre-commit==4.6.2 ; python_full_version < '3.11'
+pre-commit==4.7.0 ; python_full_version >= '3.11'
 prettytable==3.18.0
     # via skops
 prometheus-client==0.26.0
@@ -655,7 +697,7 @@ propcache==0.5.4
     # via
     #   aiohttp
     #   yarl
-protobuf==6.33.6
+protobuf==7.36.2
     # via
     #   databricks-sdk
     #   mlflow-skinny
@@ -675,21 +717,27 @@ pure-eval==0.2.4
     # via stack-data
 py==1.11.0
     # via interrogate
-py-serializable==2.1.0
+py-serializable==2.2.0
     # via cyclonedx-python-lib
-pyarrow==25.0.1
+pyarrow==25.0.1 ; python_full_version < '3.11'
     # via
     #   mlflow
     #   sentimento-ptbr-llm
-pyasn1==0.6.4
+pyarrow==26.0.1 ; python_full_version >= '3.11'
+    # via
+    #   mlflow
+    #   sentimento-ptbr-llm
+pyasn1==0.6.5
     # via pyasn1-modules
 pyasn1-modules==0.4.2
     # via google-auth
 pycodestyle==2.15.0
     # via autopep8
-pycparser==3.11 ; implementation_name != 'PyPy'
+pycparser==3.11 ; python_full_version < '3.11' and implementation_name != 'PyPy'
     # via cffi
-pydantic==2.14.0
+pycparser==3.12 ; python_full_version >= '3.11' and implementation_name != 'PyPy'
+    # via cffi
+pydantic==2.14.3
     # via
     #   fastapi
     #   mlflow-skinny
@@ -698,9 +746,11 @@ pydantic==2.14.0
     #   pydantic-settings
     #   scalene
     #   sentimento-ptbr-llm
-pydantic-core==2.50.0
+pydantic-core==2.50.4
     # via pydantic
-pydantic-settings==2.15.0
+pydantic-settings==2.15.0 ; python_full_version < '3.11'
+    # via sentimento-ptbr-llm
+pydantic-settings==2.16.2 ; python_full_version >= '3.11'
     # via sentimento-ptbr-llm
 pygments==2.21.0
     # via
@@ -710,7 +760,11 @@ pygments==2.21.0
     #   nbconvert
     #   pytest
     #   rich
-pymdown-extensions==12.2
+pymdown-extensions==12.3 ; python_full_version < '3.11.5'
+    # via
+    #   mkdocs-material
+    #   mkdocstrings
+pymdown-extensions==13.0 ; python_full_version >= '3.11.5'
     # via
     #   mkdocs-material
     #   mkdocstrings
@@ -718,38 +772,47 @@ pyparsing==3.3.3
     # via
     #   matplotlib
     #   pip-requirements-parser
-pyreadline3==3.5.6 ; sys_platform == 'win32'
+pyreadline3==3.5.6 ; python_full_version < '3.11' and sys_platform == 'win32'
     # via humanfriendly
-pytest==9.1.1
+pytest==9.2.0
     # via pytest-cov
 pytest-cov==7.1.0
-python-dateutil==2.9.0.post0
+python-dateutil==3.0.0 ; python_full_version < '3.11'
     # via
     #   arrow
     #   ghp-import
-    #   graphene
     #   jupyter-client
     #   matplotlib
     #   pandas
-python-discovery==1.6.2
+python-dateutil==4.0.0 ; python_full_version >= '3.11'
+    # via
+    #   arrow
+    #   ghp-import
+    #   jupyter-client
+    #   matplotlib
+    #   pandas
+python-discovery==1.9.5
     # via virtualenv
 python-dotenv==1.2.4
     # via
-    #   magika
     #   mlflow-skinny
     #   pydantic-settings
     #   sentimento-ptbr-llm
 python-json-logger==4.2.0
     # via jupyter-events
+python-multipart==0.0.32 ; python_full_version < '3.11'
+    # via mlflow-skinny
+python-multipart==0.0.33 ; python_full_version >= '3.11'
+    # via mlflow-skinny
 python-pptx==1.0.2
     # via
     #   markitdown
     #   sentimento-ptbr-llm
-pytz==2026.5 ; python_full_version < '3.11'
+pytz==2026.6 ; python_full_version < '3.11'
     # via pandas
 pywin32==312 ; sys_platform == 'win32'
     # via docker
-pywinpty==3.0.5 ; (python_full_version != '3.11.*' and os_name == 'nt') or (os_name == 'nt' and platform_machine != 'x86_64') or (os_name == 'nt' and sys_platform != 'darwin')
+pywinpty==3.1.2 ; (python_full_version != '3.11.*' and os_name == 'nt') or (os_name == 'nt' and platform_machine != 'x86_64') or (os_name == 'nt' and sys_platform != 'darwin')
     # via
     #   jupyter-server
     #   jupyter-server-terminals
@@ -771,7 +834,7 @@ pyyaml==6.0.3
     #   xenon
 pyyaml-env-tag==1.1
     # via mkdocs
-pyzmq==27.2.0
+pyzmq==27.3.0
     # via
     #   ipykernel
     #   jupyter-client
@@ -822,8 +885,8 @@ rpds-py==2026.9.1 ; python_full_version >= '3.11'
     # via
     #   jsonschema
     #   referencing
-ruff==0.17.0
-scalene==2.3.0
+ruff==0.17.4
+scalene==2.4.0
 scikit-learn==1.7.2 ; python_full_version < '3.11'
     # via
     #   mlflow
@@ -876,7 +939,7 @@ shap==0.50.0 ; python_full_version == '3.11.*' and platform_machine == 'x86_64' 
     # via sentimento-ptbr-llm
 shap==0.51.0 ; (python_full_version == '3.11.*' and platform_machine != 'x86_64') or (python_full_version == '3.11.*' and sys_platform != 'darwin')
     # via sentimento-ptbr-llm
-shap==0.53.0 ; python_full_version >= '3.12'
+shap==0.54.1 ; python_full_version >= '3.12'
     # via sentimento-ptbr-llm
 six==1.17.0
     # via
@@ -894,23 +957,27 @@ sortedcontainers==2.4.0
     # via
     #   cyclonedx-python-lib
     #   hypothesis
-soupsieve==2.10 ; python_full_version < '3.11'
+soupsieve==2.10 ; python_full_version < '3.11.5'
     # via beautifulsoup4
-soupsieve==3.0.1 ; python_full_version >= '3.11'
+soupsieve==4.0.1 ; python_full_version >= '3.11.5'
     # via beautifulsoup4
-sqlalchemy==2.0.54 ; python_full_version < '3.11'
+sqlalchemy==2.0.57 ; python_full_version < '3.11'
     # via
     #   alembic
     #   mlflow
-sqlalchemy==2.1.4 ; python_full_version >= '3.11'
+sqlalchemy==2.1.8 ; python_full_version >= '3.11'
     # via
     #   alembic
     #   mlflow
-sqlparse==0.6.0
+sqlparse==0.6.1
     # via mlflow-skinny
 stack-data==0.6.3
     # via ipython
-starlette==1.7.0
+starlette==1.7.0 ; python_full_version < '3.11'
+    # via
+    #   fastapi
+    #   mlflow-skinny
+starlette==1.10.0 ; python_full_version >= '3.11'
     # via
     #   fastapi
     #   mlflow-skinny
@@ -920,7 +987,7 @@ stevedore==5.8.0 ; python_full_version < '3.11'
     # via bandit
 stevedore==5.9.1 ; python_full_version >= '3.11'
     # via bandit
-sympy==1.14.0
+sympy==1.14.0 ; python_full_version < '3.11'
     # via onnxruntime
 tabulate==0.10.0
     # via interrogate
@@ -930,7 +997,7 @@ terminado==0.18.1
     # via
     #   jupyter-server
     #   jupyter-server-terminals
-threadpoolctl==3.7.0
+threadpoolctl==3.8.0
     # via scikit-learn
 tinycss2==1.5.1
     # via bleach
@@ -953,9 +1020,16 @@ tomli==2.5.0
     #   vulture
 tomli-w==1.2.0
     # via pip-audit
-tomlkit==0.15.1
+tomlkit==0.15.2
     # via commitizen
-tornado==6.5.10
+tornado==6.5.10 ; python_full_version < '3.11'
+    # via
+    #   ipykernel
+    #   jupyter-client
+    #   jupyter-server
+    #   jupyterlab
+    #   terminado
+tornado==6.6 ; python_full_version >= '3.11'
     # via
     #   ipykernel
     #   jupyter-client
@@ -1011,6 +1085,7 @@ typing-extensions==4.16.0
     #   pandera
     #   pydantic
     #   pydantic-core
+    #   pydantic-settings
     #   python-pptx
     #   referencing
     #   shap
@@ -1023,15 +1098,16 @@ typing-extensions==4.16.0
     #   virtualenv
 typing-inspect==0.9.0
     # via pandera
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via
     #   fastapi
     #   pydantic
     #   pydantic-settings
-tzdata==2026.5
+tzdata==2026.6
     # via
     #   arrow
     #   pandas
+    #   python-dateutil
 uri-template==1.3.0
     # via jsonschema
 urllib3==2.8.0
@@ -1041,14 +1117,16 @@ urllib3==2.8.0
     #   requests
 uvicorn==0.54.0
     # via mlflow-skinny
-virtualenv==21.14.6
+virtualenv==21.15.6
     # via pre-commit
 vulture==2.16
 waitress==3.0.2 ; sys_platform == 'win32'
     # via mlflow
-watchdog==6.0.0
+watchdog==6.0.0 ; python_full_version < '3.11'
     # via mkdocs
-wcwidth==0.9.2
+watchdog==7.1.0 ; python_full_version >= '3.11'
+    # via mkdocs
+wcwidth==0.9.4
     # via
     #   prettytable
     #   prompt-toolkit
@@ -1066,7 +1144,7 @@ werkzeug==3.1.9
     #   flask-cors
 widgetsnbextension==4.0.16
     # via ipywidgets
-wrapt==2.5.0
+wrapt==2.5.2
     # via
     #   deprecated
     #   formulaic
@@ -1075,9 +1153,9 @@ xgboost==3.2.0 ; python_full_version < '3.12'
     # via sentimento-ptbr-llm
 xgboost==3.4.1 ; python_full_version >= '3.12'
     # via sentimento-ptbr-llm
-xlsxwriter==3.2.9
+xlsxwriter==3.3.1
     # via python-pptx
 yarl==1.25.1
     # via aiohttp
-zipp==4.1.1
+zipp==4.1.2
     # via importlib-metadata
