@@ -259,7 +259,9 @@ all:  ## Executa o workflow completo, na ordem configurada em configs/config.yam
 
 # --- Camada de diagnóstico HypotheSAEs (opt-in, fora de `make all`) -----------
 # 'diagnostics' vive em src/, que não está no sys.path do venv: exporta PYTHONPATH=src.
-DIAG := PYTHONPATH=src uv run python -m diagnostics
+# `export` do Make (em vez do prefixo inline `VAR=x cmd`) funciona também em cmd/PowerShell.
+export PYTHONPATH := src
+DIAG := uv run python -m diagnostics
 TARGET ?= disagreement
 GOLD ?= gold_openai
 
