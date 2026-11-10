@@ -39,7 +39,11 @@ from config.logging import configure_logging
 from config.paths import ProjectPaths, load_project_paths
 from config.settings import load_general_config
 from data.loader import read_dataset_file
-from diagnostics.cost import estimate_hypothesis_generation_cost, format_cost_report
+from diagnostics.cost import (
+    estimate_hypothesis_generation_cost,
+    format_cost_report,
+    save_dry_run_report,
+)
 from diagnostics.sae_runner import (
     DISCOVERY_PARTITION,
     HOLDOUT_PARTITION,
@@ -55,6 +59,7 @@ from diagnostics.settings import (
     DiagnosticsSettings,
     load_diagnostics_settings,
 )
+from diagnostics.summary import format_hypotheses_summary, save_summary_report
 from diagnostics.targets import TARGET_NAMES, TargetName, adapt_labeled_corpus, build_target
 from diagnostics.tracking import (
     configure_mlflow,
@@ -519,6 +524,11 @@ def run_target_diagnostics(
             raise
         if track:
             _log_result(result)
+    summary = format_hypotheses_summary(result)
+    logger.info("\n%s", summary)
+    save_summary_report(
+        summary, paths.reports_interpretability_dir / settings.data.output_dir, f"hipoteses_{slug}"
+    )
     assert_sanity_gate_passed(result.gate)
     return result
 
@@ -755,6 +765,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.dry_run:
         report = build_dry_run_report(args.target, corpus, settings, **target_arguments)
         print(report)
+        save_dry_run_report(
+            report,
+            paths.reports_interpretability_dir / settings.data.output_dir,
+            f"hypotheses_{args.target}",
+        )
         return 0
 
     configure_reproducibility(

@@ -37,7 +37,7 @@ from config.environment import configure_environment_variables
 from config.logging import configure_logging
 from config.paths import ProjectPaths, load_project_paths
 from diagnostics.annotation import annotate_concepts
-from diagnostics.cost import estimate_annotation_cost, format_cost_report
+from diagnostics.cost import estimate_annotation_cost, format_cost_report, save_dry_run_report
 from diagnostics.hypotheses import (
     build_target_slug,
     load_diagnostic_corpus,
@@ -56,6 +56,7 @@ from diagnostics.settings import (
     DiagnosticsSettings,
     load_diagnostics_settings,
 )
+from diagnostics.summary import format_validation_summary, save_summary_report
 from diagnostics.targets import TARGET_NAMES, TargetName, build_target
 from diagnostics.tracking import (
     configure_mlflow,
@@ -453,7 +454,11 @@ def run_validation_stage(
                 }
             )
             log_diagnostics_artifact(output_dir / f"{slug}_validacao.csv")
-    return ValidationOutcome(validated, n_survivors, sample_path)
+    outcome = ValidationOutcome(validated, n_survivors, sample_path)
+    summary = format_validation_summary(slug, outcome, correction=settings.validation.correction)
+    logger.info("\n%s", summary)
+    save_summary_report(summary, output_dir, f"validacao_{slug}")
+    return outcome
 
 
 def _write_sample(
@@ -552,7 +557,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     corpus = load_diagnostic_corpus(settings, paths, args.corpus)
     target_arguments = resolve_target_arguments(args.target, args, settings)
     if args.dry_run:
-        print(build_dry_run_report(args.target, corpus, settings, **target_arguments))
+        report = build_dry_run_report(args.target, corpus, settings, **target_arguments)
+        print(report)
+        save_dry_run_report(
+            report,
+            paths.reports_interpretability_dir / settings.data.output_dir,
+            f"validation_{args.target}",
+        )
         return 0
     run_validation_stage(
         args.target, corpus, settings, paths, track=not args.no_mlflow, **target_arguments

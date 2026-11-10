@@ -35,10 +35,19 @@ DIAGNOSTICS_STEPS: tuple[str, ...] = ("hypotheses", "validation", "comparison")
 DIAGNOSTICS_GOLD_CHOICES: tuple[str, ...] = GOLD_SOURCE_NAMES
 
 
-def _emit_report(report: str) -> str:
-    """Registra e imprime o relatório de dry-run (a saída é o objetivo do comando)."""
+def _emit_report(
+    report: str, paths: ProjectPaths, settings: "DiagnosticsSettings", name: str
+) -> str:
+    """Registra, imprime e salva em disco o relatório de dry-run.
+
+    O arquivo ``dry_run_<name>.txt`` vai para a mesma pasta das demais saídas
+    do diagnóstico (``reports/interpretability/<data.output_dir>/``).
+    """
+    from diagnostics.cost import save_dry_run_report
+
     logger.info("\n%s", report)
     print(report)
+    save_dry_run_report(report, paths.reports_interpretability_dir / settings.data.output_dir, name)
     return report
 
 
@@ -81,7 +90,8 @@ def _run_comparison_step(
     gold_file = paths.gold_openai_file if gold == "gold_openai" else paths.gold_unb_file
     chosen_models = list(models or [settings.llm.annotator_model])
     if dry_run:
-        return _emit_report(build_comparison_dry_run(gold_file, settings, chosen_models))
+        report = build_comparison_dry_run(gold_file, settings, chosen_models)
+        return _emit_report(report, paths, settings, f"comparison_{gold}")
     return run_prompt_comparison(gold_file, settings, paths, models=chosen_models, track=track)
 
 
@@ -99,7 +109,8 @@ def _run_validation_step(
     from diagnostics.validation import build_dry_run_report, run_validation_stage
 
     if dry_run:
-        return _emit_report(build_dry_run_report(target_name, corpus, settings, **target_arguments))
+        report = build_dry_run_report(target_name, corpus, settings, **target_arguments)
+        return _emit_report(report, paths, settings, f"validation_{target_name}")
     return run_validation_stage(
         target_name, corpus, settings, paths, track=track, **target_arguments
     )
@@ -120,7 +131,8 @@ def _run_hypotheses_step(
     from diagnostics.sae_runner import prepare_discovery_data
 
     if dry_run:
-        return _emit_report(build_dry_run_report(target_name, corpus, settings, **target_arguments))
+        report = build_dry_run_report(target_name, corpus, settings, **target_arguments)
+        return _emit_report(report, paths, settings, f"hypotheses_{target_name}")
     discovery = prepare_discovery_data(corpus, settings, paths)
     return run_target_diagnostics(
         target_name, corpus, discovery, settings, paths, track=track, **target_arguments

@@ -44,6 +44,7 @@ from diagnostics.cost import (
     estimate_classification_cost,
     estimate_prompt_tokens,
     format_cost_report,
+    save_dry_run_report,
 )
 from diagnostics.gold_eval import calculate_scores_with_ci
 from diagnostics.llm_client import AsyncLLMClient, CallStats, DiskCompletionCache
@@ -52,6 +53,7 @@ from diagnostics.settings import (
     DiagnosticsSettings,
     load_diagnostics_settings,
 )
+from diagnostics.summary import format_comparison_summary, save_summary_report
 from diagnostics.tracking import (
     configure_mlflow,
     log_diagnostics_artifact,
@@ -693,6 +695,11 @@ def run_prompt_comparison(
         )
         table_path = paths.reports_metrics_dir / "diagnostics_comparacao_v1_v2.csv"
         write_csv(result, table_path)
+        summary = format_comparison_summary(
+            result, agreements["v1"], agreements["v2"], gold_name=gold_file.stem
+        )
+        logger.info("\n%s", summary)
+        save_summary_report(summary, paths.reports_metrics_dir, f"comparacao_{gold_file.stem}")
         if track:
             _log_comparison(result, agreements["v1"], agreements["v2"], table_path)
     return result
@@ -795,7 +802,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     gold_file = paths.gold_openai_file if args.gold == "gold_openai" else paths.gold_unb_file
     models = args.models or [settings.llm.annotator_model]
     if args.dry_run:
-        print(build_comparison_dry_run(gold_file, settings, models))
+        report = build_comparison_dry_run(gold_file, settings, models)
+        print(report)
+        save_dry_run_report(
+            report,
+            paths.reports_interpretability_dir / settings.data.output_dir,
+            f"comparison_{args.gold}",
+        )
         return 0
     result = run_prompt_comparison(
         gold_file, settings, paths, models=models, track=not args.no_mlflow

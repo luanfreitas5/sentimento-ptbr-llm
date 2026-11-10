@@ -1119,7 +1119,7 @@ class TestCli:
         """``--dry-run`` imprime a estimativa e sai com 0, sem carregar embeddings nem SAE."""
         monkeypatch.setattr(hypotheses, "configure_environment_variables", lambda: None)
         monkeypatch.setattr(hypotheses, "configure_logging", lambda: None)
-        monkeypatch.setattr(hypotheses, "load_project_paths", SimpleNamespace)
+        monkeypatch.setattr(hypotheses, "load_project_paths", _namespace)
         monkeypatch.setattr(
             hypotheses, "load_diagnostic_corpus", lambda *_: diagnostic_corpus_large
         )
@@ -1130,6 +1130,9 @@ class TestCli:
         monkeypatch.setattr(hypotheses, "prepare_discovery_data", _must_not_run)
         assert run_hypotheses_cli(["--target", "disagreement", "--dry-run"]) == 0
         assert "DRY-RUN do alvo 'disagreement'" in capsys.readouterr().out
+        saved = list(_DRY_RUN_OUTPUT_DIR[0].rglob("dry_run_hypotheses_disagreement.txt"))
+        assert len(saved) == 1
+        assert "DRY-RUN do alvo 'disagreement'" in saved[0].read_text(encoding="utf-8")
 
     def test_gold_error_requires_corpus(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """O alvo ``gold_error`` exige ``--corpus`` com as predições sobre o gold."""
@@ -2014,8 +2017,19 @@ class TestLoadDiagnosticsSettings:
 # ============================================================================
 
 
+_DRY_RUN_OUTPUT_DIR: list[Path] = []
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dry_run_output(tmp_path: Path) -> None:
+    """Direciona o relatório de dry-run para a pasta temporária do teste."""
+    _DRY_RUN_OUTPUT_DIR[:] = [tmp_path / "interpretability"]
+
+
 def _namespace(**kwargs: Any) -> Any:
     """Cria um objeto simples que faz as vezes de ``ProjectPaths``/``Settings`` nos testes."""
+    if _DRY_RUN_OUTPUT_DIR:
+        kwargs.setdefault("reports_interpretability_dir", _DRY_RUN_OUTPUT_DIR[0])
     return SimpleNamespace(**kwargs)
 
 
@@ -2107,6 +2121,9 @@ class TestRunDiagnosticsStage:
         report = run_diagnostics_stage(_namespace(), target_name="disagreement", dry_run=True)
         assert "DRY-RUN do alvo 'disagreement'" in report
         assert "DRY-RUN" in capsys.readouterr().out
+        saved = list(_DRY_RUN_OUTPUT_DIR[0].rglob("dry_run_hypotheses_disagreement.txt"))
+        assert len(saved) == 1
+        assert "DRY-RUN do alvo 'disagreement'" in saved[0].read_text(encoding="utf-8")
 
     def test_validation_dry_run_uses_validation_report(
         self, diagnostic_corpus_large: pl.DataFrame, monkeypatch: pytest.MonkeyPatch

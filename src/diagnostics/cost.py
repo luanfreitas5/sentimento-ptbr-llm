@@ -9,6 +9,8 @@ Preços vêm de ``configs/diagnostics.yaml -> pricing`` (Ollama local = 0).
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 from diagnostics.llm_client import estimate_tokens
 from diagnostics.settings import DiagnosticsSettings, PricingSettings
@@ -245,3 +247,34 @@ def format_cost_report(estimates: dict[str, CostEstimate], *, provider: str) -> 
     if provider == "ollama":
         lines.append("  (Ollama local: sem custo em dinheiro; o tempo depende do hardware.)")
     return "\n".join(lines)
+
+
+def save_dry_run_report(report: str, output_dir: Path, name: str) -> Path:
+    """Grava o relatório de dry-run em disco (além de imprimi-lo na tela).
+
+    Parameters
+    ----------
+    report : str
+        Texto do relatório de estimativa.
+    output_dir : Path
+        Pasta de destino (criada se não existir).
+    name : str
+        Identificador do relatório (ex.: ``hypotheses_disagreement``); o arquivo é
+        ``dry_run_<name>.txt`` e é sobrescrito a cada execução.
+
+    Returns
+    -------
+    Path
+        Caminho do arquivo gravado.
+
+    Examples
+    --------
+    >>> save_dry_run_report("texto", Path("reports/x"), "validation_uncertainty")  # doctest: +SKIP
+    PosixPath('reports/x/dry_run_validation_uncertainty.txt')
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_path = output_dir / f"dry_run_{name}.txt"
+    header = f"# Gerado em {datetime.now().astimezone().isoformat(timespec='seconds')}\n"
+    file_path.write_text(header + report.rstrip("\n") + "\n", encoding="utf-8")
+    logger.info("Relatório de dry-run salvo em %s", file_path)
+    return file_path
