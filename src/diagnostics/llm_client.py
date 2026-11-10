@@ -26,6 +26,7 @@ from typing import Any
 from diagnostics.settings import LLMSettings
 from exceptions.configuration import MissingEnvironmentVariableError
 from exceptions.pipeline import PipelineStageError
+from hypothesaes.progress import open_progress
 from labeling.rate_limiter import (
     RateLimiter,
     calculate_backoff_seconds,
@@ -417,13 +418,24 @@ class AsyncLLMClient:
         )
         self._rate_limiter.report_rate_limited(wait_seconds)
 
-    async def complete_many(self, prompts: Sequence[str], **kwargs: Any) -> list[str | None]:
+    async def complete_many(
+        self,
+        prompts: Sequence[str],
+        *,
+        description: str = "Chamadas ao LLM",
+        **kwargs: Any,
+    ) -> list[str | None]:
         """Executa vários prompts concorrentemente, na ordem de entrada.
+
+        Exibe uma barra de progresso ``rich`` (desativada em ``dry_run``), avançada
+        a cada requisição concluída, inclusive as que falham ou vêm do cache.
 
         Parameters
         ----------
         prompts : Sequence[str]
             Prompts a enviar.
+        description : str, optional
+            Texto exibido ao lado da barra de progresso, by default "Chamadas ao LLM".
         **kwargs : Any
             Argumentos repassados a :meth:`complete` (``model`` obrigatório).
 
@@ -450,5 +462,12 @@ class AsyncLLMClient:
                 return await self.complete(prompt, **kwargs)
             except PipelineStageError:
                 return None
+            finally:
+                progress.advance(task_id)
 
-        return list(await asyncio.gather(*(_safe(prompt) for prompt in prompts)))
+        with open_progress(disable=self._dry_run) as progress:
+            task_id = progress.add_task(description, total=len(prompts))
+            try:
+                return list(await asyncio.gather(*(_safe(prompt) for prompt in prompts)))
+            finally:
+                progress.remove_task(task_id)

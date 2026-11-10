@@ -1251,6 +1251,86 @@ class TestAsyncLLMClient:
         assert results == ["Yes"] * 10
         assert fake.max_active <= 2
 
+    @staticmethod
+    def _patch_progress(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        """Troca ``open_progress`` por um espião que registra as chamadas à barra."""
+        from contextlib import contextmanager
+
+        record: dict[str, Any] = {
+            "disable": None,
+            "description": None,
+            "total": None,
+            "advances": 0,
+        }
+
+        class _SpyProgress:
+            def add_task(self, description: str, total: int) -> int:
+                record["description"], record["total"] = description, total
+                return 7
+
+            def advance(self, task_id: int) -> None:
+                assert task_id == 7
+                record["advances"] += 1
+
+            def remove_task(self, task_id: int) -> None:
+                record["removed"] = task_id
+
+        @contextmanager
+        def _spy_open_progress(*, disable: bool = False) -> Any:
+            record["disable"] = disable
+            yield _SpyProgress()
+
+        monkeypatch.setattr(llm_client, "open_progress", _spy_open_progress)
+        return record
+
+    def test_complete_many_advances_progress_to_total(
+        self, diagnostics_settings: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A barra recebe o total de prompts, a descrição e avança uma vez por requisição."""
+        record = self._patch_progress(monkeypatch)
+        client = AsyncLLMClient(
+            diagnostics_settings.llm, client_factory=_factory(_FakeCompletions())
+        )
+        results = asyncio.run(
+            client.complete_many([f"p{i}" for i in range(6)], model="m", description="Anotando")
+        )
+        assert results == ["Yes"] * 6
+        assert record["total"] == 6
+        assert record["description"] == "Anotando"
+        assert record["advances"] == 6
+        assert record["removed"] == 7
+        assert record["disable"] is False
+
+    def test_complete_many_advances_progress_even_on_failure(
+        self, diagnostics_settings: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Requisições que falham (``None``) também avançam a barra."""
+
+        async def _no_sleep(_: float) -> None:
+            return None
+
+        def _always_fail(kwargs: Any) -> str:
+            raise RuntimeError("fora do ar")
+
+        record = self._patch_progress(monkeypatch)
+        monkeypatch.setattr(llm_client, "_transient_exceptions", lambda: (RuntimeError,))
+        monkeypatch.setattr(llm_client.asyncio, "sleep", _no_sleep)
+        settings = diagnostics_settings.llm.model_copy(update={"max_retries": 1})
+        client = AsyncLLMClient(settings, client_factory=_factory(_FakeCompletions(_always_fail)))
+        assert asyncio.run(client.complete_many(["a", "b", "c"], model="m")) == [None] * 3
+        assert record["advances"] == 3
+        assert record["description"] == "Chamadas ao LLM"
+
+    def test_complete_many_disables_progress_in_dry_run(
+        self, diagnostics_settings: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Em dry-run a barra é desativada."""
+        record = self._patch_progress(monkeypatch)
+        client = AsyncLLMClient(diagnostics_settings.llm, dry_run=True)
+        asyncio.run(client.complete_many(["a", "b"], model="m", max_tokens=5))
+        assert record["disable"] is True
+        assert record["advances"] == 2
+
     def test_transient_error_is_retried(
         self, diagnostics_settings: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
