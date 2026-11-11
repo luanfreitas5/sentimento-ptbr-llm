@@ -268,8 +268,8 @@ GOLD ?= gold_openai
 patterns:  ## Hipóteses sobre padrões/inconsistências nos rótulos de baixa confiança (HypotheSAEs, modo patterns)
 	$(RUN) --stage hypotheses --hypotheses-mode patterns
 
-diagnostics:  ## Camada de diagnóstico via main.py (STEP=hypotheses|validation|comparison, TARGET=..., DRY_RUN=--dry-run)
-	$(RUN) --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step $(or $(STEP),hypotheses) --diagnostics-target $(TARGET) --diagnostics-gold $(GOLD) $(DRY_RUN)
+diagnostics:  ## Camada de diagnóstico via main.py (STEP=hypotheses|validation|comparison, TARGET=..., CORPUS=... obrigatório p/ gold_error, DRY_RUN=--dry-run)
+	$(RUN) --stage hypotheses --hypotheses-mode diagnostics --diagnostics-step $(or $(STEP),hypotheses) --diagnostics-target $(TARGET) --diagnostics-gold $(GOLD) $(if $(CORPUS),--diagnostics-corpus $(CORPUS)) $(DRY_RUN)
 
 install-hypothesaes:  ## Instala os extras do HypotheSAEs (torch + sentence-transformers + openai + ollama)
 	uv sync --extra hypothesaes --dev
