@@ -312,7 +312,14 @@ def evaluate_raters(
             "ic_inferior": float(np.quantile(boots, alpha)),
             "ic_superior": float(np.quantile(boots, 1 - alpha)),
             "kappa_cohen": float(cohen_kappa_score(human, predicted)),
-            "f1_macro": float(f1_score(human, predicted, average="macro", zero_division=0)),
+            "f1_macro": float(
+                f1_score(
+                    human,
+                    predicted,
+                    average="macro",
+                    zero_division=0,  # pyright: ignore[reportArgumentType]
+                )
+            ),
         }
         for stratum in STRATA:
             mask = strata == stratum
@@ -404,7 +411,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     10
     """
     parser = argparse.ArgumentParser(
-        prog="python -m diagnostics.human_validation", description=__doc__.split("\n")[0]
+        prog="python -m diagnostics.human_validation", description=(__doc__ or "").split("\n")[0]
     )
     parser.add_argument("action", choices=("prepare", "evaluate"))
     parser.add_argument("--sample-size", type=int, default=500)

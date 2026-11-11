@@ -240,7 +240,7 @@ def _log_confidence_test(scored: pl.DataFrame) -> None:
     high = labeled.filter(pl.col("conf_hf") >= LOW_CONFIDENCE_THRESHOLD)[
         "reconstruction_error"
     ].to_numpy()
-    if low.size == 0 or high.size == 0:
+    if 0 in (low.size, high.size):
         return
     result = mannwhitneyu(low, high, alternative="two-sided")
     logger.info(
@@ -248,7 +248,7 @@ def _log_confidence_test(scored: pl.DataFrame) -> None:
         "(Mann-Whitney p=%.3g).",
         float(np.median(low)),
         float(np.median(high)),
-        float(result.pvalue),
+        float(result.pvalue),  # pyright: ignore[reportAttributeAccessIssue]
     )
 
 
@@ -301,7 +301,7 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     100
     """
     parser = argparse.ArgumentParser(
-        prog="python -m diagnostics.reconstruction", description=__doc__.split("\n")[0]
+        prog="python -m diagnostics.reconstruction", description=(__doc__ or "").split("\n")[0]
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_DIAGNOSTICS_CONFIG_FILE)
     parser.add_argument("--umap-sample", type=int, default=10000)
