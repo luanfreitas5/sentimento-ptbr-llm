@@ -78,3 +78,22 @@ def test_summarize_error_by_group_has_both_groupings() -> None:
     summary = summarize_error_by_group(scored)
     assert set(summary["grupo"]) == {"classe_primario", "confianca_primario"}
     assert summary["n"].sum() == 6  # 3 posts rotulados contados em cada agrupamento
+
+
+def test_mcnemar_comparisons_counts_exclusive_hits() -> None:
+    from diagnostics.human_validation import run_mcnemar_comparisons
+
+    joined = pl.DataFrame(
+        {
+            "rotulo_humano": ["positivo"] * 6,
+            "lab_huggingface": ["positivo", "positivo", "positivo", "neutro", "neutro", "neutro"],
+            "lab_openai": ["positivo", "neutro", "neutro", "positivo", "positivo", "positivo"],
+            "lab_unb": ["positivo"] * 6,
+        }
+    )
+    result = run_mcnemar_comparisons(joined).filter(
+        (pl.col("rotulador_a") == "huggingface_primario") & (pl.col("rotulador_b") == "gold_openai")
+    )
+    row = result.row(0, named=True)
+    assert (row["so_a_acerta"], row["so_b_acerta"]) == (2, 3)
+    assert 0.0 <= row["p_valor"] <= 1.0

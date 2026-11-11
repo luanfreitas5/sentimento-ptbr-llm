@@ -35,15 +35,18 @@ from constants.defaults import DEFAULT_BOOTSTRAP_ITERATIONS, DEFAULT_RANDOM_SEED
 from constants.labels import SENTIMENT_CLASSES
 from diagnostics.gold_eval import load_human_labels
 from diagnostics.sampling import HUMAN_LABEL_COLUMN, pseudonymize_id, resolve_sample_salt
+from evaluation.significance import run_mcnemar_test
 from exceptions.data import DataValidationError, EmptyDatasetError
 from io_utils.csv import write_csv
 from io_utils.parquet import write_parquet
 
-logger = logging.getLogger(__name__)
+# Executado com `python -m`, `__name__` vira "__main__" e o nível de log do projeto não se aplica.
+logger = logging.getLogger("diagnostics.human_validation" if __name__ == "__main__" else __name__)
 
 SAMPLE_FILE_NAME = "para_rotular_500.csv"
 KEY_FILE_NAME = "chave_validacao_humana.parquet"
 RESULTS_FILE_NAME = "validacao_humana_resultados.csv"
+MCNEMAR_FILE_NAME = "validacao_humana_mcnemar.csv"
 OUTPUT_DIR_NAME = "validacao_humana"
 CORPUS_FILE_NAME = "corpus_rotulado.parquet"
 SALT_ENV_VAR = "DIAGNOSTICS_SAMPLE_SALT"
@@ -330,6 +333,57 @@ def evaluate_raters(
     return pl.DataFrame(rows)
 
 
+def run_mcnemar_comparisons(joined: pl.DataFrame) -> pl.DataFrame:
+    """Compara os acertos de cada par de rotuladores contra o humano (McNemar exato).
+
+    O teste usa apenas os posts em que os dois rotuladores divergem quanto a acertar. A
+    amostra tem alocação igual entre faixas de confiança (sem ponderação), então o resultado
+    vale para esta amostra, não diretamente para a população dos *gold sets*.
+
+    Parameters
+    ----------
+    joined : pl.DataFrame
+        Chave com as colunas dos rotuladores e ``rotulo_humano``.
+
+    Returns
+    -------
+    pl.DataFrame
+        Uma linha por par: acertos exclusivos de cada um, estatística e p-valor.
+
+    Raises
+    ------
+    EmptyDatasetError
+        Se ``joined`` estiver vazio.
+
+    Examples
+    --------
+    >>> run_mcnemar_comparisons(joined)  # doctest: +SKIP
+    """
+    if joined.is_empty():
+        raise EmptyDatasetError("amostra rotulada por humanos")
+    human = joined[HUMAN_LABEL_COLUMN].to_list()
+    names = list(RATER_COLUMNS)
+    rows: list[dict[str, float | str | int]] = []
+    for index, name_a in enumerate(names):
+        for name_b in names[index + 1 :]:
+            pred_a = joined[RATER_COLUMNS[name_a]].to_list()
+            pred_b = joined[RATER_COLUMNS[name_b]].to_list()
+            hit_a = [a == h for a, h in zip(pred_a, human, strict=True)]
+            hit_b = [b == h for b, h in zip(pred_b, human, strict=True)]
+            result = run_mcnemar_test(human, pred_a, pred_b, exact=True)
+            rows.append(
+                {
+                    "rotulador_a": name_a,
+                    "rotulador_b": name_b,
+                    "so_a_acerta": sum(a and not b for a, b in zip(hit_a, hit_b, strict=True)),
+                    "so_b_acerta": sum(b and not a for a, b in zip(hit_a, hit_b, strict=True)),
+                    "estatistica": result["statistic"],
+                    "p_valor": result["p_value"],
+                }
+            )
+    return pl.DataFrame(rows)
+
+
 def run_evaluation(
     paths: ProjectPaths, *, csv_path: Path | None, n_bootstrap: int, random_seed: int
 ) -> Path:
@@ -389,6 +443,12 @@ def run_evaluation(
     write_csv(results, results_path)
     logger.info("Resultados da validação humana:\n%s", results)
     logger.info("Tabela de resultados gravada em '%s'.", results_path)
+    logger.info("Comparando os rotuladores par a par com o teste de McNemar (acertos vs humano)...")
+    mcnemar = run_mcnemar_comparisons(joined)
+    mcnemar_path = output_dir / MCNEMAR_FILE_NAME
+    write_csv(mcnemar, mcnemar_path)
+    logger.info("McNemar (a vs b; acertos exclusivos e p-valor):\n%s", mcnemar)
+    logger.info("Tabela do McNemar gravada em '%s'.", mcnemar_path)
     return results_path
 
 

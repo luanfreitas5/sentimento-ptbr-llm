@@ -42,7 +42,8 @@ from io_utils.yaml import read_yaml
 from visualization.embeddings import plot_embedding_scatter
 from visualization.theme import save_figure
 
-logger = logging.getLogger(__name__)
+# Executado com `python -m`, `__name__` vira "__main__" e o nível de log do projeto não se aplica.
+logger = logging.getLogger("diagnostics.reconstruction" if __name__ == "__main__" else __name__)
 
 SILVER_FILE_NAME = "corpus_normalizado.parquet"
 LABELED_FILE_NAME = "corpus_rotulado.parquet"
