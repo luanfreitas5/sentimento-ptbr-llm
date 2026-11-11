@@ -75,6 +75,7 @@ def build_rater_table(paths: ProjectPaths) -> pl.DataFrame:
     EmptyDatasetError
         Se a interseção entre as três fontes for vazia.
     """
+    logger.info("Lendo o corpus rotulado e os gold sets da camada gold...")
     corpus = pl.read_parquet(paths.data_gold_dir / CORPUS_FILE_NAME).select(
         "id",
         "text_normalized",
@@ -88,10 +89,18 @@ def build_rater_table(paths: ProjectPaths) -> pl.DataFrame:
         "id", pl.col("sentiment_label").alias("lab_unb")
     )
     table = corpus.join(openai, on="id").join(unb, on="id")
+    logger.info(
+        "Interseção das três fontes: %d post(s) (corpus=%d, gold_openai=%d, gold_unb=%d).",
+        table.height,
+        corpus.height,
+        openai.height,
+        unb.height,
+    )
     valid_classes = list(SENTIMENT_CLASSES)
     table = table.filter(
         pl.all_horizontal(pl.col(column).is_in(valid_classes) for column in RATER_COLUMNS.values())
     )
+    logger.info("%d post(s) com rótulo válido nos três rotuladores.", table.height)
     if table.is_empty():
         raise EmptyDatasetError("amostra comum dos rotuladores (HF + gold sets)")
     return table
@@ -197,9 +206,20 @@ def prepare_sample(paths: ProjectPaths, *, sample_size: int, random_seed: int) -
     MissingEnvironmentVariableError
         Se ``DIAGNOSTICS_SAMPLE_SALT`` não estiver definida.
     """
+    logger.info(
+        "Preparando a amostra de validação humana (n=%d, semente=%d).", sample_size, random_seed
+    )
     salt = resolve_sample_salt(SALT_ENV_VAR)
     table = assign_confidence_strata(build_rater_table(paths))
+    logger.info(
+        "Posts por faixa de confiança: %s",
+        table["stratum"].value_counts().sort("stratum").to_dicts(),
+    )
     sample = draw_stratified_sample(table, sample_size=sample_size, random_seed=random_seed)
+    logger.info(
+        "Amostra sorteada por faixa: %s",
+        sample["stratum"].value_counts().sort("stratum").to_dicts(),
+    )
     sample = sample.with_columns(
         pl.col("id")
         .map_elements(lambda value: pseudonymize_id(str(value), salt), return_dtype=pl.Utf8)
@@ -221,6 +241,7 @@ def prepare_sample(paths: ProjectPaths, *, sample_size: int, random_seed: int) -
     key_dir = paths.data_silver_dir / OUTPUT_DIR_NAME
     key_dir.mkdir(parents=True, exist_ok=True)
     write_parquet(sample.drop("text_normalized"), key_dir / KEY_FILE_NAME)
+    logger.info("Chave sample_id -> id gravada em '%s' (fora do git).", key_dir / KEY_FILE_NAME)
     logger.info(
         "Amostra de %d post(s) gravada em '%s'. Preencha '%s' com negativo|neutro|positivo.",
         sample.height,
@@ -330,9 +351,13 @@ def run_evaluation(
         menos de dois rótulos distintos (sinal de preenchimento padrão).
     """
     output_dir = paths.reports_tables_dir / OUTPUT_DIR_NAME
+    logger.info(
+        "Avaliando a validação humana (bootstrap=%d, semente=%d)...", n_bootstrap, random_seed
+    )
     labels = load_human_labels(csv_path or output_dir / SAMPLE_FILE_NAME).select(
         "sample_id", HUMAN_LABEL_COLUMN
     )
+    logger.info("%d post(s) rotulado(s) pelo humano; lendo a chave de junção...", labels.height)
     key = pl.read_parquet(paths.data_silver_dir / OUTPUT_DIR_NAME / KEY_FILE_NAME)
     joined = labels.join(key, on="sample_id", how="inner")
     if joined.height != labels.height:
@@ -349,12 +374,14 @@ def run_evaluation(
         )
     if joined.height < len(key):
         logger.warning("Apenas %d de %d posts rotulados.", joined.height, len(key))
+    logger.info("Calculando concordância, Kappa e F1 por rotulador...")
     results = evaluate_raters(
         joined, n_bootstrap=n_bootstrap, confidence_level=0.95, random_seed=random_seed
     )
     results_path = output_dir / RESULTS_FILE_NAME
     write_csv(results, results_path)
     logger.info("Resultados da validação humana:\n%s", results)
+    logger.info("Tabela de resultados gravada em '%s'.", results_path)
     return results_path
 
 
