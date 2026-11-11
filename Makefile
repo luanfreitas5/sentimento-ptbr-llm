@@ -15,7 +15,7 @@ export PYTHONHASHSEED := 42
 	clean-gold clean-reports clean-outputs clean-notebooks \
 	ingest preprocess label label-hf label-hf-secondary label-hf-extra label-openai compare consensus hypotheses features \
 	classical deep transformer llm evaluate report all \
-	patterns diagnostics install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
+	patterns diagnostics human-sample human-eval reconstruction install-hypothesaes diag-dry-run diag-hypotheses diag-validate diag-compare \
 	mlflow app \
 	docker-build docker-up docker-down docker-ollama \
 	dvc-repro dvc-dag dvc-push dvc-pull \
@@ -285,6 +285,15 @@ diag-validate:  ## Valida as hipóteses no holdout (Bonferroni) e gera reports/t
 
 diag-compare:  ## Compara os prompts v1 e v2 no gold (GOLD=gold_openai|gold_unb)
 	$(DIAG).comparison --gold $(GOLD)
+
+human-sample:  ## Gera o CSV da validação humana (n=500, estratificado por confiança; requer DIAGNOSTICS_SAMPLE_SALT no .env)
+	$(DIAG).human_validation prepare
+
+human-eval:  ## Avalia os rotuladores contra o CSV preenchido (concordância ponderada, Kappa, F1, IC 95%)
+	$(DIAG).human_validation evaluate
+
+reconstruction:  ## Erro de reconstrução do autoencoder (p95) + UMAP do espaço latente (requer: make install-hypothesaes install-viz)
+	$(DIAG).reconstruction
 
 # --- Serviços auxiliares ----------------------------------------------------
 mlflow:  ## Sobe a interface do MLflow para inspecionar os experimentos

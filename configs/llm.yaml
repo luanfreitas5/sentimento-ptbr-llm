@@ -10,7 +10,7 @@
 #           compatíveis (ex.: o endpoint UnB usado por padrão em
 #           configs/labeling.yaml e configs/hypothesaes.yaml).
 # "ollama": servidor Ollama local, usando `backends.ollama.base_url` abaixo.
-active_provider: "openai" # "openai" | "ollama"
+active_provider: "ollama" # "openai" | "ollama"
 
 backends:
   ollama:

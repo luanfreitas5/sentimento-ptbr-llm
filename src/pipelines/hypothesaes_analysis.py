@@ -389,29 +389,36 @@ def _generate_and_save_hypotheses(
     """Gera as hipóteses de inconsistência, consolida a tabela top-N e salva o gráfico."""
     logger.info("Identificação de inconsistências: gerando hipóteses...")
     target_column = f"target_{selection_method}"
-    hypotheses = pl.from_pandas(
-        generate_hypotheses(
-            texts=texts,
-            labels=low_confidence_labels,
-            embeddings=train_embeddings,
-            sae=sae,
-            cache_name=cache_name,
-            classification=True,
-            selection_method=selection_method,
-            n_selected_neurons=n_selected_neurons,
-            interpreter_model=interpreter_model,
-            annotator_model=annotator_model,
-            n_examples_for_interpretation=n_examples_for_interpretation,
-            max_words_per_example=max_words_per_example,
-            max_interpretation_tokens=max_interpretation_tokens,
-            n_scoring_examples=n_scoring_examples,
-            n_workers_interpretation=n_workers,
-            n_workers_annotation=n_workers,
-            task_specific_instructions=task_specific_instructions,
-            interpret_llm_kwargs=interpret_llm_kwargs,
-            annotation_llm_kwargs=annotation_llm_kwargs,
-        ).sort_values(by=target_column, ascending=False)
+    raw_hypotheses = generate_hypotheses(
+        texts=texts,
+        labels=low_confidence_labels,
+        embeddings=train_embeddings,
+        sae=sae,
+        cache_name=cache_name,
+        classification=True,
+        selection_method=selection_method,
+        n_selected_neurons=n_selected_neurons,
+        interpreter_model=interpreter_model,
+        annotator_model=annotator_model,
+        n_examples_for_interpretation=n_examples_for_interpretation,
+        max_words_per_example=max_words_per_example,
+        max_interpretation_tokens=max_interpretation_tokens,
+        n_scoring_examples=n_scoring_examples,
+        n_workers_interpretation=n_workers,
+        n_workers_annotation=n_workers,
+        task_specific_instructions=task_specific_instructions,
+        interpret_llm_kwargs=interpret_llm_kwargs,
+        annotation_llm_kwargs=annotation_llm_kwargs,
     )
+    if raw_hypotheses.empty or target_column not in raw_hypotheses.columns:
+        # Ocorre quando o LLM interpretador falha (endpoint fora do ar, 5xx) ou todos
+        # os neurônios são descartados pelo filtro de qualidade.
+        logger.error(
+            "Nenhuma hipótese foi gerada (LLM indisponível ou todos os neurônios "
+            "descartados pelo filtro de qualidade)."
+        )
+        raise EmptyDatasetError("hipóteses HypotheSAEs (verifique o LLM interpretador)")
+    hypotheses = pl.from_pandas(raw_hypotheses.sort_values(by=target_column, ascending=False))
     write_csv(hypotheses, paths.reports_interpretability_dir / _HYPOTHESES_FILE_NAME)
 
     top_hypotheses_table = build_top_hypotheses_table(hypotheses, target_column=target_column)
