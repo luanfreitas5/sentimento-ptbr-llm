@@ -280,8 +280,8 @@ diag-dry-run:  ## Estima chamadas/custo do alvo (TARGET=...; disagreement exige 
 diag-hypotheses:  ## Gate de sanidade + hipóteses HypotheSAEs para o alvo (TARGET=...; CORPUS=... opcional)
 	$(DIAG).hypotheses --target $(TARGET) $(if $(CORPUS),--corpus $(CORPUS))
 
-diag-validate:  ## Valida as hipóteses no holdout (Bonferroni) e gera reports/tables/para_rotular.csv
-	$(DIAG).validation --target $(TARGET)
+diag-validate:  ## Valida as hipóteses no holdout (Bonferroni) e gera reports/tables/para_rotular.csv (CORPUS=... igual ao diag-hypotheses)
+	$(DIAG).validation --target $(TARGET) $(if $(CORPUS),--corpus $(CORPUS))
 
 diag-compare:  ## Compara os prompts v1 e v2 no gold (GOLD=gold_openai|gold_unb)
 	$(DIAG).comparison --gold $(GOLD)
