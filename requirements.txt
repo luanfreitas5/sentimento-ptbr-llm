@@ -559,7 +559,7 @@ nvidia-nccl-cu12==2.29.3 ; python_full_version < '3.12' and sys_platform == 'lin
     # via xgboost
 nvidia-nccl-cu13==2.32.3 ; python_full_version >= '3.12' and sys_platform == 'linux'
     # via xgboost
-onnxruntime==1.23.2 ; python_full_version < '3.11'
+onnxruntime==1.24.3 ; python_full_version < '3.11'
     # via magika
 onnxruntime==1.31.1 ; python_full_version >= '3.11'
     # via magika
