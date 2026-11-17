@@ -1,3 +1,43 @@
+## v0.6.0 (2026-11-17)
+
+### Feat
+
+- **evaluation**: avaliar contra gold, corrigir comparações e proteger dados pessoais
+- **diagnostics**: adicionar teste de McNemar para avaliadores
+- **diagnostics**: registrar o progresso da validação humana
+- **diagnostics**: adicionar fluxo de trabalho de validação humana
+- **llm**: adicionar barra de progresso ao complete_many
+- **diagnostics**: adicionar relatórios de resumo e simulação
+- **labeling**: adicionar aliases para nomes de modelos extras
+- **hypotheses**: adicionar progresso de pares aos logs
+- **diagnostics**: adicionar opção CORPUS aos alvos
+- **diagnostics**: Adicionada opção de correção FDR-BH
+- **hypotheses**: adicionar filtros para modelos e conjuntos de referência
+- **hypotheses**: add resume capability and refactor source resolution
+- **labeling**: adicionar modelos HuggingFace adicionais e aprimorar o pipeline
+- **labeling**: adicionar aliases de modelo e melhorar a resolução de nomes
+
+### Fix
+
+- **diagnostics**: proteger docstring de módulo ausente
+- **makefile**: passar corpus para o alvo de diagnóstico
+- **makefile**: passar CORPUS para o alvo diag-validate
+- **build**: Exportar PYTHONPATH via make para shells do Windows
+- **labeling**: remover rótulos indefinidos antes do kappa
+- **paths**: encurtar nomes de modelos longos com hash
+- **tests**: atualizar a expectativa do tamanho da amostra de referência para 2000
+- **config**: corrigir a porta do Ollama para 11434
+- **diagnostics**: corrige o valor de configuração de n_workers
+- **diagnostics**: aprimorar a verificação de sanidade para desvio padrão zero
+
+### Refactor
+
+- **neurons**: simplificar a descrição do progresso
+
+### Perf
+
+- **config**: mudança para o modelo qwen2.5 e redução da concorrência
+
 ## v0.5.0 (2026-10-17)
 
 ### Feat
