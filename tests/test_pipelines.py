@@ -18,6 +18,7 @@ import polars as pl
 import pytest
 
 from config.paths import ProjectPaths
+from data.authors import write_author_key_table
 from data.loader import read_dataset_file
 from data.writer import write_dataset, write_labeled_corpus
 from exceptions.configuration import InvalidConfigurationError
@@ -35,7 +36,7 @@ from pipelines.comparative_evaluation import (
     build_comparison_subdir,
     run_comparative_evaluation_stage,
 )
-from pipelines.features import run_features_stage
+from pipelines.features import LEAKAGE_AUDIT_FILE_NAME, run_features_stage
 from pipelines.hypothesaes_analysis import run_hypothesaes_analysis_stage
 from pipelines.ingestion import run_ingestion_stage
 from pipelines.labeling import LabelingSource, run_labeling_stage
@@ -512,6 +513,58 @@ class TestRunFeaturesStage:
         assert training_split.height == 6
         tfidf_features = read_dataset_file(artifacts.tfidf_features_path)
         assert tfidf_features.height > 0
+
+    def test_group_by_author_never_splits_an_author(self, pipeline_paths: ProjectPaths) -> None:
+        """Com ``group_by_author``, nenhum autor cruza partições e o vazamento é auditado."""
+        n_authors, per_author = 40, 5
+        ids = [f"t{index:07d}" for index in range(n_authors * per_author)]
+        labels = ["positivo", "negativo", "neutro"]
+        labeled_corpus = pl.DataFrame(
+            {
+                "id": ids,
+                "text": [f"texto {index}" for index in range(len(ids))],
+                "sentiment_label": [labels[index % 3] for index in range(len(ids))],
+            }
+        )
+        write_labeled_corpus(labeled_corpus, pipeline_paths.labeled_corpus_file)
+        authors = pl.DataFrame(
+            {"id": ids, "author_key": [f"a{index // per_author}" for index in range(len(ids))]}
+        )
+        write_author_key_table(authors, pipeline_paths.data_silver_dir)
+
+        artifacts = run_features_stage(
+            pipeline_paths,
+            tfidf_overrides={"min_document_frequency": 1, "max_document_frequency_ratio": 1.0},
+            group_by_author=True,
+        )
+
+        author_by_id = dict(zip(authors["id"], authors["author_key"], strict=True))
+        seen: dict[str, str] = {}
+        for split_name, path in (
+            ("treino", artifacts.training_corpus_path),
+            ("validacao", artifacts.validation_corpus_path),
+            ("teste", artifacts.test_corpus_path),
+        ):
+            for tweet_id in read_dataset_file(path)["id"].to_list():
+                assert seen.setdefault(author_by_id[tweet_id], split_name) == split_name
+        audit = read_json(pipeline_paths.reports_statistics_dir / LEAKAGE_AUDIT_FILE_NAME)
+        assert audit["grouped_by_author"] is True
+        assert audit["pairs"]["treino->teste"]["author_overlap_share"] == 0.0
+        # o pseudônimo do autor não vaza para os conjuntos de treino/validação/teste
+        assert "author_key" not in read_dataset_file(artifacts.training_corpus_path).columns
+
+    def test_group_by_author_without_author_table_raises(
+        self, pipeline_paths: ProjectPaths
+    ) -> None:
+        """Sem a tabela de pseudônimos, deve falhar com instrução, sem cair no split por tweet."""
+        write_labeled_corpus(
+            pl.DataFrame(
+                {"id": ["1", "2"], "text": ["a", "b"], "sentiment_label": ["positivo", "negativo"]}
+            ),
+            pipeline_paths.labeled_corpus_file,
+        )
+        with pytest.raises(DataNotFoundError):
+            run_features_stage(pipeline_paths, group_by_author=True)
 
 
 class TestRunTrainingClassicalStage:

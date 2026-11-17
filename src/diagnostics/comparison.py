@@ -694,7 +694,7 @@ def run_prompt_comparison(
             ]
         )
         table_path = paths.reports_metrics_dir / "diagnostics_comparacao_v1_v2.csv"
-        write_csv(result, table_path)
+        write_csv(result, table_path, mask_text=True)
         summary = format_comparison_summary(
             result, agreements["v1"], agreements["v2"], gold_name=gold_file.stem
         )

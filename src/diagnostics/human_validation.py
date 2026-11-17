@@ -35,7 +35,7 @@ from constants.defaults import DEFAULT_BOOTSTRAP_ITERATIONS, DEFAULT_RANDOM_SEED
 from constants.labels import SENTIMENT_CLASSES
 from diagnostics.gold_eval import load_human_labels
 from diagnostics.sampling import HUMAN_LABEL_COLUMN, pseudonymize_id, resolve_sample_salt
-from evaluation.significance import run_mcnemar_test
+from evaluation.significance import adjust_p_values, run_mcnemar_test
 from exceptions.data import DataValidationError, EmptyDatasetError
 from io_utils.csv import write_csv
 from io_utils.parquet import write_parquet
@@ -240,6 +240,7 @@ def prepare_sample(paths: ProjectPaths, *, sample_size: int, random_seed: int) -
             pl.lit("").alias(HUMAN_LABEL_COLUMN),
         ),
         csv_path,
+        mask_text=True,
     )
     key_dir = paths.data_silver_dir / OUTPUT_DIR_NAME
     key_dir.mkdir(parents=True, exist_ok=True)
@@ -381,7 +382,11 @@ def run_mcnemar_comparisons(joined: pl.DataFrame) -> pl.DataFrame:
                     "p_valor": result["p_value"],
                 }
             )
-    return pl.DataFrame(rows)
+    table = pl.DataFrame(rows)
+    # 3 rotuladores = 3 pares: sem correção, a chance de um falso positivo sobe de 5% para ~14%.
+    return table.with_columns(
+        pl.Series("p_valor_holm", adjust_p_values(table["p_valor"].to_list(), method="holm"))
+    )
 
 
 def run_evaluation(
@@ -471,7 +476,8 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     10
     """
     parser = argparse.ArgumentParser(
-        prog="python -m diagnostics.human_validation", description=(__doc__ or "").split("\n")[0]
+        prog="python -m diagnostics.human_validation",
+        description=__doc__.split("\n")[0] if __doc__ else None,
     )
     parser.add_argument("action", choices=("prepare", "evaluate"))
     parser.add_argument("--sample-size", type=int, default=500)

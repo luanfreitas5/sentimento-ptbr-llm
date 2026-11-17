@@ -261,7 +261,7 @@ def _run_single_target(
             top_tweets_per_hypothesis=top_tweets_per_hypothesis,
         )
         evidence_path = output_dir / f"hipoteses_{target}_evidencias.csv"
-        write_csv(evidence, evidence_path)
+        write_csv(evidence, evidence_path, mask_text=True)
     return HypothesisTargetOutcome(
         target,
         "concluido",

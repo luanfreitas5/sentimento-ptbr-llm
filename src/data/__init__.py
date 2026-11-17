@@ -18,7 +18,13 @@ gold
     descoberta/avaliação (:func:`gold.load_gold_set`,
     :func:`gold.split_gold_discovery_eval`).
 splitter
-    Particionamento estratificado em treino/validação/teste, com seed fixa.
+    Particionamento estratificado em treino/validação/teste, com seed fixa; variante
+    agrupada por autor (:func:`splitter.create_grouped_stratified_split`) e remoção de
+    duplicatas entre partições.
+leakage
+    Auditoria de vazamento entre partições (autores em comum e textos duplicados).
+authors
+    Tabela ``id -> author_key`` com o autor pseudonimizado (HMAC), usada no split por autor.
 sampler
     Amostragem aleatória e estratificada para validação humana.
 writer

@@ -97,6 +97,7 @@ nav:
       - Metodologia: guides/metodologia.md
       - Diagnóstico HypotheSAEs: guides/diagnostico-hypothesaes.md
       - Pipeline: guides/pipeline.md
+      - Validade e privacidade: guides/validade-e-privacidade.md
       - Reprodutibilidade: guides/reprodutibilidade.md
       - Setup: guides/setup.md
   - Referência da API: reference.md

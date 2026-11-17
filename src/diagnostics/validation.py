@@ -434,7 +434,7 @@ def run_validation_stage(
         ).with_columns(pl.lit(slug).alias("target"), pl.lit("holdout").alias("partition"))
         output_dir = paths.reports_interpretability_dir / settings.data.output_dir
         write_parquet(validated, output_dir / f"{slug}_validacao.parquet")
-        write_csv(validated, output_dir / f"{slug}_validacao.csv")
+        write_csv(validated, output_dir / f"{slug}_validacao.csv", mask_text=True)
         n_survivors = int(validated["survives"].sum())
         logger.info(
             "%d/%d hipóteses sobrevivem à correção '%s'.",

@@ -11,8 +11,10 @@ import logging
 
 import numpy as np
 import polars as pl
+from sklearn.model_selection import StratifiedGroupKFold
 
 from constants.defaults import DEFAULT_RANDOM_SEED, DEFAULT_TEST_SIZE, DEFAULT_VALIDATION_SIZE
+from data.leakage import DUPLICATE_KEY_COLUMN, build_duplicate_key_expression
 from schemas.training import DATA_SPLITS
 
 logger = logging.getLogger(__name__)
@@ -130,5 +132,173 @@ def create_stratified_split(
         split_labels_by_row_index.count(_TRAIN_SPLIT),
         split_labels_by_row_index.count(_VALIDATION_SPLIT),
         split_labels_by_row_index.count(_TEST_SPLIT),
+    )
+    return result
+
+
+def _select_group_fold(
+    labels: np.ndarray, groups: np.ndarray, *, fraction: float, random_seed: int
+) -> np.ndarray:
+    """Escolhe, sem repartir grupos, ~``fraction`` das linhas via ``StratifiedGroupKFold``.
+
+    A fração é aproximada por ``1 / round(1 / fraction)`` dobras; um grupo (autor)
+    inteiro cai na fração escolhida ou fora dela.
+    """
+    n_splits = max(2, round(1 / fraction))
+    splitter = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
+    _, selected = next(splitter.split(np.zeros(len(labels)), labels, groups))
+    return selected
+
+
+def create_grouped_stratified_split(
+    dataframe: pl.DataFrame,
+    *,
+    label_column: str,
+    group_column: str,
+    split_column: str = "split",
+    test_size: float = DEFAULT_TEST_SIZE,
+    validation_size: float = DEFAULT_VALIDATION_SIZE,
+    random_seed: int = DEFAULT_RANDOM_SEED,
+) -> pl.DataFrame:
+    """Particiona em treino/validação/teste sem repartir autores e mantendo as classes.
+
+    Cada valor de ``group_column`` (por exemplo, o pseudônimo do autor) cai em uma
+    única partição, o que elimina o vazamento de estilo do autor entre treino e teste.
+    As proporções são aproximadas, porque o grupo inteiro é movido de uma vez, e a
+    estratificação por classe é a melhor possível dado esse limite
+    (``StratifiedGroupKFold``). Linhas com grupo nulo viram grupos próprios.
+
+    Parameters
+    ----------
+    dataframe : pl.DataFrame
+        Dados com as colunas de rótulo e de grupo.
+    label_column : str
+        Coluna usada para estratificar.
+    group_column : str
+        Coluna que identifica o grupo (autor pseudonimizado).
+    split_column : str, optional
+        Nome da coluna de partição criada, by default "split".
+    test_size : float, optional
+        Fração aproximada do teste, by default :data:`constants.defaults.DEFAULT_TEST_SIZE`.
+    validation_size : float, optional
+        Fração aproximada da validação sobre o corpus inteiro, by default
+        :data:`constants.defaults.DEFAULT_VALIDATION_SIZE`.
+    random_seed : int, optional
+        Semente da divisão, by default :data:`constants.defaults.DEFAULT_RANDOM_SEED`.
+
+    Returns
+    -------
+    pl.DataFrame
+        O DataFrame original com a coluna ``split_column``.
+
+    Raises
+    ------
+    ValueError
+        Se ``test_size + validation_size >= 1``.
+    KeyError
+        Se faltar a coluna de rótulo ou de grupo.
+
+    Examples
+    --------
+    >>> df = pl.DataFrame(
+    ...     {
+    ...         "sentiment_label": ["positivo", "negativo"] * 50,
+    ...         "author_key": [str(i // 2) for i in range(100)],
+    ...     }
+    ... )
+    >>> out = create_grouped_stratified_split(
+    ...     df, label_column="sentiment_label", group_column="author_key"
+    ... )
+    >>> out.group_by("author_key").agg(pl.col("split").n_unique()).get_column("split").max()
+    1
+    """
+    if test_size + validation_size >= 1:
+        raise ValueError(
+            "A soma de test_size e validation_size deve ser menor que 1, "
+            f"recebido: {test_size + validation_size}"
+        )
+    missing = [column for column in (label_column, group_column) if column not in dataframe.columns]
+    if missing:
+        raise KeyError(f"Colunas ausentes para o split agrupado: {missing}")
+
+    labels = np.asarray(dataframe[label_column].to_list())
+    groups = np.asarray(
+        [
+            value if value is not None else f"__sem_grupo_{index}"
+            for index, value in enumerate(dataframe[group_column].to_list())
+        ]
+    )
+    split_labels = np.full(dataframe.height, _TRAIN_SPLIT, dtype=object)
+
+    test_indices = _select_group_fold(labels, groups, fraction=test_size, random_seed=random_seed)
+    split_labels[test_indices] = _TEST_SPLIT
+
+    remaining = np.flatnonzero(split_labels != _TEST_SPLIT)
+    validation_indices = remaining[
+        _select_group_fold(
+            labels[remaining],
+            groups[remaining],
+            fraction=validation_size / (1 - test_size),
+            random_seed=random_seed,
+        )
+    ]
+    split_labels[validation_indices] = _VALIDATION_SPLIT
+
+    result = dataframe.with_columns(pl.Series(split_column, split_labels.tolist(), dtype=pl.String))
+    logger.info(
+        "Split agrupado por %s concluído: %d treino, %d validação, %d teste.",
+        group_column,
+        int(np.sum(split_labels == _TRAIN_SPLIT)),
+        int(np.sum(split_labels == _VALIDATION_SPLIT)),
+        int(np.sum(split_labels == _TEST_SPLIT)),
+    )
+    return result
+
+
+def remove_cross_split_duplicates(
+    dataframe: pl.DataFrame, *, text_column: str = "text", split_column: str = "split"
+) -> pl.DataFrame:
+    """Remove do treino e da validação os textos que também aparecem em partições finais.
+
+    O teste nunca perde linhas: se um texto (normalizado) está no teste, as cópias em
+    validação e treino saem; se está na validação, as cópias do treino saem. Assim o
+    avaliador não vê no treino um texto que será usado para medi-lo.
+
+    Parameters
+    ----------
+    dataframe : pl.DataFrame
+        Dados já particionados.
+    text_column : str, optional
+        Coluna de texto, by default "text".
+    split_column : str, optional
+        Coluna de partição, by default "split".
+
+    Returns
+    -------
+    pl.DataFrame
+        Dados sem as duplicatas que cruzavam partições.
+
+    Examples
+    --------
+    >>> df = pl.DataFrame({"text": ["Oi!", "oi", "tchau"], "split": ["treino", "teste", "treino"]})
+    >>> remove_cross_split_duplicates(df).height
+    2
+    """
+    keyed = dataframe.with_columns(build_duplicate_key_expression(text_column))
+    test_keys = keyed.filter(pl.col(split_column) == _TEST_SPLIT)[DUPLICATE_KEY_COLUMN].to_list()
+    validation_keys = keyed.filter(pl.col(split_column) == _VALIDATION_SPLIT)[
+        DUPLICATE_KEY_COLUMN
+    ].to_list()
+    drop_from_validation = (pl.col(split_column) == _VALIDATION_SPLIT) & pl.col(
+        DUPLICATE_KEY_COLUMN
+    ).is_in(test_keys)
+    drop_from_train = (pl.col(split_column) == _TRAIN_SPLIT) & (
+        pl.col(DUPLICATE_KEY_COLUMN).is_in(test_keys)
+        | pl.col(DUPLICATE_KEY_COLUMN).is_in(validation_keys)
+    )
+    result = keyed.filter(~(drop_from_validation | drop_from_train)).drop(DUPLICATE_KEY_COLUMN)
+    logger.info(
+        "Duplicatas entre partições removidas do treino/validação: %d linha(s).",
+        dataframe.height - result.height,
     )
     return result

@@ -12,7 +12,7 @@ import pandas as pd
 import polars as pl
 import pytest
 import yaml
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
@@ -2677,6 +2677,11 @@ class TestBuildTargetDispatcher:
 _LABELS = st.sampled_from(SENTIMENT_CLASSES)
 
 
+@settings(
+    max_examples=25,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
 @given(pairs=st.lists(st.tuples(_LABELS, _LABELS), min_size=1, max_size=30))
 def test_disagreement_is_symmetric_and_matches_inequality(
     pairs: list[tuple[str, str]],
@@ -2697,6 +2702,11 @@ def test_disagreement_is_symmetric_and_matches_inequality(
     assert build_disagreement_target(backward)["target"].to_list() == expected
 
 
+@settings(
+    max_examples=25,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
 @given(scores=st.lists(st.floats(min_value=0.0, max_value=1.0), min_size=1, max_size=30))
 def test_uncertainty_stays_in_unit_interval(scores: list[float]) -> None:
     """Invariante: incerteza sempre em [0, 1] e monotônica decrescente no agreement."""

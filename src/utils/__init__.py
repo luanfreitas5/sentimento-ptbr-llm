@@ -11,6 +11,10 @@ hashing
     Cálculo de hash de arquivos e strings para rastreabilidade.
 memory
     Liberação de memória de GPU para modelos pesados.
+privacy
+    Proteção de dados pessoais (LGPD): pseudonimização HMAC de identificadores,
+    mascaramento de @menções/URLs/e-mails/CPFs/telefones em textos e contagem de
+    dados pessoais para auditoria.
 seed
     Fixação de sementes aleatórias para reprodutibilidade.
 text

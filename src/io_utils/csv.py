@@ -10,6 +10,7 @@ from typing import Any
 
 import polars as pl
 
+from utils.privacy import mask_text_columns
 from utils.validation import validate_file_exists
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,9 @@ def read_csv(file_path: Path, **kwargs: Any) -> pl.DataFrame:
     return dataframe
 
 
-def write_csv(dataframe: pl.DataFrame, file_path: Path, **kwargs: Any) -> None:
+def write_csv(
+    dataframe: pl.DataFrame, file_path: Path, *, mask_text: bool = False, **kwargs: Any
+) -> None:
     """Escreve um DataFrame Polars em um arquivo CSV, criando diretórios pais se necessário.
 
     Parameters
@@ -60,6 +63,10 @@ def write_csv(dataframe: pl.DataFrame, file_path: Path, **kwargs: Any) -> None:
         DataFrame a ser escrito.
     file_path : Path
         Caminho do arquivo CSV de destino.
+    mask_text : bool, optional
+        Se ``True``, mascara @menções, URLs, e-mails, CPFs e telefones nas colunas de
+        texto de tweet (:func:`utils.privacy.mask_text_columns`). Use em tudo que sai
+        da camada ``data/`` (relatórios, tabelas, planilhas de anotação), by default False.
     **kwargs : Any
         Argumentos adicionais repassados a :meth:`polars.DataFrame.write_csv`.
 
@@ -72,5 +79,7 @@ def write_csv(dataframe: pl.DataFrame, file_path: Path, **kwargs: Any) -> None:
     >>> write_csv(pl.DataFrame({"a": [1, 2]}), Path("data/silver/exemplo.csv"))  # doctest: +SKIP
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
+    if mask_text:
+        dataframe = mask_text_columns(dataframe)
     dataframe.write_csv(file_path, **kwargs)
     logger.debug("Arquivo CSV escrito: %s (%d linhas)", file_path, dataframe.height)

@@ -168,7 +168,7 @@ def _write_tables(tables: dict[str, pl.DataFrame], directory: Path) -> dict[str,
     written: dict[str, Path] = {}
     for name, table in tables.items():
         written[name] = directory / f"{name}.csv"
-        write_csv(table, written[name])
+        write_csv(table, written[name], mask_text=True)
     return written
 
 

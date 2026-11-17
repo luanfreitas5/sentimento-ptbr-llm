@@ -197,6 +197,20 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Consultas de coleta (etapa `ingestion`), ex.: --queries termo1 termo2.",
     )
     parser.add_argument(
+        "--group-by-author",
+        action="store_true",
+        help=(
+            "Etapa `features`: particiona sem repartir autores (usa "
+            "`data/silver/autores_pseudonimizados.parquet`; veja "
+            "`scripts/run_tweets_data_pipeline.py --steps pseudonymize-authors`)."
+        ),
+    )
+    parser.add_argument(
+        "--drop-cross-split-duplicates",
+        action="store_true",
+        help="Etapa `features`: remove do treino/validação textos que também estão no teste.",
+    )
+    parser.add_argument(
         "--skip-hypotheses",
         action="store_true",
         help="Dispensa a etapa `hypotheses` (útil em `--stage all` sem LLM/GPU).",
@@ -776,6 +790,8 @@ def _build_features_stage_kwargs(
         "test_size": general_config.data_split.test_size,
         "validation_size": general_config.data_split.validation_size,
         "random_seed": random_seed,
+        "group_by_author": args.group_by_author,
+        "drop_cross_split_duplicates": args.drop_cross_split_duplicates,
     }
 
 

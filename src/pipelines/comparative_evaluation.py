@@ -383,7 +383,7 @@ def _write_tables(
     written: dict[str, Path] = {}
     for name, table in tables.items():
         written[name] = directory / f"{name}.csv"
-        write_csv(_apply_model_names(table, primary, reference), written[name])
+        write_csv(_apply_model_names(table, primary, reference), written[name], mask_text=True)
     return written
 
 

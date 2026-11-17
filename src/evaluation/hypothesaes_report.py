@@ -104,5 +104,5 @@ def save_top_hypotheses_table(table: pl.DataFrame, output_path: Path) -> None:
     ...     pl.DataFrame({"a": [1]}), Path("reports/interpretability/exemplo.csv")
     ... )  # doctest: +SKIP
     """
-    write_csv(table, output_path)
+    write_csv(table, output_path, mask_text=True)
     logger.info("Tabela de hipóteses salva em '%s' (%d linha(s)).", output_path, table.height)

@@ -10,9 +10,9 @@ VALIDAÇÃO (nunca no teste, para não orientar decisões de projeto com o conju
 final).
 
 Saídas: ``reports/tables/avaliacao/`` (métricas, por classe, por fatia,
-predições), ``reports/statistics/`` (McNemar), ``reports/ablation/`` (ablação)
-e ``reports/metrics/avaliacao.json`` (resumo). A etapa ``report`` consome essas
-saídas.
+predições, métricas contra os gold sets e ruído do rótulo de treino),
+``reports/statistics/`` (McNemar), ``reports/ablation/`` (ablação) e
+``reports/metrics/avaliacao.json`` (resumo). A etapa ``report`` consome essas saídas.
 """
 
 import logging
@@ -39,6 +39,13 @@ from data.writer import write_dataset
 from evaluation.ablation import identify_most_impactful_component, run_pipeline_ablation
 from evaluation.calibration import calculate_calibration_metrics
 from evaluation.evaluator import evaluate_classifier
+from evaluation.gold_reference import (
+    CONSENSUS_REFERENCE,
+    TRAINING_LABELER_NAME,
+    build_gold_references,
+    evaluate_models_against_references,
+    summarize_training_label_noise,
+)
 from evaluation.predictions import (
     CATEGORY_CLASSICAL,
     CATEGORY_LABELS,
@@ -47,11 +54,17 @@ from evaluation.predictions import (
     discover_checkpoints,
     predict_with_checkpoint,
 )
-from evaluation.significance import run_mcnemar_test
+from evaluation.significance import (
+    adjust_p_values,
+    calculate_mcnemar_effect,
+    calculate_paired_bootstrap_f1_difference,
+    run_mcnemar_test,
+)
 from evaluation.slice_evaluation import evaluate_metrics_by_slice
 from exceptions.data import DataNotFoundError
 from io_utils.csv import write_csv
 from io_utils.json import write_json
+from io_utils.parquet import read_parquet
 from models.persistence import load_classifier
 from pipelines.features import TFIDF_VECTORIZER_FILE_NAME
 from pipelines.training_llm import select_sample_indices
@@ -64,6 +77,8 @@ METRICS_TABLE_FILE_NAME = "metricas_por_modelo.csv"
 PER_CLASS_TABLE_FILE_NAME = "relatorio_por_classe.csv"
 SLICE_TABLE_FILE_NAME = "metricas_por_comprimento.csv"
 MCNEMAR_FILE_NAME = "comparacao_mcnemar.csv"
+GOLD_METRICS_FILE_NAME = "metricas_vs_gold.csv"
+LABEL_NOISE_FILE_NAME = "ruido_rotulo_treino.csv"
 ABLATION_FILE_NAME = "ablacao_pipeline_classico.csv"
 SUMMARY_FILE_NAME = "avaliacao.json"
 _LENGTH_SLICES: tuple[str, ...] = ("1_curto", "2_medio", "3_longo")
@@ -176,9 +191,20 @@ def _evaluate_model(
 
 
 def _compare_models_mcnemar(
-    predictions: Sequence[ModelPredictions], y_true_all: Sequence[str], alpha: float
+    predictions: Sequence[ModelPredictions],
+    y_true_all: Sequence[str],
+    alpha: float,
+    *,
+    n_bootstrap: int = DEFAULT_BOOTSTRAP_ITERATIONS,
+    confidence_level: float = DEFAULT_CONFIDENCE_LEVEL,
+    random_seed: int = DEFAULT_RANDOM_SEED,
 ) -> pl.DataFrame:
-    """McNemar par a par (tweets preditos por ambos), com correção de Holm."""
+    """McNemar par a par (tweets preditos por ambos), com Holm, efeito e IC da diferença de F1.
+
+    Além do p-valor (bruto, Holm e Benjamini-Hochberg), cada linha traz o tamanho do
+    efeito (acertos exclusivos, razão de chances) e a diferença de macro-F1 com IC de
+    bootstrap pareado, para que "significativo" não seja lido como "relevante".
+    """
     rows: list[dict[str, Any]] = []
     for first, second in combinations(predictions, 2):
         first_by_index = dict(zip(first.indices, first.y_pred, strict=True))
@@ -190,6 +216,15 @@ def _compare_models_mcnemar(
         pred_a = [first_by_index[index] for index in common]
         pred_b = [second_by_index[index] for index in common]
         test = run_mcnemar_test(y_true, pred_a, pred_b)
+        effect = calculate_mcnemar_effect(y_true, pred_a, pred_b)
+        f1_difference = calculate_paired_bootstrap_f1_difference(
+            y_true,
+            pred_a,
+            pred_b,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            random_state=random_seed,
+        )
         rows.append(
             {
                 "model_a": first.name,
@@ -199,15 +234,77 @@ def _compare_models_mcnemar(
                 "accuracy_b": float(np.mean(np.array(pred_b) == np.array(y_true))),
                 "statistic": test["statistic"],
                 "p_value": test["p_value"],
+                "a_only_correct": int(effect["a_only_correct"]),
+                "b_only_correct": int(effect["b_only_correct"]),
+                "odds_ratio": effect["odds_ratio"],
+                "f1_macro_difference": f1_difference["f1_macro_difference"],
+                "f1_macro_difference_ci_low": f1_difference["ci_low"],
+                "f1_macro_difference_ci_high": f1_difference["ci_high"],
             }
         )
     if not rows:
         return pl.DataFrame()
-    adjusted = adjust_p_values_holm([row["p_value"] for row in rows])
-    for row, adjusted_value in zip(rows, adjusted, strict=True):
+    raw_p_values = [row["p_value"] for row in rows]
+    adjusted = adjust_p_values_holm(raw_p_values)
+    benjamini_hochberg = adjust_p_values(raw_p_values, method="bh")
+    for row, adjusted_value, bh_value in zip(rows, adjusted, benjamini_hochberg, strict=True):
         row["p_value_holm"] = adjusted_value
+        row["p_value_bh"] = bh_value
         row["significant"] = adjusted_value < alpha
     return pl.DataFrame(rows)
+
+
+def _evaluate_against_gold(
+    paths: ProjectPaths,
+    predictions_table: pl.DataFrame,
+    *,
+    n_bootstrap: int,
+    confidence_level: float,
+    random_seed: int,
+) -> tuple[dict[str, pl.DataFrame], dict[str, Any]]:
+    """Mede os modelos contra os gold sets e quantifica o ruído do rótulo de treino.
+
+    O rótulo de treino (Hugging Face) é um classificador, não a verdade; as métricas
+    contra ``y_true`` medem o quanto o modelo o reproduz. Aqui o teste é medido contra os
+    gold sets e o consenso deles, restrito aos tweets de teste que eles cobrem.
+    Devolve ``({}, {})`` se nenhum gold set existir.
+    """
+    gold_files = {"gold_openai": paths.gold_openai_file, "gold_unb": paths.gold_unb_file}
+    gold_sets = {
+        name: read_parquet(file_path)
+        for name, file_path in gold_files.items()
+        if file_path.is_file()
+    }
+    if not gold_sets:
+        logger.warning("Nenhum gold set encontrado; a avaliação contra o gold será pulada.")
+        return {}, {}
+    references = build_gold_references(gold_sets)
+    options = {
+        "n_bootstrap": n_bootstrap,
+        "confidence_level": confidence_level,
+        "random_seed": random_seed,
+    }
+    model_metrics = evaluate_models_against_references(predictions_table, references, **options)
+    corpus = read_parquet(paths.labeled_corpus_file).select(
+        "id", pl.col("sentiment_label").alias("label")
+    )
+    label_noise = summarize_training_label_noise(corpus, references, **options)
+
+    summary: dict[str, Any] = {"references": list(references)}
+    if not label_noise.is_empty():
+        summary["training_label_noise"] = label_noise.to_dicts()
+    consensus = model_metrics.filter(
+        (pl.col("reference") == CONSENSUS_REFERENCE) & (pl.col("model") != TRAINING_LABELER_NAME)
+    )
+    if not consensus.is_empty():
+        best = consensus.row(0, named=True)
+        summary["best_model_on_gold_consensus"] = {
+            "model": best["model"],
+            "n": best["n"],
+            "f1_macro": best["f1_macro"],
+            "ci": [best["f1_macro_ci_low"], best["f1_macro_ci_high"]],
+        }
+    return {GOLD_METRICS_FILE_NAME: model_metrics, LABEL_NOISE_FILE_NAME: label_noise}, summary
 
 
 def _build_predictions_table(
@@ -434,7 +531,14 @@ def run_evaluate_stage(
         random_seed=random_seed,
     )
     y_true_all = test["sentiment_label"].to_list()
-    mcnemar_table = _compare_models_mcnemar(all_predictions, y_true_all, alpha)
+    mcnemar_table = _compare_models_mcnemar(
+        all_predictions,
+        y_true_all,
+        alpha,
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
     files = _write_tables(
         paths,
         {"metrics": metrics_table, "per_class": per_class_table, "slices": slice_table},
@@ -443,6 +547,18 @@ def run_evaluate_stage(
     if not mcnemar_table.is_empty():
         files["mcnemar"] = paths.reports_statistics_dir / MCNEMAR_FILE_NAME
         write_csv(mcnemar_table, files["mcnemar"])
+
+    gold_tables, gold_summary = _evaluate_against_gold(
+        paths,
+        _build_predictions_table(test["id"].to_list(), y_true_all, all_predictions),
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
+    for file_name, table in gold_tables.items():
+        if not table.is_empty():
+            files[file_name] = paths.reports_tables_dir / EVALUATION_SUBDIR / file_name
+            write_csv(table, files[file_name])
 
     ablation_table: pl.DataFrame | None = None
     if ablation_config and not skip_ablation:
@@ -465,6 +581,8 @@ def run_evaluate_stage(
         confidence_level=confidence_level,
         alpha=alpha,
     )
+    if gold_summary:
+        summary["gold_reference"] = gold_summary
     files["summary"] = paths.reports_metrics_dir / SUMMARY_FILE_NAME
     write_json(summary, files["summary"])
 

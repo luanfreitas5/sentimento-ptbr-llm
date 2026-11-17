@@ -222,6 +222,7 @@ def run_reconstruction(
         .head(TOP_ANOMALIES)
         .select("id", "text_normalized", "reconstruction_error", "lab_huggingface", "conf_hf"),
         output_dir / "posts_mais_atipicos.csv",
+        mask_text=True,
     )
     summary = summarize_error_by_group(scored)
     write_csv(summary, output_dir / "resumo_erro_reconstrucao.csv")
@@ -302,7 +303,8 @@ def parse_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     100
     """
     parser = argparse.ArgumentParser(
-        prog="python -m diagnostics.reconstruction", description=(__doc__ or "").split("\n")[0]
+        prog="python -m diagnostics.reconstruction",
+        description=__doc__.split("\n")[0] if __doc__ else None,
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_DIAGNOSTICS_CONFIG_FILE)
     parser.add_argument("--umap-sample", type=int, default=10000)

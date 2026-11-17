@@ -13,7 +13,9 @@ evaluator
     Orquestra as métricas de ``src/metrics/`` em um :class:`EvaluationResult`
     com intervalos de confiança bootstrap.
 significance
-    Testes de McNemar, Wilcoxon, Friedman e post-hoc de Nemenyi para
+    Testes de McNemar, Wilcoxon, Friedman e post-hoc de Nemenyi, correção de
+    comparações múltiplas (Holm/Benjamini-Hochberg), tamanho de efeito, bootstrap pareado
+    da diferença de macro-F1 e teste t reamostrado corrigido, para
     comparação entre classificadores (``configs/evaluation.yaml`` ->
     ``significance_tests``).
 calibration
@@ -23,6 +25,9 @@ slice_evaluation
     Métricas de classificação por fatia dos dados (fonte, classe,
     comprimento de texto) e identificação de fatias com desempenho abaixo
     do limiar.
+gold_reference
+    Avaliação dos modelos contra os gold sets e seu consenso, ruído do rótulo de treino
+    e alfa de Krippendorff.
 ablation
     Impacto da remoção de cada componente do pipeline sobre a métrica
     principal.

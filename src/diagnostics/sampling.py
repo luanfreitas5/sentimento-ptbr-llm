@@ -170,7 +170,7 @@ def write_labeling_sample(
     >>> write_labeling_sample(sample, key, sample_csv=Path("a.csv"), key_parquet=Path("k.parquet"))
     ... # doctest: +SKIP
     """
-    write_csv(sample, sample_csv)
+    write_csv(sample, sample_csv, mask_text=True)
     write_parquet(key, key_parquet)
     logger.info(
         "Amostra de %d tweets gravada em '%s' (chave em '%s').",

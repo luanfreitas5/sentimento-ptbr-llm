@@ -18,16 +18,24 @@ import polars as pl
 
 from config.paths import ProjectPaths
 from constants.defaults import DEFAULT_RANDOM_SEED, DEFAULT_TEST_SIZE, DEFAULT_VALIDATION_SIZE
+from data.authors import AUTHOR_KEY_COLUMN, load_author_key_table
+from data.leakage import audit_split_leakage
 from data.loader import load_labeled_corpus
-from data.splitter import create_stratified_split
+from data.splitter import (
+    create_grouped_stratified_split,
+    create_stratified_split,
+    remove_cross_split_duplicates,
+)
 from data.writer import write_dataset, write_training_example_dataset
 from features.lexical import LexicalTfidfVectorizer, compute_tfidf_features
+from io_utils.json import write_json
 from models.persistence import save_classifier
 
 logger = logging.getLogger(__name__)
 
 _TRAINING_EXAMPLE_COLUMNS: tuple[str, ...] = ("id", "text", "sentiment_label", "split")
 _TFIDF_FEATURES_FILE_NAME = "tfidf_features.parquet"
+LEAKAGE_AUDIT_FILE_NAME = "auditoria_vazamento_split.json"
 TFIDF_VECTORIZER_FILE_NAME = "tfidf_vectorizer.joblib"
 
 
@@ -67,6 +75,8 @@ def run_features_stage(
     test_size: float = DEFAULT_TEST_SIZE,
     validation_size: float = DEFAULT_VALIDATION_SIZE,
     random_seed: int = DEFAULT_RANDOM_SEED,
+    group_by_author: bool = False,
+    drop_cross_split_duplicates: bool = False,
 ) -> FeatureArtifacts:
     """Executa o split estratificado do corpus rotulado e a extração de features TF-IDF.
 
@@ -105,6 +115,16 @@ def run_features_stage(
     random_seed : int, optional
         Repassado a :func:`data.splitter.create_stratified_split`, by
         default :data:`constants.defaults.DEFAULT_RANDOM_SEED`.
+    group_by_author : bool, optional
+        Se ``True``, particiona sem repartir autores
+        (:func:`data.splitter.create_grouped_stratified_split`) usando a tabela de
+        pseudônimos de ``data/silver`` (gerada por
+        ``scripts/run_tweets_data_pipeline.py --steps pseudonymize-authors``). O padrão
+        ``False`` mantém o split por tweet, by default False.
+    drop_cross_split_duplicates : bool, optional
+        Se ``True``, remove do treino/validação os textos que também aparecem em
+        partições posteriores (:func:`data.splitter.remove_cross_split_duplicates`),
+        by default False.
 
     Returns
     -------
@@ -117,19 +137,47 @@ def run_features_stage(
     EmptyDatasetError
         Se o corpus rotulado, ou algum dos conjuntos particionados,
         estiver vazio.
+    DataNotFoundError
+        Se ``group_by_author`` for ``True`` e a tabela de autores não existir.
 
     Examples
     --------
     >>> run_features_stage(paths)  # doctest: +SKIP
     """
     labeled_corpus = load_labeled_corpus(paths.labeled_corpus_file)
-    split_corpus = create_stratified_split(
-        labeled_corpus,
-        label_column=label_column,
-        test_size=test_size,
-        validation_size=validation_size,
-        random_seed=random_seed,
-    ).select(list(_TRAINING_EXAMPLE_COLUMNS))
+    group_column: str | None = None
+    if group_by_author:
+        group_column = AUTHOR_KEY_COLUMN
+        labeled_corpus = labeled_corpus.join(
+            load_author_key_table(paths.data_silver_dir), on="id", how="left"
+        )
+        split_with_groups = create_grouped_stratified_split(
+            labeled_corpus,
+            label_column=label_column,
+            group_column=group_column,
+            test_size=test_size,
+            validation_size=validation_size,
+            random_seed=random_seed,
+        )
+    else:
+        split_with_groups = create_stratified_split(
+            labeled_corpus,
+            label_column=label_column,
+            test_size=test_size,
+            validation_size=validation_size,
+            random_seed=random_seed,
+        )
+    if drop_cross_split_duplicates:
+        split_with_groups = remove_cross_split_duplicates(split_with_groups)
+
+    leakage_audit = audit_split_leakage(
+        split_with_groups, text_column="text", group_column=group_column
+    )
+    write_json(
+        {"grouped_by_author": group_by_author, "pairs": leakage_audit},
+        paths.reports_statistics_dir / LEAKAGE_AUDIT_FILE_NAME,
+    )
+    split_corpus = split_with_groups.select(list(_TRAINING_EXAMPLE_COLUMNS))
 
     training_split = split_corpus.filter(pl.col("split") == "treino")
     validation_split = split_corpus.filter(pl.col("split") == "validacao")

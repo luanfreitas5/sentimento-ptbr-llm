@@ -352,7 +352,7 @@ def _discover_and_save_patterns(
             interpret_llm_kwargs=interpret_llm_kwargs,
         )
     )
-    write_csv(patterns, paths.reports_interpretability_dir / _PATTERNS_FILE_NAME)
+    write_csv(patterns, paths.reports_interpretability_dir / _PATTERNS_FILE_NAME, mask_text=True)
     return patterns
 
 
@@ -419,7 +419,9 @@ def _generate_and_save_hypotheses(
         )
         raise EmptyDatasetError("hipóteses HypotheSAEs (verifique o LLM interpretador)")
     hypotheses = pl.from_pandas(raw_hypotheses.sort_values(by=target_column, ascending=False))
-    write_csv(hypotheses, paths.reports_interpretability_dir / _HYPOTHESES_FILE_NAME)
+    write_csv(
+        hypotheses, paths.reports_interpretability_dir / _HYPOTHESES_FILE_NAME, mask_text=True
+    )
 
     top_hypotheses_table = build_top_hypotheses_table(hypotheses, target_column=target_column)
     save_top_hypotheses_table(
@@ -470,6 +472,7 @@ def _evaluate_hypotheses_on_holdout(
     write_csv(
         pl.from_pandas(evaluation_df),
         paths.reports_interpretability_dir / _HOLDOUT_EVALUATION_FILE_NAME,
+        mask_text=True,
     )
     holdout_metrics = {
         key: (list(value) if isinstance(value, tuple) else value) for key, value in metrics.items()
@@ -627,7 +630,9 @@ def run_hypothesaes_analysis_stage(
         .sort(confidence_column)
     )
     write_csv(
-        low_confidence_tweets, paths.reports_interpretability_dir / _LOW_CONFIDENCE_TWEETS_FILE_NAME
+        low_confidence_tweets,
+        paths.reports_interpretability_dir / _LOW_CONFIDENCE_TWEETS_FILE_NAME,
+        mask_text=True,
     )
     logger.info(
         "Tweets de baixa confiança (confidence_score < %.2f): %d/%d.",

@@ -354,7 +354,7 @@ def _write_outputs(table: pl.DataFrame, directory: Path, slug: str) -> Path:
     """Grava a tabela em parquet e CSV e devolve o caminho do parquet."""
     parquet_path = directory / f"{slug}.parquet"
     write_parquet(table, parquet_path)
-    write_csv(table, directory / f"{slug}.csv")
+    write_csv(table, directory / f"{slug}.csv", mask_text=True)
     return parquet_path
 
 
