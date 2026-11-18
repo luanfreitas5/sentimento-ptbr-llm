@@ -6,6 +6,7 @@
 
 [![CI](https://github.com/luanfreitas5/sentimento-ptbr-llm/actions/workflows/ci.yml/badge.svg)](https://github.com/luanfreitas5/sentimento-ptbr-llm/actions/workflows/ci.yml)
 [![Tests](https://github.com/luanfreitas5/sentimento-ptbr-llm/actions/workflows/tests.yml/badge.svg)](https://github.com/luanfreitas5/sentimento-ptbr-llm/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/luanfreitas5/sentimento-ptbr-llm/branch/main/graph/badge.svg)](https://codecov.io/gh/luanfreitas5/sentimento-ptbr-llm)
 [![Docs](https://github.com/luanfreitas5/sentimento-ptbr-llm/actions/workflows/docs.yml/badge.svg)](https://luanfreitas5.github.io/sentimento-ptbr-llm)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)

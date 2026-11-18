@@ -1,0 +1,14 @@
+# Codecov: o badge reflete a cobertura medida no CI (ubuntu + Python 3.12).
+# O piso de 80 % também é imposto localmente por `fail_under` no pyproject.toml.
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+comment:
+  layout: "diff, files"
+  require_changes: true
