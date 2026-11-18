@@ -138,7 +138,7 @@ pre-commit:  ## Roda todos os hooks do pre-commit em todos os arquivos
 	uv run pre-commit run --all-files
 
 update-hooks:  ## Atualiza os hooks do pre-commit
-	uv run pre-commit autoupdate
+	PYTHONUTF8=1 uv run pre-commit autoupdate
 
 release:  ## Cria uma nova release (versão + changelog + tag)
 	uv run cz bump --changelog

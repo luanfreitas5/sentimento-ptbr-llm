@@ -28,7 +28,7 @@ repos:
 
   # --- Ruff: lint + format -------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.0
+    rev: v0.17.5
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -43,13 +43,13 @@ repos:
 
   # --- nbstripout: remove outputs de notebooks antes do commit -------------
   - repo: https://github.com/kynan/nbstripout
-    rev: 0.9.1
+    rev: 0.9.2
     hooks:
       - id: nbstripout
 
   # --- commitizen: valida Conventional Commits (stage commit-msg) ----------
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.19.2
+    rev: v4.19.3
     hooks:
       - id: commitizen
         stages: [commit-msg]
