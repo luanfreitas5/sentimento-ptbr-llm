@@ -121,8 +121,8 @@ def load_extra_display_names(
     """Nome de exibição (apelido) de cada base adicional, para tabelas e gráficos.
 
     O ``alias`` vem de ``configs/labeling.yaml -> huggingface_extra.models``; sem apelido
-    (ou sem entrada na configuração), vale o nome de :func:`load_extra_model_names`. Pastas e
-    arquivos continuam usando o nome completo.
+    (ou sem entrada na configuração), vale o nome de :func:`load_extra_model_names`. Vale também
+    para pastas e arquivos.
 
     Parameters
     ----------

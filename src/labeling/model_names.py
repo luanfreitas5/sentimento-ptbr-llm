@@ -126,10 +126,12 @@ def resolve_source_model_names(labeling_config: Mapping[str, Any]) -> dict[str, 
 
 
 def load_source_file_names(config_file: Path | None = None) -> dict[str, str]:
-    """Nome completo (sem apelido) do modelo de cada fonte, para pastas e arquivos.
+    """Nome curto (``alias``) do modelo de cada fonte, para pastas e arquivos.
 
-    Os apelidos servem a tabelas e gráficos; pastas e arquivos mantêm o nome completo para
-    permanecerem estáveis e inequívocos.
+    Os nomes completos de modelos do Hugging Face passam do limite de caminho e, truncados,
+    exigiam um sufixo de hash (ex.: ``twitter-xlm-roberta-bas-9bb70cb7``). O ``alias`` de
+    ``configs/labeling.yaml`` é o mapa canônico nome longo → nome curto e vale igualmente em
+    tabelas, gráficos, pastas e arquivos; o nome completo fica nos metadados (``*.meta.json``).
 
     Parameters
     ----------
@@ -139,7 +141,7 @@ def load_source_file_names(config_file: Path | None = None) -> dict[str, str]:
     Returns
     -------
     dict[str, str]
-        Nome do modelo sem o prefixo da organização, indexado pela fonte.
+        ``alias`` (ou nome sem o prefixo da organização, se ausente), indexado pela fonte.
 
     Raises
     ------
@@ -149,17 +151,9 @@ def load_source_file_names(config_file: Path | None = None) -> dict[str, str]:
     Examples
     --------
     >>> load_source_file_names()["gold_openai"]  # doctest: +SKIP
-    'gpt-6-luna'
+    'GPT-6'
     """
-    path = config_file or CONFIGS_DIR / CONFIG_FILE_NAMES["labeling"]
-    blocks = _read_source_blocks(read_yaml(path))
-    try:
-        return {source: build_display_name(str(block["model"])) for source, block in blocks.items()}
-    except KeyError as error:
-        raise DataValidationError(
-            schema_name="labeling_config",
-            detail=f"modelo das fontes de rotulagem ausente em labeling.yaml: {error}",
-        ) from error
+    return load_source_model_names(config_file)
 
 
 def load_source_model_names(config_file: Path | None = None) -> dict[str, str]:

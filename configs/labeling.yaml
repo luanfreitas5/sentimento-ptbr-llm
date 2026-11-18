@@ -51,8 +51,8 @@ huggingface_secondary:
 # grava `data/gold/tweets_data_<modelo>.parquet` (modelo = nome sem a organização) e NÃO alimenta
 # treino. As chaves fora de `models` valem para todos e podem ser sobrescritas por modelo.
 # Modelos de cinco classes (estrelas / "very") somam as probabilidades por classe do projeto.
-# `alias` (opcional, por modelo) é o nome curto em tabelas e gráficos; pastas e arquivos
-# mantêm o nome completo do modelo.
+# `alias` (opcional, por modelo) é o nome curto em tabelas, gráficos, pastas e arquivos; deve ser
+# único. O nome completo do modelo fica nos metadados (`*.meta.json`).
 huggingface_extra:
   device: "auto"
   dtype: "auto"

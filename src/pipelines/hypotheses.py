@@ -29,7 +29,7 @@ from typing import Any
 from config.paths import ProjectPaths
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.json import read_json, write_json
-from labeling.extra_sources import load_extra_model_names
+from labeling.extra_sources import load_extra_display_names
 from labeling.model_names import load_source_file_names
 from pipelines.comparative_evaluation import (
     build_comparison_subdir,
@@ -168,7 +168,7 @@ def _run_disagreement_mode(
     """
     from diagnostics.model_disagreement import run_disagreement_hypotheses
 
-    file_names = {**load_extra_model_names(paths), **load_source_file_names()}
+    file_names = {**load_extra_display_names(paths), **load_source_file_names()}
     available = list_available_gold_names(paths)
     if not available:
         raise DataNotFoundError(

@@ -692,7 +692,7 @@ class TestBuildComparisonSubdir:
     """Nome da pasta do par limita cada modelo para evitar caminhos longos."""
 
     def test_long_model_names_are_shortened_and_distinct(self) -> None:
-        """Slugs acima do limite são truncados com hash; os curtos ficam intactos."""
+        """Slugs acima do limite são truncados com hash; os curtos (aliases) ficam intactos."""
         names = {"huggingface": "m" * 60, "gold_openai": "gpt-6-luna", "gold_unb": "n" * 60}
         first = build_comparison_subdir("comparativo", names, "gold_openai")
         second = build_comparison_subdir(
@@ -870,7 +870,7 @@ class TestRunComparativeEvaluationStage:
         vs_gold = results[f"{source}_vs_gold_unb"]
         assert vs_gold.summary["models"]["primary"] == "FinBERT-PT"
         assert vs_gold.summary["agreement"]["n_tweets"] == 60
-        assert vs_gold.metrics_path.name.startswith("comparativo_FinBERT-PT-BR_vs_")
+        assert vs_gold.metrics_path.name.startswith("comparativo_FinBERT-PT_vs_")
         assert results[source].summary["agreement"]["n_tweets"] == 60
 
     def test_raises_with_guidance_when_no_gold_set_exists(
