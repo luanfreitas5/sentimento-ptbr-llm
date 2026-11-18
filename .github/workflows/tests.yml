@@ -69,9 +69,10 @@ jobs:
 
       - name: Upload de cobertura (Codecov)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v7.1.1
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          # Em push (main/develop) o token existe, então falha de upload quebra o CI;
+          # em PRs de forks/Dependabot os secrets não são expostos, então só avisa.
+          fail_ci_if_error: ${{ github.event_name == 'push' }}
