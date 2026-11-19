@@ -264,7 +264,7 @@ def _plot_umap(
     random_seed: int,
 ) -> None:
     """Projeta o espaço latente em 2D (UMAP) numa subamostra rotulada e salva a figura."""
-    import umap  # type: ignore[import-untyped]
+    from umap.umap_ import UMAP  # type: ignore[import-untyped]
 
     rows = np.flatnonzero(scored["lab_huggingface"].is_not_null().to_numpy())
     if rows.size == 0:
@@ -274,7 +274,7 @@ def _plot_umap(
     chosen = np.sort(rng.choice(rows, size=min(sample_size, rows.size), replace=False))
     latent = encode_with_autoencoder(embeddings[chosen], artifacts)  # type: ignore[arg-type]
     logger.info("Projetando %d ponto(s) com UMAP...", len(chosen))
-    coordinates = umap.UMAP(n_components=2, random_state=random_seed).fit_transform(latent)
+    coordinates = UMAP(n_components=2, random_state=random_seed).fit_transform(latent)
     labels = scored["lab_huggingface"].to_numpy()[chosen].tolist()
     figure = plot_embedding_scatter(
         coordinates, labels, title="Espaço latente do autoencoder (UMAP) por rótulo do primário"
