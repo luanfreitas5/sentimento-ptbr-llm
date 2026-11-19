@@ -526,6 +526,44 @@ class TestEvaluateAndReportEndToEnd:
         assert "treino" in datasheet and "teste" in datasheet
         assert "item1" not in datasheet  # nenhum texto de tweet no datasheet (LGPD)
 
+    def test_calibration_and_abstention_use_validation_for_fitting(
+        self, trained_paths: ProjectPaths
+    ) -> None:
+        """Temperatura e limiar saem da validação; o LLM (sem probabilidades) fica de fora."""
+        result = run_evaluate_stage(
+            trained_paths,
+            n_bootstrap=10,
+            llm_max_test_samples=12,
+            calibration_config={"n_bins": 5, "coverages": [0.5, 1.0], "target_coverage": 0.8},
+        )
+        evaluation_dir = trained_paths.reports_tables_dir / "avaliacao"
+        calibration = pl.read_csv(evaluation_dir / "calibracao_por_modelo.csv")
+        assert set(calibration["model"]) == {"dummy", "naive_bayes", "logistic_regression"}
+        assert (calibration["n_validation"] == 24).all()
+        assert (calibration["temperature"] > 0).all()
+        abstention = pl.read_csv(evaluation_dir / "abstencao_por_modelo.csv")
+        assert (abstention["coverage"] >= 0).all()
+        assert (abstention["coverage"] <= 1).all()
+        review = pl.read_csv(evaluation_dir / "revisao_humana.csv")
+        assert set(review.columns) == {"id", "model", "y_pred", "confidence"}  # sem texto (LGPD)
+        assert "calibration_abstention" in result.summary
+
+    def test_calibration_is_off_by_default_and_report_draws_its_figures(
+        self, trained_paths: ProjectPaths
+    ) -> None:
+        """Sem ``calibration_config`` nada é gravado; com ele, ``report`` gera as figuras."""
+        run_evaluate_stage(trained_paths, n_bootstrap=10, llm_max_test_samples=12)
+        assert not (trained_paths.reports_tables_dir / "avaliacao" / "risco_cobertura.csv").exists()
+        run_evaluate_stage(
+            trained_paths,
+            n_bootstrap=10,
+            llm_max_test_samples=12,
+            calibration_config={"coverages": [0.5, 1.0]},
+        )
+        figure_names = {path.name for path in run_report_stage(trained_paths).figures}
+        assert "risco_cobertura.png" in figure_names
+        assert "confiabilidade_logistic_regression.png" in figure_names
+
     def test_report_requires_evaluate_first(self, stage_paths: ProjectPaths) -> None:
         """Sem as saídas de ``evaluate``, o erro manda rodar ``make evaluate``."""
         with pytest.raises(DataNotFoundError, match="make evaluate"):

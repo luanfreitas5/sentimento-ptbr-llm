@@ -1036,6 +1036,11 @@ def _build_evaluate_stage_kwargs(
         "llm_max_test_samples": evaluation_config["evaluate"]["llm_max_test_samples"],
         "ablation_config": ablation_config,
         "skip_ablation": args.skip_ablation,
+        "calibration_config": (
+            evaluation_config["calibration"]
+            if evaluation_config["calibration"].get("enabled")
+            else None
+        ),
     }
 
 

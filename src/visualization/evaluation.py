@@ -139,3 +139,140 @@ def plot_ablation_impact(ablation_table: pl.DataFrame) -> Figure:
     axis.set_ylabel("Componente removido")
     figure.tight_layout()
     return figure
+
+
+def plot_reliability_with_intervals(reliability_table: pl.DataFrame, *, model: str) -> Figure:
+    """Curva de confiabilidade de um modelo, antes e depois do *temperature scaling*.
+
+    Cada ponto traz o IC de Clopper-Pearson da acurácia da faixa e o ``n`` anotado, para que
+    faixas com poucas amostras não sejam lidas como calibradas (ou descalibradas).
+
+    Parameters
+    ----------
+    reliability_table : pl.DataFrame
+        ``calibracao_confiabilidade.csv`` (``model``, ``variant``, ``n``, ``mean_confidence``,
+        ``accuracy``, ``ci_low``, ``ci_high``).
+    model : str
+        Modelo a desenhar.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figura com a diagonal de calibração perfeita e uma curva por variante.
+
+    Raises
+    ------
+    EmptyDatasetError
+        Se não houver linhas para ``model``.
+
+    Examples
+    --------
+    >>> tabela = pl.DataFrame(
+    ...     {
+    ...         "model": ["m"],
+    ...         "variant": ["original"],
+    ...         "n": [10],
+    ...         "mean_confidence": [0.8],
+    ...         "accuracy": [0.7],
+    ...         "ci_low": [0.4],
+    ...         "ci_high": [0.9],
+    ...     }
+    ... )
+    >>> plot_reliability_with_intervals(tabela, model="m").axes[0].get_xlabel()
+    'Confiança média predita'
+    """
+    data = reliability_table.filter(pl.col("model") == model)
+    if data.is_empty():
+        raise EmptyDatasetError(f"tabela de confiabilidade de {model}")
+    figure, axis = plt.subplots(figsize=(6, 5))
+    axis.plot([0, 1], [0, 1], linestyle="--", color="gray", label="calibração perfeita")
+    styles = {"original": ("#D55E00", "original"), "temperature_scaling": ("#0072B2", "calibrado")}
+    for variant, (color, label) in styles.items():
+        part = data.filter(pl.col("variant") == variant).sort("mean_confidence")
+        if part.is_empty():
+            continue
+        accuracy = part["accuracy"].to_numpy()
+        errors = np.vstack(
+            [accuracy - part["ci_low"].to_numpy(), part["ci_high"].to_numpy() - accuracy]
+        )
+        axis.errorbar(
+            part["mean_confidence"].to_numpy(),
+            accuracy,
+            yerr=errors,
+            marker="o",
+            capsize=3,
+            color=color,
+            label=label,
+        )
+        for x_value, y_value, count in zip(
+            part["mean_confidence"], accuracy, part["n"], strict=True
+        ):
+            axis.annotate(
+                f"n={count}",
+                (x_value, y_value),
+                fontsize=6,
+                xytext=(3, -9),
+                textcoords="offset points",
+                color=color,
+            )
+    axis.set_xlim(0, 1)
+    axis.set_ylim(0, 1)
+    axis.set_xlabel("Confiança média predita")
+    axis.set_ylabel("Acurácia observada (IC 95%)")
+    axis.set_title(f"Curva de confiabilidade (teste) — {model}")
+    axis.legend(loc="upper left")
+    figure.tight_layout()
+    return figure
+
+
+def plot_risk_coverage_curves(risk_coverage_table: pl.DataFrame) -> Figure:
+    """Macro-F1 contra a fração de tweets respondidos, uma linha por modelo, com IC.
+
+    Parameters
+    ----------
+    risk_coverage_table : pl.DataFrame
+        ``risco_cobertura.csv`` (``model``, ``coverage``, ``f1_macro`` e seu IC).
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figura com uma linha por modelo e faixa de IC.
+
+    Raises
+    ------
+    EmptyDatasetError
+        Se ``risk_coverage_table`` estiver vazia.
+
+    Examples
+    --------
+    >>> tabela = pl.DataFrame(
+    ...     {
+    ...         "model": ["m", "m"],
+    ...         "coverage": [0.5, 1.0],
+    ...         "f1_macro": [0.8, 0.7],
+    ...         "f1_macro_ci_low": [0.75, 0.68],
+    ...         "f1_macro_ci_high": [0.85, 0.72],
+    ...     }
+    ... )
+    >>> plot_risk_coverage_curves(tabela).axes[0].get_xlabel()
+    'Cobertura (fração de tweets respondidos)'
+    """
+    if risk_coverage_table.is_empty():
+        raise EmptyDatasetError("tabela risco-cobertura")
+    figure, axis = plt.subplots(figsize=(8, 5))
+    for model in risk_coverage_table["model"].unique(maintain_order=True):
+        part = risk_coverage_table.filter(pl.col("model") == model).sort("coverage")
+        coverage = part["coverage"].to_numpy()
+        axis.plot(coverage, part["f1_macro"].to_numpy(), marker="o", label=model)
+        axis.fill_between(
+            coverage,
+            part["f1_macro_ci_low"].to_numpy(),
+            part["f1_macro_ci_high"].to_numpy(),
+            alpha=0.15,
+        )
+    axis.set_xlabel("Cobertura (fração de tweets respondidos)")
+    axis.set_ylabel("F1-macro nos respondidos (IC 95%)")
+    axis.set_title("Predição com abstenção: F1-macro contra cobertura (teste)")
+    axis.legend(title="Modelo", fontsize=8)
+    figure.tight_layout()
+    return figure

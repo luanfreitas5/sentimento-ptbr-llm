@@ -19,8 +19,11 @@ significance
     comparação entre classificadores (``configs/evaluation.yaml`` ->
     ``significance_tests``).
 calibration
-    Curva de confiabilidade, Erro de Calibração Esperado (ECE) e Brier
-    score multiclasse.
+    Curva e tabela de confiabilidade (com IC por faixa), Erro de Calibração Esperado
+    (ECE), Brier score multiclasse e *temperature scaling*.
+abstention
+    Predição com abstenção: curva risco-cobertura, limiar de confiança por cobertura-alvo
+    e avaliação dos tweets respondidos e abstidos.
 slice_evaluation
     Métricas de classificação por fatia dos dados (fonte, classe,
     comprimento de texto) e identificação de fatias com desempenho abaixo
@@ -37,10 +40,18 @@ reports
 """
 
 from evaluation.ablation import calculate_ablation_impact, identify_most_impactful_component
+from evaluation.abstention import (
+    calculate_risk_coverage_curve,
+    evaluate_abstention_at_threshold,
+    select_confidence_threshold,
+)
 from evaluation.calibration import (
+    apply_temperature_scaling,
     calculate_calibration_metrics,
     calculate_expected_calibration_error,
     calculate_reliability_curve,
+    calculate_reliability_table,
+    fit_temperature_scaling,
 )
 from evaluation.evaluator import (
     EvaluationResult,
@@ -62,14 +73,19 @@ from evaluation.slice_evaluation import evaluate_metrics_by_slice, identify_unde
 
 __all__: list[str] = [
     "EvaluationResult",
+    "apply_temperature_scaling",
     "build_evaluation_report",
     "calculate_ablation_impact",
     "calculate_bootstrap_confidence_intervals",
     "calculate_calibration_metrics",
     "calculate_expected_calibration_error",
     "calculate_reliability_curve",
+    "calculate_reliability_table",
+    "calculate_risk_coverage_curve",
+    "evaluate_abstention_at_threshold",
     "evaluate_classifier",
     "evaluate_metrics_by_slice",
+    "fit_temperature_scaling",
     "identify_most_impactful_component",
     "identify_underperforming_slices",
     "merge_evaluation_reports",
@@ -78,4 +94,5 @@ __all__: list[str] = [
     "run_nemenyi_post_hoc_test",
     "run_wilcoxon_signed_rank_test",
     "save_evaluation_report",
+    "select_confidence_threshold",
 ]

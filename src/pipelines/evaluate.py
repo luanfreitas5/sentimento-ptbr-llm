@@ -66,6 +66,7 @@ from io_utils.csv import write_csv
 from io_utils.json import write_json
 from io_utils.parquet import read_parquet
 from models.persistence import load_classifier
+from pipelines.calibration_abstention import run_calibration_abstention
 from pipelines.features import TFIDF_VECTORIZER_FILE_NAME
 from pipelines.training_llm import select_sample_indices
 
@@ -448,6 +449,21 @@ def _write_tables(
     return files
 
 
+def _write_evaluation_tables(
+    paths: ProjectPaths,
+    tables: Mapping[str, pl.DataFrame],
+    files: dict[str, Path],
+    *,
+    skip_empty: bool = False,
+) -> None:
+    """Grava tabelas CSV em ``evaluation/`` e registra os caminhos em ``files``."""
+    for file_name, table in tables.items():
+        if skip_empty and table.is_empty():
+            continue
+        files[file_name] = paths.reports_tables_dir / EVALUATION_SUBDIR / file_name
+        write_csv(table, files[file_name])
+
+
 def run_evaluate_stage(
     paths: ProjectPaths,
     *,
@@ -459,6 +475,7 @@ def run_evaluate_stage(
     llm_max_test_samples: int | None = None,
     ablation_config: Mapping[str, Any] | None = None,
     skip_ablation: bool = False,
+    calibration_config: Mapping[str, Any] | None = None,
 ) -> EvaluateResult:
     """Avalia no teste todos os modelos treinados, compara-os e executa a ablação.
 
@@ -484,6 +501,10 @@ def run_evaluate_stage(
         ``tfidf_params``), by default None (sem ablação).
     skip_ablation : bool, optional
         Dispensa a ablação, by default False.
+    calibration_config : Mapping[str, Any] | None, optional
+        ``configs/evaluation.yaml -> calibration`` (``n_bins``, ``temperature_scaling``,
+        ``coverages``, ``target_coverage``); ativa a calibração com *temperature scaling*
+        (ajustada na validação) e a predição com abstenção, by default None (desligada).
 
     Returns
     -------
@@ -555,10 +576,23 @@ def run_evaluate_stage(
         confidence_level=confidence_level,
         random_seed=random_seed,
     )
-    for file_name, table in gold_tables.items():
-        if not table.is_empty():
-            files[file_name] = paths.reports_tables_dir / EVALUATION_SUBDIR / file_name
-            write_csv(table, files[file_name])
+    _write_evaluation_tables(paths, gold_tables, files, skip_empty=True)
+
+    calibration_summary: dict[str, Any] = {}
+    if calibration_config:
+        calibration_result = run_calibration_abstention(
+            checkpoints,
+            all_predictions,
+            test,
+            load_training_example_dataset(paths.validation_corpus_file),
+            vectorizer=vectorizer,
+            config=calibration_config,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            random_seed=random_seed,
+        )
+        calibration_summary = calibration_result.summary
+        _write_evaluation_tables(paths, calibration_result.tables, files)
 
     ablation_table: pl.DataFrame | None = None
     if ablation_config and not skip_ablation:
@@ -583,6 +617,8 @@ def run_evaluate_stage(
     )
     if gold_summary:
         summary["gold_reference"] = gold_summary
+    if calibration_summary:
+        summary["calibration_abstention"] = calibration_summary
     files["summary"] = paths.reports_metrics_dir / SUMMARY_FILE_NAME
     write_json(summary, files["summary"])
 

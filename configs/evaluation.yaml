@@ -30,6 +30,11 @@ calibration:
   method: "reliability_curve"
   n_bins: 10
   metric: "brier_score"
+  # Estágio `evaluate`: temperature scaling ajustado na VALIDAÇÃO (nunca no teste) e predição com
+  # abstenção. O limiar de confiança também sai da validação (cobertura-alvo) e é aplicado ao teste.
+  temperature_scaling: true
+  coverages: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0] # curva risco-cobertura (macro-F1 vs. fração respondida)
+  target_coverage: 0.8 # fração respondida; o restante vai para revisão humana
 
 slice_evaluation:
   enabled: true

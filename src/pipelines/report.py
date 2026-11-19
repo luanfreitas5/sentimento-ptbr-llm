@@ -5,7 +5,8 @@ Consome as saídas de ``evaluate`` (``reports/tables/avaliacao/``,
 modelo:
 
 * figuras (``reports/figures/avaliacao/``, PNG 300 dpi + SVG): comparação entre
-  modelos com IC 95%, matriz de confusão por modelo e impacto da ablação;
+  modelos com IC 95%, matriz de confusão por modelo, impacto da ablação e, quando
+  ``evaluate`` calibrou os modelos, confiabilidade por modelo e curva risco-cobertura;
 * tabelas (``reports/tables/relatorio/``): resultados principais e ablação em
   CSV, Markdown e LaTeX;
 * um Model Card de resultados por categoria de modelo
@@ -31,6 +32,7 @@ from exceptions.data import DataNotFoundError
 from io_utils.csv import read_csv, write_csv
 from io_utils.json import read_json
 from metrics.classification import calculate_confusion_matrix
+from pipelines.calibration_abstention import RELIABILITY_FILE_NAME, RISK_COVERAGE_FILE_NAME
 from pipelines.evaluate import (
     ABLATION_FILE_NAME,
     EVALUATION_SUBDIR,
@@ -44,7 +46,12 @@ from pipelines.evaluate import (
 from reporting.documents import render_datasheet, render_model_card
 from reporting.tables import build_results_table, dataframe_to_latex, dataframe_to_markdown
 from visualization.confusion_matrix import plot_confusion_matrix_heatmap
-from visualization.evaluation import plot_ablation_impact, plot_model_comparison
+from visualization.evaluation import (
+    plot_ablation_impact,
+    plot_model_comparison,
+    plot_reliability_with_intervals,
+    plot_risk_coverage_curves,
+)
 from visualization.theme import apply_project_theme, save_figure
 
 logger = logging.getLogger(__name__)
@@ -93,19 +100,9 @@ def _require(path: Path) -> Path:
     return path
 
 
-def _save_figures(
-    metrics_table: pl.DataFrame,
-    predictions: pl.DataFrame,
-    ablation: pl.DataFrame | None,
-    directory: Path,
-) -> list[Path]:
-    """Gera a comparação entre modelos, as matrizes de confusão e o gráfico da ablação."""
-    apply_project_theme()
+def _save_confusion_figures(predictions: pl.DataFrame, directory: Path) -> list[Path]:
+    """Gera uma matriz de confusão normalizada por modelo (colunas ``pred_*``)."""
     saved: list[Path] = []
-    saved.extend(
-        save_figure(plot_model_comparison(metrics_table), "comparacao_modelos", directory=directory)
-    )
-
     for column in (name for name in predictions.columns if name.startswith("pred_")):
         evaluated = predictions.filter(pl.col(column).is_not_null())
         matrix = calculate_confusion_matrix(
@@ -116,11 +113,48 @@ def _save_figures(
             matrix, normalize=True, title=f"Matriz de confusão (teste) — {model_name}"
         )
         saved.extend(save_figure(figure, f"matriz_confusao_{model_name}", directory=directory))
+    return saved
 
+
+def _save_calibration_figures(
+    reliability: pl.DataFrame | None, risk_coverage: pl.DataFrame | None, directory: Path
+) -> list[Path]:
+    """Gera os diagramas de confiabilidade (por modelo) e as curvas risco-cobertura."""
+    saved: list[Path] = []
+    if reliability is not None and not reliability.is_empty():
+        for model_name in reliability["model"].unique(maintain_order=True):
+            figure = plot_reliability_with_intervals(reliability, model=model_name)
+            saved.extend(save_figure(figure, f"confiabilidade_{model_name}", directory=directory))
+    if risk_coverage is not None and not risk_coverage.is_empty():
+        saved.extend(
+            save_figure(
+                plot_risk_coverage_curves(risk_coverage), "risco_cobertura", directory=directory
+            )
+        )
+    return saved
+
+
+def _save_figures(
+    metrics_table: pl.DataFrame,
+    predictions: pl.DataFrame,
+    ablation: pl.DataFrame | None,
+    directory: Path,
+    *,
+    reliability: pl.DataFrame | None = None,
+    risk_coverage: pl.DataFrame | None = None,
+) -> list[Path]:
+    """Gera a comparação entre modelos, as matrizes de confusão, a ablação e a calibração."""
+    apply_project_theme()
+    saved: list[Path] = []
+    saved.extend(
+        save_figure(plot_model_comparison(metrics_table), "comparacao_modelos", directory=directory)
+    )
+    saved.extend(_save_confusion_figures(predictions, directory))
     if ablation is not None and not ablation.is_empty():
         saved.extend(
             save_figure(plot_ablation_impact(ablation), "ablacao_pipeline", directory=directory)
         )
+    saved.extend(_save_calibration_figures(reliability, risk_coverage, directory))
     return saved
 
 
@@ -203,8 +237,17 @@ def run_report_stage(paths: ProjectPaths) -> ReportResult:
     ablation_path = paths.reports_ablation_dir / ABLATION_FILE_NAME
     ablation = _read_numeric_csv(ablation_path) if ablation_path.is_file() else None
 
+    reliability_path = evaluation_dir / RELIABILITY_FILE_NAME
+    risk_coverage_path = evaluation_dir / RISK_COVERAGE_FILE_NAME
     figures = _save_figures(
-        metrics_table, predictions, ablation, paths.reports_figures_dir / EVALUATION_SUBDIR
+        metrics_table,
+        predictions,
+        ablation,
+        paths.reports_figures_dir / EVALUATION_SUBDIR,
+        reliability=_read_numeric_csv(reliability_path) if reliability_path.is_file() else None,
+        risk_coverage=(
+            _read_numeric_csv(risk_coverage_path) if risk_coverage_path.is_file() else None
+        ),
     )
 
     tables_dir = paths.reports_tables_dir / REPORT_SUBDIR
