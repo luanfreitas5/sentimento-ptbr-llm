@@ -36,9 +36,16 @@ calibration:
   coverages: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0] # curva risco-cobertura (macro-F1 vs. fração respondida)
   target_coverage: 0.8 # fração respondida; o restante vai para revisão humana
 
+# Estágio `evaluate`: macro-F1 por fatia com IC e diferença contra o restante do teste
+# (src/evaluation/error_analysis.py). As fatias são detectadas por padrões lexicais (proxies; "ironia_aparente"
+# é a presença de marcadores, não a detecção de ironia). Também gera a tabela dos maiores erros por paradigma
+# (com coluna `manual_category` vazia para a revisão manual) e a decomposição erro do modelo vs. do rótulo de treino.
 slice_evaluation:
   enabled: true
-  slices: ["fonte_dados", "classe", "comprimento_texto"]
+  slices: ["comprimento_texto", "emoji", "hashtag", "negacao", "ironia_aparente", "giria"]
+  min_slice_size: 30 # abaixo disso a fatia é marcada `small_sample` e nunca como pior de forma significativa
+  top_n_errors: 50 # maiores erros listados por paradigma (melhor modelo de cada um)
+  reference: "consenso_gold" # referência gold que define a origem do erro (cai na primeira existente)
 
 # Falha o build/pipeline se a métrica principal cair abaixo do limiar acordado.
 regression_thresholds:

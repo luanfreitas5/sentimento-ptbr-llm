@@ -276,3 +276,71 @@ def plot_risk_coverage_curves(risk_coverage_table: pl.DataFrame) -> Figure:
     axis.legend(title="Modelo", fontsize=8)
     figure.tight_layout()
     return figure
+
+
+def plot_slice_differences(slice_table: pl.DataFrame, *, model: str) -> Figure:
+    """Diferença de macro-F1 de cada fatia contra o restante do teste, com IC.
+
+    Parameters
+    ----------
+    slice_table : pl.DataFrame
+        ``metricas_por_fatia.csv`` (``model``, ``dimension``, ``slice``, ``n``,
+        ``f1_macro_difference`` e seu IC, ``small_sample``).
+    model : str
+        Modelo a desenhar.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Uma linha por fatia (fatias pequenas omitidas); barras de erro abaixo de zero
+        indicam fatia pior que o restante.
+
+    Raises
+    ------
+    EmptyDatasetError
+        Se não houver fatias com tamanho suficiente para o modelo.
+
+    Examples
+    --------
+    >>> tabela = pl.DataFrame(
+    ...     {
+    ...         "model": ["m"],
+    ...         "dimension": ["emoji"],
+    ...         "slice": ["com_emoji"],
+    ...         "n": [100],
+    ...         "small_sample": [False],
+    ...         "f1_macro_difference": [-0.05],
+    ...         "difference_ci_low": [-0.1],
+    ...         "difference_ci_high": [-0.01],
+    ...     }
+    ... )
+    >>> plot_slice_differences(tabela, model="m").axes[0].get_xlabel()
+    'Diferença de F1-macro contra o restante (IC 95%)'
+    """
+    data = slice_table.filter(
+        (pl.col("model") == model)
+        & ~pl.col("small_sample")
+        & pl.col("f1_macro_difference").is_not_null()
+    ).sort("f1_macro_difference", descending=True)
+    if data.is_empty():
+        raise EmptyDatasetError(f"fatias de {model}")
+    values = data["f1_macro_difference"].to_numpy()
+    errors = np.vstack(
+        [
+            values - data["difference_ci_low"].to_numpy(),
+            data["difference_ci_high"].to_numpy() - values,
+        ]
+    )
+    labels = [f"{row['dimension']}: {row['slice']} (n={row['n']})" for row in data.to_dicts()]
+    colors = ["#D55E00" if high < 0 else "#0072B2" for high in data["difference_ci_high"].to_list()]
+    figure, axis = plt.subplots(figsize=(9, max(3.0, 0.45 * data.height + 1.5)))
+    positions = np.arange(data.height)
+    axis.errorbar(values, positions, xerr=errors, fmt="none", ecolor="#555555", capsize=3)
+    axis.scatter(values, positions, c=colors, zorder=3)
+    axis.axvline(0, color="#333333", linewidth=0.8)
+    axis.set_yticks(positions, labels)
+    axis.invert_yaxis()
+    axis.set_xlabel("Diferença de F1-macro contra o restante (IC 95%)")
+    axis.set_title(f"Desempenho por fatia (teste) — {model}")
+    figure.tight_layout()
+    return figure

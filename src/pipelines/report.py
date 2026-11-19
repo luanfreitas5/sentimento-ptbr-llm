@@ -26,9 +26,10 @@ import polars as pl
 
 from config.paths import ProjectPaths
 from constants.labels import SENTIMENT_CLASSES
+from constants.metrics import PRIMARY_METRIC
 from data.loader import load_training_example_dataset, read_dataset_file
 from evaluation.predictions import CATEGORY_LABELS
-from exceptions.data import DataNotFoundError
+from exceptions.data import DataNotFoundError, EmptyDatasetError
 from io_utils.csv import read_csv, write_csv
 from io_utils.json import read_json
 from metrics.classification import calculate_confusion_matrix
@@ -43,6 +44,7 @@ from pipelines.evaluate import (
     SLICE_TABLE_FILE_NAME,
     SUMMARY_FILE_NAME,
 )
+from pipelines.slice_error_analysis import SLICE_UNCERTAINTY_FILE_NAME
 from reporting.documents import render_datasheet, render_model_card
 from reporting.tables import build_results_table, dataframe_to_latex, dataframe_to_markdown
 from visualization.confusion_matrix import plot_confusion_matrix_heatmap
@@ -51,6 +53,7 @@ from visualization.evaluation import (
     plot_model_comparison,
     plot_reliability_with_intervals,
     plot_risk_coverage_curves,
+    plot_slice_differences,
 )
 from visualization.theme import apply_project_theme, save_figure
 
@@ -134,6 +137,26 @@ def _save_calibration_figures(
     return saved
 
 
+def _save_slice_figures(
+    slice_uncertainty: pl.DataFrame | None, metrics_table: pl.DataFrame, directory: Path
+) -> list[Path]:
+    """Gera a figura de diferença por fatia do melhor modelo de cada paradigma."""
+    if slice_uncertainty is None or slice_uncertainty.is_empty():
+        return []
+    saved: list[Path] = []
+    best = metrics_table.sort(PRIMARY_METRIC, descending=True).unique(
+        subset="category", keep="first", maintain_order=True
+    )
+    for model_name in best["model"].to_list():
+        try:
+            figure = plot_slice_differences(slice_uncertainty, model=model_name)
+        except EmptyDatasetError:
+            logger.warning("Sem fatias com tamanho suficiente para %s; figura pulada.", model_name)
+            continue
+        saved.extend(save_figure(figure, f"fatias_{model_name}", directory=directory))
+    return saved
+
+
 def _save_figures(
     metrics_table: pl.DataFrame,
     predictions: pl.DataFrame,
@@ -142,8 +165,9 @@ def _save_figures(
     *,
     reliability: pl.DataFrame | None = None,
     risk_coverage: pl.DataFrame | None = None,
+    slice_uncertainty: pl.DataFrame | None = None,
 ) -> list[Path]:
-    """Gera a comparação entre modelos, as matrizes de confusão, a ablação e a calibração."""
+    """Gera comparação entre modelos, matrizes de confusão, ablação, calibração e fatias."""
     apply_project_theme()
     saved: list[Path] = []
     saved.extend(
@@ -155,6 +179,7 @@ def _save_figures(
             save_figure(plot_ablation_impact(ablation), "ablacao_pipeline", directory=directory)
         )
     saved.extend(_save_calibration_figures(reliability, risk_coverage, directory))
+    saved.extend(_save_slice_figures(slice_uncertainty, metrics_table, directory))
     return saved
 
 
@@ -239,6 +264,7 @@ def run_report_stage(paths: ProjectPaths) -> ReportResult:
 
     reliability_path = evaluation_dir / RELIABILITY_FILE_NAME
     risk_coverage_path = evaluation_dir / RISK_COVERAGE_FILE_NAME
+    slice_uncertainty_path = evaluation_dir / SLICE_UNCERTAINTY_FILE_NAME
     figures = _save_figures(
         metrics_table,
         predictions,
@@ -247,6 +273,9 @@ def run_report_stage(paths: ProjectPaths) -> ReportResult:
         reliability=_read_numeric_csv(reliability_path) if reliability_path.is_file() else None,
         risk_coverage=(
             _read_numeric_csv(risk_coverage_path) if risk_coverage_path.is_file() else None
+        ),
+        slice_uncertainty=(
+            _read_numeric_csv(slice_uncertainty_path) if slice_uncertainty_path.is_file() else None
         ),
     )
 

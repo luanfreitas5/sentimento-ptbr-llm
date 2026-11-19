@@ -41,3 +41,25 @@ MULTIPLE_WHITESPACE_PATTERN = re.compile(r"\s+")
 
 # Caracteres repetidos mais de duas vezes seguidas (ex.: "muitooo" -> "muito")
 REPEATED_CHARACTERS_PATTERN = re.compile(r"(\w)\1{2,}")
+
+# Marcadores de negação do português (palavra inteira, sem acento obrigatório)
+NEGATION_PATTERN = re.compile(
+    r"\b(?:n[aã]o|nunca|jamais|nem|nada|ningu[eé]m|nenhum[a]?|nao|sem|tampouco|n)\b",
+    flags=re.IGNORECASE,
+)
+
+# Marcadores lexicais de ironia aparente: proxy, não detecta ironia de fato
+IRONY_PATTERN = re.compile(
+    r"s[oó] que n[aã]o|claro que|com certeza|ah t[aá]|ah sim|imagina|nossa,? que"
+    r"|que (?:lindo|maravilha|[oó]timo|legal|bom)\b.*[!?]{2,}|parab[eé]ns,? hein"
+    r"|obrigad[oa],? hein|[\"“”][^\"“”]{2,40}[\"“”]|#ironia|\b/s\b|\bvaleu hein\b",
+    flags=re.IGNORECASE,
+)
+
+# Gíria e escrita informal de tweets pt-BR (léxico curto e auditável)
+SLANG_PATTERN = re.compile(
+    r"\b(?:mano|mina|vei|v[eê]i|cara|mlk|mlr|slc|krl|krlh|pqp|porra|caralho|pq|vc|vcs|tb|tbm"
+    r"|blz|fds|fdp|bora|massa|daora|top|zuado|zuera|lacrou|lacrar|mds|pls|migu[eé]|bagulho"
+    r"|trampo|rol[eê]|tnc|sdds|kkk+|rs+|haha+|aff+|ata|eita|oxe|uai|sô)\b",
+    flags=re.IGNORECASE,
+)

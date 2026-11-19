@@ -564,6 +564,44 @@ class TestEvaluateAndReportEndToEnd:
         assert "risco_cobertura.png" in figure_names
         assert "confiabilidade_logistic_regression.png" in figure_names
 
+    def test_slice_error_analysis_writes_tables_without_leaking_pii(
+        self, trained_paths: ProjectPaths
+    ) -> None:
+        """Fatias com IC, maiores erros por paradigma e origem do erro; texto sai mascarado."""
+        gold = pl.read_parquet(trained_paths.test_corpus_file).select("id", "sentiment_label")
+        trained_paths.gold_openai_file.parent.mkdir(parents=True, exist_ok=True)
+        gold.write_parquet(trained_paths.gold_openai_file)
+        gold.write_parquet(trained_paths.labeled_corpus_file)  # exigido pela avaliação vs. gold
+        result = run_evaluate_stage(
+            trained_paths,
+            n_bootstrap=10,
+            llm_max_test_samples=12,
+            slice_config={
+                "slices": ["comprimento_texto", "emoji"],
+                "min_slice_size": 2,
+                "top_n_errors": 3,
+            },
+        )
+        evaluation_dir = trained_paths.reports_tables_dir / "avaliacao"
+        slices = pl.read_csv(evaluation_dir / "metricas_por_fatia.csv")
+        assert set(slices["dimension"]) == {"comprimento_texto", "emoji"}
+        assert set(slices["model"]) == {"dummy", "naive_bayes", "logistic_regression", "llama3_2"}
+        sources = pl.read_csv(evaluation_dir / "erros_origem_modelo_vs_rotulo.csv")
+        assert set(sources["reference"]) == {"gold_openai"}
+        assert "slice_error_analysis" in result.summary
+        top_path = evaluation_dir / "erros_maiores_por_paradigma.csv"
+        if top_path.is_file():
+            top = pl.read_csv(top_path)
+            assert (top.group_by("category").len()["len"] <= 3).all()
+        # fatias sem variação (dados sintéticos) não geram figura, mas não derrubam o relatório
+        assert run_report_stage(trained_paths).figures
+
+    def test_slice_error_analysis_is_off_by_default(self, trained_paths: ProjectPaths) -> None:
+        """Sem ``slice_config`` nenhuma tabela de fatias com IC é gravada."""
+        run_evaluate_stage(trained_paths, n_bootstrap=10, llm_max_test_samples=12)
+        evaluation_dir = trained_paths.reports_tables_dir / "avaliacao"
+        assert not (evaluation_dir / "metricas_por_fatia.csv").exists()
+
     def test_report_requires_evaluate_first(self, stage_paths: ProjectPaths) -> None:
         """Sem as saídas de ``evaluate``, o erro manda rodar ``make evaluate``."""
         with pytest.raises(DataNotFoundError, match="make evaluate"):

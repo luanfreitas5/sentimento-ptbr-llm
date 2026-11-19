@@ -68,6 +68,7 @@ from io_utils.parquet import read_parquet
 from models.persistence import load_classifier
 from pipelines.calibration_abstention import run_calibration_abstention
 from pipelines.features import TFIDF_VECTORIZER_FILE_NAME
+from pipelines.slice_error_analysis import run_slice_error_analysis
 from pipelines.training_llm import select_sample_indices
 
 logger = logging.getLogger(__name__)
@@ -255,6 +256,20 @@ def _compare_models_mcnemar(
     return pl.DataFrame(rows)
 
 
+def _load_gold_references(paths: ProjectPaths) -> dict[str, pl.DataFrame]:
+    """Lê os gold sets existentes e monta as referências (cada gold e o consenso).
+
+    Devolve ``{}`` se nenhum gold set existir.
+    """
+    gold_files = {"gold_openai": paths.gold_openai_file, "gold_unb": paths.gold_unb_file}
+    gold_sets = {
+        name: read_parquet(file_path)
+        for name, file_path in gold_files.items()
+        if file_path.is_file()
+    }
+    return build_gold_references(gold_sets) if gold_sets else {}
+
+
 def _evaluate_against_gold(
     paths: ProjectPaths,
     predictions_table: pl.DataFrame,
@@ -270,16 +285,10 @@ def _evaluate_against_gold(
     gold sets e o consenso deles, restrito aos tweets de teste que eles cobrem.
     Devolve ``({}, {})`` se nenhum gold set existir.
     """
-    gold_files = {"gold_openai": paths.gold_openai_file, "gold_unb": paths.gold_unb_file}
-    gold_sets = {
-        name: read_parquet(file_path)
-        for name, file_path in gold_files.items()
-        if file_path.is_file()
-    }
-    if not gold_sets:
+    references = _load_gold_references(paths)
+    if not references:
         logger.warning("Nenhum gold set encontrado; a avaliação contra o gold será pulada.")
         return {}, {}
-    references = build_gold_references(gold_sets)
     options = {
         "n_bootstrap": n_bootstrap,
         "confidence_level": confidence_level,
@@ -464,6 +473,66 @@ def _write_evaluation_tables(
         write_csv(table, files[file_name])
 
 
+def _run_calibration_step(
+    paths: ProjectPaths,
+    calibration_config: Mapping[str, Any] | None,
+    checkpoints: Sequence[Any],
+    all_predictions: Sequence[Any],
+    test: pl.DataFrame,
+    vectorizer: Any,
+    files: dict[str, Path],
+    *,
+    n_bootstrap: int,
+    confidence_level: float,
+    random_seed: int,
+) -> dict[str, Any]:
+    """Executa a calibração e a abstenção (se configuradas), gravando as tabelas em ``files``."""
+    if not calibration_config:
+        return {}
+    result = run_calibration_abstention(
+        checkpoints,
+        all_predictions,
+        test,
+        load_training_example_dataset(paths.validation_corpus_file),
+        vectorizer=vectorizer,
+        config=calibration_config,
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
+    _write_evaluation_tables(paths, result.tables, files)
+    return result.summary
+
+
+def _run_slice_error_step(
+    paths: ProjectPaths,
+    slice_config: Mapping[str, Any] | None,
+    all_predictions: Sequence[Any],
+    metrics_table: pl.DataFrame,
+    test: pl.DataFrame,
+    files: dict[str, Path],
+    *,
+    n_bootstrap: int,
+    confidence_level: float,
+    random_seed: int,
+) -> dict[str, Any]:
+    """Executa a avaliação por fatia e a análise de erros (se configuradas)."""
+    if not slice_config:
+        return {}
+    result = run_slice_error_analysis(
+        all_predictions,
+        metrics_table,
+        test,
+        _load_gold_references(paths),
+        config=slice_config,
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
+    _write_evaluation_tables(paths, result.tables, files)
+    return result.summary
+
+
 def run_evaluate_stage(
     paths: ProjectPaths,
     *,
@@ -476,6 +545,7 @@ def run_evaluate_stage(
     ablation_config: Mapping[str, Any] | None = None,
     skip_ablation: bool = False,
     calibration_config: Mapping[str, Any] | None = None,
+    slice_config: Mapping[str, Any] | None = None,
 ) -> EvaluateResult:
     """Avalia no teste todos os modelos treinados, compara-os e executa a ablação.
 
@@ -505,6 +575,10 @@ def run_evaluate_stage(
         ``configs/evaluation.yaml -> calibration`` (``n_bins``, ``temperature_scaling``,
         ``coverages``, ``target_coverage``); ativa a calibração com *temperature scaling*
         (ajustada na validação) e a predição com abstenção, by default None (desligada).
+    slice_config : Mapping[str, Any] | None, optional
+        ``configs/evaluation.yaml -> slice_evaluation`` (``slices``, ``min_slice_size``,
+        ``top_n_errors``); ativa a macro-F1 por fatia com IC e a análise de erros,
+        by default None (desligada).
 
     Returns
     -------
@@ -578,21 +652,29 @@ def run_evaluate_stage(
     )
     _write_evaluation_tables(paths, gold_tables, files, skip_empty=True)
 
-    calibration_summary: dict[str, Any] = {}
-    if calibration_config:
-        calibration_result = run_calibration_abstention(
-            checkpoints,
-            all_predictions,
-            test,
-            load_training_example_dataset(paths.validation_corpus_file),
-            vectorizer=vectorizer,
-            config=calibration_config,
-            n_bootstrap=n_bootstrap,
-            confidence_level=confidence_level,
-            random_seed=random_seed,
-        )
-        calibration_summary = calibration_result.summary
-        _write_evaluation_tables(paths, calibration_result.tables, files)
+    calibration_summary = _run_calibration_step(
+        paths,
+        calibration_config,
+        checkpoints,
+        all_predictions,
+        test,
+        vectorizer,
+        files,
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
+    slice_error_summary = _run_slice_error_step(
+        paths,
+        slice_config,
+        all_predictions,
+        metrics_table,
+        test,
+        files,
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
 
     ablation_table: pl.DataFrame | None = None
     if ablation_config and not skip_ablation:
@@ -619,6 +701,8 @@ def run_evaluate_stage(
         summary["gold_reference"] = gold_summary
     if calibration_summary:
         summary["calibration_abstention"] = calibration_summary
+    if slice_error_summary:
+        summary["slice_error_analysis"] = slice_error_summary
     files["summary"] = paths.reports_metrics_dir / SUMMARY_FILE_NAME
     write_json(summary, files["summary"])
 

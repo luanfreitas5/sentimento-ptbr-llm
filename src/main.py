@@ -1041,6 +1041,11 @@ def _build_evaluate_stage_kwargs(
             if evaluation_config["calibration"].get("enabled")
             else None
         ),
+        "slice_config": (
+            evaluation_config["slice_evaluation"]
+            if evaluation_config["slice_evaluation"].get("enabled")
+            else None
+        ),
     }
 
 
