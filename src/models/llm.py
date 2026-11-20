@@ -30,6 +30,8 @@ from utils.validation import validate_not_empty_collection
 logger = logging.getLogger(__name__)
 
 _JSON_OBJECT_PATTERN = re.compile(r"\{.*\}", re.DOTALL)
+_LABEL_FIELD_PATTERN = re.compile(r'"sentiment_label"\s*:\s*"([^"]+)"')
+_CONFIDENCE_FIELD_PATTERN = re.compile(r'"confidence_score"\s*:\s*([0-9]*\.?[0-9]+)')
 
 
 class LLMBackend(Protocol):
@@ -254,8 +256,18 @@ def parse_llm_sentiment_output(
         label = str(parsed["sentiment_label"]).strip().lower()
         confidence = float(parsed.get("confidence_score", 0.0))
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exception:
-        logger.warning("Falha ao decodificar resposta do LLM: %s", exception)
-        return None, 0.0
+        # JSON malformado (ex.: justificativa com aspas não escapadas ou truncada):
+        # recupera rótulo e confiança por regex, pois os campos úteis vêm antes.
+        label_match = _LABEL_FIELD_PATTERN.search(raw_output)
+        if label_match is None:
+            logger.warning(
+                "Falha ao decodificar resposta do LLM: %s | resposta: %r", exception, raw_output
+            )
+            return None, 0.0
+        label = label_match.group(1).strip().lower()
+        confidence_match = _CONFIDENCE_FIELD_PATTERN.search(raw_output)
+        confidence = float(confidence_match.group(1)) if confidence_match else 0.0
+        logger.debug("JSON malformado (%s); campos recuperados por regex.", exception)
 
     if label not in allowed_labels:
         logger.warning("Rótulo '%s' fora das classes conhecidas %s.", label, allowed_labels)
