@@ -23,6 +23,8 @@ from typing import Any
 
 import polars as pl
 
+from config.paths import to_project_relative
+
 logger = logging.getLogger(__name__)
 
 TOP_HYPOTHESES_IN_SUMMARY = 10
@@ -65,7 +67,9 @@ def format_hypotheses_summary(result: Any, *, top_n: int = TOP_HYPOTHESES_IN_SUM
     if table is None:
         lines.append("Nenhuma hipótese gerada (gate reprovado).")
         return "\n".join(lines)
-    lines.append(f"Hipóteses geradas: {table.height} (tabela: {result.output_path})")
+    lines.append(
+        f"Hipóteses geradas: {table.height} (tabela: {to_project_relative(result.output_path)})"
+    )
     if "separation_score" in table.columns:
         table = table.sort("separation_score", descending=True, nulls_last=True)
     for rank, row in enumerate(table.head(top_n).iter_rows(named=True), start=1):
@@ -105,10 +109,11 @@ def format_validation_summary(
     ... # doctest: +SKIP
     """
     validated: pl.DataFrame = outcome.validated
+    sample_path = to_project_relative(outcome.sample_path) or "não gerada"
     lines = [
         f"RESUMO da validação do alvo '{target_slug}'",
         f"{outcome.n_survivors}/{validated.height} hipóteses sobrevivem à correção '{correction}'.",
-        f"Amostra para rotulagem humana: {outcome.sample_path or 'não gerada'}",
+        f"Amostra para rotulagem humana: {sample_path}",
     ]
     ordered = validated.sort(
         ["survives", "regression_pval_adjusted"], descending=[True, False], nulls_last=True

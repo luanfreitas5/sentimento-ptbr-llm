@@ -26,7 +26,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from config.paths import ProjectPaths
+from config.paths import ProjectPaths, to_project_relative
 from exceptions.data import DataNotFoundError, DataValidationError
 from io_utils.json import read_json, write_json
 from labeling.extra_sources import load_extra_display_names
@@ -52,8 +52,8 @@ def _summarize_outcome(outcome: Any) -> dict[str, Any]:
         "status": outcome.status,
         "detail": outcome.detail,
         "n_hypotheses": outcome.n_hypotheses,
-        "hypotheses_path": str(outcome.hypotheses_path or ""),
-        "evidence_path": str(outcome.evidence_path or ""),
+        "hypotheses_path": to_project_relative(outcome.hypotheses_path),
+        "evidence_path": to_project_relative(outcome.evidence_path),
     }
 
 

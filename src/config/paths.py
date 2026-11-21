@@ -38,6 +38,39 @@ def resolve_project_path(relative_path: str | Path) -> Path:
     return PROJECT_ROOT / relative_path
 
 
+def to_project_relative(path: str | Path | None) -> str:
+    """Converte um caminho em texto relativo à raiz do projeto, para relatórios.
+
+    Evita gravar caminhos absolutos (que expõem usuário e estrutura da máquina)
+    em JSON e resumos versionados. Caminhos fora da raiz do projeto são
+    reduzidos ao nome do arquivo.
+
+    Parameters
+    ----------
+    path : str | Path | None
+        Caminho absoluto ou relativo; ``None``/vazio gera texto vazio.
+
+    Returns
+    -------
+    str
+        Caminho com separador ``/``, relativo a :data:`PROJECT_ROOT`.
+
+    Examples
+    --------
+    >>> to_project_relative(PROJECT_ROOT / "reports" / "metrics" / "a.json")
+    'reports/metrics/a.json'
+    """
+    if path is None or str(path) == "":
+        return ""
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return candidate.as_posix()
+    try:
+        return candidate.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return candidate.name
+
+
 @dataclass(frozen=True)
 class ProjectPaths:
     """Caminhos absolutos de dados, modelos, relatórios, logs e documentação.

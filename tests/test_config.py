@@ -14,7 +14,12 @@ from config.environment import (
     get_required_environment_variable,
 )
 from config.logging import _resolve_log_level, configure_logging
-from config.paths import PROJECT_ROOT, load_project_paths, resolve_project_path
+from config.paths import (
+    PROJECT_ROOT,
+    load_project_paths,
+    resolve_project_path,
+    to_project_relative,
+)
 from config.settings import Settings, create_settings, load_general_config
 from config.version import get_project_name, get_project_version, read_latest_changelog_entry
 from exceptions.configuration import InvalidConfigurationError, MissingEnvironmentVariableError
@@ -240,3 +245,18 @@ class TestVersion:
         empty_changelog_path.write_text("# Changelog\n\nNenhuma entrada ainda.\n")
 
         assert read_latest_changelog_entry(empty_changelog_path) == ""
+
+
+def test_to_project_relative_strips_project_root() -> None:
+    """Caminho dentro do projeto vira texto relativo, com separador ``/``."""
+    absolute = PROJECT_ROOT / "reports" / "metrics" / "a.json"
+    assert to_project_relative(absolute) == "reports/metrics/a.json"
+
+
+def test_to_project_relative_handles_empty_relative_and_outside() -> None:
+    """Vazio/``None`` geram texto vazio; relativo é mantido; fora da raiz vira só o nome."""
+    assert to_project_relative(None) == ""
+    assert to_project_relative("") == ""
+    assert to_project_relative(Path("reports") / "x.csv") == "reports/x.csv"
+    outside = PROJECT_ROOT.parent / "outro_lugar" / "arquivo.parquet"
+    assert to_project_relative(outside) == "arquivo.parquet"

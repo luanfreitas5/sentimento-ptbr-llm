@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import polars as pl
 
+from config.paths import PROJECT_ROOT
 from diagnostics.summary import (
     format_comparison_summary,
     format_hypotheses_summary,
@@ -69,3 +70,15 @@ def test_comparison_summary_and_save(tmp_path: Path) -> None:
     path = save_summary_report(text, tmp_path / "novo", "comparacao_g")
     assert path.name == "resumo_comparacao_g.txt"
     assert "Modelo: m1" in path.read_text(encoding="utf-8")
+
+
+def test_summaries_do_not_expose_absolute_paths() -> None:
+    """Os resumos gravam o caminho da tabela e da amostra relativos ao projeto."""
+    table = pl.DataFrame({"hypothesis": ["a"], "separation_score": [0.5]})
+    output = PROJECT_ROOT / "reports" / "interpretability" / "t.parquet"
+    result = SimpleNamespace(
+        target_slug="t", gate=_gate(True), hypotheses=table, output_path=output
+    )
+    text = format_hypotheses_summary(result)
+    assert "reports/interpretability/t.parquet" in text
+    assert str(PROJECT_ROOT) not in text
