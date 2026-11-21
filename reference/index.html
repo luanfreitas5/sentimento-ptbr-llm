@@ -934,6 +934,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#config.paths.to_project_relative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_project_relative
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#config.paths.load_project_paths" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -11030,6 +11041,17 @@
     <span class="md-ellipsis">
       
         resolve_project_path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config.paths.to_project_relative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_project_relative
       
     </span>
   </a>
@@ -23902,6 +23924,154 @@ deve ser escrito diretamente (como string) em outro módulo do projeto.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="config.paths.to_project_relative" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_project_relative</span>
+
+
+<a href="#config.paths.to_project_relative" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_project_relative</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Converte um caminho em texto relativo à raiz do projeto, para relatórios.</p>
+<p>Evita gravar caminhos absolutos (que expõem usuário e estrutura da máquina)
+em JSON e resumos versionados. Caminhos fora da raiz do projeto são
+reduzidos ao nome do arquivo.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>path</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Caminho absoluto ou relativo; <code>None</code>/vazio gera texto vazio.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Caminho com separador <code>/</code>, relativo a :data:<code>PROJECT_ROOT</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">to_project_relative</span><span class="p">(</span><span class="n">PROJECT_ROOT</span> <span class="o">/</span> <span class="s2">"reports"</span> <span class="o">/</span> <span class="s2">"metrics"</span> <span class="o">/</span> <span class="s2">"a.json"</span><span class="p">)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="go">'reports/metrics/a.json'</span>
+</span></code></pre></div>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/config/paths.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-66">66</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-67">67</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-68">68</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-70">70</a></span>
+<span class="normal"><a href="#config.paths.to_project_relative--source--__codelineno-0-71">71</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="config.paths.to_project_relative--source--__span-0-41"><a id="config.paths.to_project_relative--source--__codelineno-0-41" name="config.paths.to_project_relative--source--__codelineno-0-41"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_project_relative</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-42"><a id="config.paths.to_project_relative--source--__codelineno-0-42" name="config.paths.to_project_relative--source--__codelineno-0-42"></a><span class="w">    </span><span class="sd">"""Converte um caminho em texto relativo à raiz do projeto, para relatórios.</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-43"><a id="config.paths.to_project_relative--source--__codelineno-0-43" name="config.paths.to_project_relative--source--__codelineno-0-43"></a>
+</span><span id="config.paths.to_project_relative--source--__span-0-44"><a id="config.paths.to_project_relative--source--__codelineno-0-44" name="config.paths.to_project_relative--source--__codelineno-0-44"></a><span class="sd">    Evita gravar caminhos absolutos (que expõem usuário e estrutura da máquina)</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-45"><a id="config.paths.to_project_relative--source--__codelineno-0-45" name="config.paths.to_project_relative--source--__codelineno-0-45"></a><span class="sd">    em JSON e resumos versionados. Caminhos fora da raiz do projeto são</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-46"><a id="config.paths.to_project_relative--source--__codelineno-0-46" name="config.paths.to_project_relative--source--__codelineno-0-46"></a><span class="sd">    reduzidos ao nome do arquivo.</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-47"><a id="config.paths.to_project_relative--source--__codelineno-0-47" name="config.paths.to_project_relative--source--__codelineno-0-47"></a>
+</span><span id="config.paths.to_project_relative--source--__span-0-48"><a id="config.paths.to_project_relative--source--__codelineno-0-48" name="config.paths.to_project_relative--source--__codelineno-0-48"></a><span class="sd">    Parameters</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-49"><a id="config.paths.to_project_relative--source--__codelineno-0-49" name="config.paths.to_project_relative--source--__codelineno-0-49"></a><span class="sd">    ----------</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-50"><a id="config.paths.to_project_relative--source--__codelineno-0-50" name="config.paths.to_project_relative--source--__codelineno-0-50"></a><span class="sd">    path : str | Path | None</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-51"><a id="config.paths.to_project_relative--source--__codelineno-0-51" name="config.paths.to_project_relative--source--__codelineno-0-51"></a><span class="sd">        Caminho absoluto ou relativo; ``None``/vazio gera texto vazio.</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-52"><a id="config.paths.to_project_relative--source--__codelineno-0-52" name="config.paths.to_project_relative--source--__codelineno-0-52"></a>
+</span><span id="config.paths.to_project_relative--source--__span-0-53"><a id="config.paths.to_project_relative--source--__codelineno-0-53" name="config.paths.to_project_relative--source--__codelineno-0-53"></a><span class="sd">    Returns</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-54"><a id="config.paths.to_project_relative--source--__codelineno-0-54" name="config.paths.to_project_relative--source--__codelineno-0-54"></a><span class="sd">    -------</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-55"><a id="config.paths.to_project_relative--source--__codelineno-0-55" name="config.paths.to_project_relative--source--__codelineno-0-55"></a><span class="sd">    str</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-56"><a id="config.paths.to_project_relative--source--__codelineno-0-56" name="config.paths.to_project_relative--source--__codelineno-0-56"></a><span class="sd">        Caminho com separador ``/``, relativo a :data:`PROJECT_ROOT`.</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-57"><a id="config.paths.to_project_relative--source--__codelineno-0-57" name="config.paths.to_project_relative--source--__codelineno-0-57"></a>
+</span><span id="config.paths.to_project_relative--source--__span-0-58"><a id="config.paths.to_project_relative--source--__codelineno-0-58" name="config.paths.to_project_relative--source--__codelineno-0-58"></a><span class="sd">    Examples</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-59"><a id="config.paths.to_project_relative--source--__codelineno-0-59" name="config.paths.to_project_relative--source--__codelineno-0-59"></a><span class="sd">    --------</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-60"><a id="config.paths.to_project_relative--source--__codelineno-0-60" name="config.paths.to_project_relative--source--__codelineno-0-60"></a><span class="sd">    &gt;&gt;&gt; to_project_relative(PROJECT_ROOT / "reports" / "metrics" / "a.json")</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-61"><a id="config.paths.to_project_relative--source--__codelineno-0-61" name="config.paths.to_project_relative--source--__codelineno-0-61"></a><span class="sd">    'reports/metrics/a.json'</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-62"><a id="config.paths.to_project_relative--source--__codelineno-0-62" name="config.paths.to_project_relative--source--__codelineno-0-62"></a><span class="sd">    """</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-63"><a id="config.paths.to_project_relative--source--__codelineno-0-63" name="config.paths.to_project_relative--source--__codelineno-0-63"></a>    <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">==</span> <span class="s2">""</span><span class="p">:</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-64"><a id="config.paths.to_project_relative--source--__codelineno-0-64" name="config.paths.to_project_relative--source--__codelineno-0-64"></a>        <span class="k">return</span> <span class="s2">""</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-65"><a id="config.paths.to_project_relative--source--__codelineno-0-65" name="config.paths.to_project_relative--source--__codelineno-0-65"></a>    <span class="n">candidate</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-66"><a id="config.paths.to_project_relative--source--__codelineno-0-66" name="config.paths.to_project_relative--source--__codelineno-0-66"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">candidate</span><span class="o">.</span><span class="n">is_absolute</span><span class="p">():</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-67"><a id="config.paths.to_project_relative--source--__codelineno-0-67" name="config.paths.to_project_relative--source--__codelineno-0-67"></a>        <span class="k">return</span> <span class="n">candidate</span><span class="o">.</span><span class="n">as_posix</span><span class="p">()</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-68"><a id="config.paths.to_project_relative--source--__codelineno-0-68" name="config.paths.to_project_relative--source--__codelineno-0-68"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-69"><a id="config.paths.to_project_relative--source--__codelineno-0-69" name="config.paths.to_project_relative--source--__codelineno-0-69"></a>        <span class="k">return</span> <span class="n">candidate</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">PROJECT_ROOT</span><span class="p">)</span><span class="o">.</span><span class="n">as_posix</span><span class="p">()</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-70"><a id="config.paths.to_project_relative--source--__codelineno-0-70" name="config.paths.to_project_relative--source--__codelineno-0-70"></a>    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+</span><span id="config.paths.to_project_relative--source--__span-0-71"><a id="config.paths.to_project_relative--source--__codelineno-0-71" name="config.paths.to_project_relative--source--__codelineno-0-71"></a>        <span class="k">return</span> <span class="n">candidate</span><span class="o">.</span><span class="n">name</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="config.paths.load_project_paths" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">load_project_paths</span>
 
@@ -24007,40 +24177,7 @@ deve ser escrito diretamente (como string) em outro módulo do projeto.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/config/paths.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-117">117</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-118">118</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-119">119</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-120">120</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-121">121</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-122">122</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-123">123</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-124">124</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-125">125</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-126">126</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-127">127</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-128">128</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-129">129</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-130">130</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-131">131</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-132">132</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-133">133</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-134">134</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-135">135</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-136">136</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-137">137</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-138">138</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-139">139</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-140">140</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-141">141</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-142">142</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-143">143</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-144">144</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-145">145</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-146">146</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-147">147</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-148">148</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-149">149</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-150">150</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-150">150</a></span>
 <span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-151">151</a></span>
 <span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-152">152</a></span>
 <span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-153">153</a></span>
@@ -24068,68 +24205,101 @@ deve ser escrito diretamente (como string) em outro módulo do projeto.</p>
 <span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-175">175</a></span>
 <span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-176">176</a></span>
 <span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-177">177</a></span>
-<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-178">178</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="config.paths.load_project_paths--source--__span-0-117"><a id="config.paths.load_project_paths--source--__codelineno-0-117" name="config.paths.load_project_paths--source--__codelineno-0-117"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_project_paths</span><span class="p">(</span><span class="n">config_file_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DEFAULT_PATHS_CONFIG_FILE</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProjectPaths</span><span class="p">:</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-118"><a id="config.paths.load_project_paths--source--__codelineno-0-118" name="config.paths.load_project_paths--source--__codelineno-0-118"></a><span class="w">    </span><span class="sd">"""Carrega ``configs/paths.yaml`` e resolve todos os caminhos para absolutos.</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-119"><a id="config.paths.load_project_paths--source--__codelineno-0-119" name="config.paths.load_project_paths--source--__codelineno-0-119"></a>
-</span><span id="config.paths.load_project_paths--source--__span-0-120"><a id="config.paths.load_project_paths--source--__codelineno-0-120" name="config.paths.load_project_paths--source--__codelineno-0-120"></a><span class="sd">    Parameters</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-121"><a id="config.paths.load_project_paths--source--__codelineno-0-121" name="config.paths.load_project_paths--source--__codelineno-0-121"></a><span class="sd">    ----------</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-122"><a id="config.paths.load_project_paths--source--__codelineno-0-122" name="config.paths.load_project_paths--source--__codelineno-0-122"></a><span class="sd">    config_file_path : Path, optional</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-123"><a id="config.paths.load_project_paths--source--__codelineno-0-123" name="config.paths.load_project_paths--source--__codelineno-0-123"></a><span class="sd">        Caminho do arquivo YAML de caminhos, by default :data:`DEFAULT_PATHS_CONFIG_FILE`.</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-124"><a id="config.paths.load_project_paths--source--__codelineno-0-124" name="config.paths.load_project_paths--source--__codelineno-0-124"></a>
-</span><span id="config.paths.load_project_paths--source--__span-0-125"><a id="config.paths.load_project_paths--source--__codelineno-0-125" name="config.paths.load_project_paths--source--__codelineno-0-125"></a><span class="sd">    Returns</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-126"><a id="config.paths.load_project_paths--source--__codelineno-0-126" name="config.paths.load_project_paths--source--__codelineno-0-126"></a><span class="sd">    -------</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-127"><a id="config.paths.load_project_paths--source--__codelineno-0-127" name="config.paths.load_project_paths--source--__codelineno-0-127"></a><span class="sd">    ProjectPaths</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-128"><a id="config.paths.load_project_paths--source--__codelineno-0-128" name="config.paths.load_project_paths--source--__codelineno-0-128"></a><span class="sd">        Estrutura imutável com todos os caminhos absolutos do projeto.</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-129"><a id="config.paths.load_project_paths--source--__codelineno-0-129" name="config.paths.load_project_paths--source--__codelineno-0-129"></a>
-</span><span id="config.paths.load_project_paths--source--__span-0-130"><a id="config.paths.load_project_paths--source--__codelineno-0-130" name="config.paths.load_project_paths--source--__codelineno-0-130"></a><span class="sd">    Raises</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-131"><a id="config.paths.load_project_paths--source--__codelineno-0-131" name="config.paths.load_project_paths--source--__codelineno-0-131"></a><span class="sd">    ------</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-132"><a id="config.paths.load_project_paths--source--__codelineno-0-132" name="config.paths.load_project_paths--source--__codelineno-0-132"></a><span class="sd">    DataNotFoundError</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-133"><a id="config.paths.load_project_paths--source--__codelineno-0-133" name="config.paths.load_project_paths--source--__codelineno-0-133"></a><span class="sd">        Se o arquivo de configuração não existir.</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-134"><a id="config.paths.load_project_paths--source--__codelineno-0-134" name="config.paths.load_project_paths--source--__codelineno-0-134"></a>
-</span><span id="config.paths.load_project_paths--source--__span-0-135"><a id="config.paths.load_project_paths--source--__codelineno-0-135" name="config.paths.load_project_paths--source--__codelineno-0-135"></a><span class="sd">    Examples</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-136"><a id="config.paths.load_project_paths--source--__codelineno-0-136" name="config.paths.load_project_paths--source--__codelineno-0-136"></a><span class="sd">    --------</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-137"><a id="config.paths.load_project_paths--source--__codelineno-0-137" name="config.paths.load_project_paths--source--__codelineno-0-137"></a><span class="sd">    &gt;&gt;&gt; load_project_paths().data_bronze_dir.name</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-138"><a id="config.paths.load_project_paths--source--__codelineno-0-138" name="config.paths.load_project_paths--source--__codelineno-0-138"></a><span class="sd">    'raw'</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-139"><a id="config.paths.load_project_paths--source--__codelineno-0-139" name="config.paths.load_project_paths--source--__codelineno-0-139"></a><span class="sd">    """</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-140"><a id="config.paths.load_project_paths--source--__codelineno-0-140" name="config.paths.load_project_paths--source--__codelineno-0-140"></a>    <span class="n">dados</span> <span class="o">=</span> <span class="n">read_yaml</span><span class="p">(</span><span class="n">config_file_path</span><span class="p">)</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-141"><a id="config.paths.load_project_paths--source--__codelineno-0-141" name="config.paths.load_project_paths--source--__codelineno-0-141"></a>
-</span><span id="config.paths.load_project_paths--source--__span-0-142"><a id="config.paths.load_project_paths--source--__codelineno-0-142" name="config.paths.load_project_paths--source--__codelineno-0-142"></a>    <span class="k">return</span> <span class="n">ProjectPaths</span><span class="p">(</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-143"><a id="config.paths.load_project_paths--source--__codelineno-0-143" name="config.paths.load_project_paths--source--__codelineno-0-143"></a>        <span class="n">data_bronze_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"bronze"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-144"><a id="config.paths.load_project_paths--source--__codelineno-0-144" name="config.paths.load_project_paths--source--__codelineno-0-144"></a>        <span class="n">data_external_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"external"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-145"><a id="config.paths.load_project_paths--source--__codelineno-0-145" name="config.paths.load_project_paths--source--__codelineno-0-145"></a>        <span class="n">data_silver_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"silver"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-146"><a id="config.paths.load_project_paths--source--__codelineno-0-146" name="config.paths.load_project_paths--source--__codelineno-0-146"></a>        <span class="n">data_gold_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"gold"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-147"><a id="config.paths.load_project_paths--source--__codelineno-0-147" name="config.paths.load_project_paths--source--__codelineno-0-147"></a>        <span class="n">raw_tweets_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"raw_tweets"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-148"><a id="config.paths.load_project_paths--source--__codelineno-0-148" name="config.paths.load_project_paths--source--__codelineno-0-148"></a>        <span class="n">normalized_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_normalizado"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-149"><a id="config.paths.load_project_paths--source--__codelineno-0-149" name="config.paths.load_project_paths--source--__codelineno-0-149"></a>        <span class="n">labeled_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_rotulado"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-150"><a id="config.paths.load_project_paths--source--__codelineno-0-150" name="config.paths.load_project_paths--source--__codelineno-0-150"></a>        <span class="n">huggingface_labeled_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-151"><a id="config.paths.load_project_paths--source--__codelineno-0-151" name="config.paths.load_project_paths--source--__codelineno-0-151"></a>            <span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"tweets_data_huggingface"</span><span class="p">]</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-152"><a id="config.paths.load_project_paths--source--__codelineno-0-152" name="config.paths.load_project_paths--source--__codelineno-0-152"></a>        <span class="p">),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-153"><a id="config.paths.load_project_paths--source--__codelineno-0-153" name="config.paths.load_project_paths--source--__codelineno-0-153"></a>        <span class="n">huggingface_secondary_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-154"><a id="config.paths.load_project_paths--source--__codelineno-0-154" name="config.paths.load_project_paths--source--__codelineno-0-154"></a>            <span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"tweets_data_huggingface_secondary"</span><span class="p">]</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-155"><a id="config.paths.load_project_paths--source--__codelineno-0-155" name="config.paths.load_project_paths--source--__codelineno-0-155"></a>        <span class="p">),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-156"><a id="config.paths.load_project_paths--source--__codelineno-0-156" name="config.paths.load_project_paths--source--__codelineno-0-156"></a>        <span class="n">gold_openai_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"gold_openai"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-157"><a id="config.paths.load_project_paths--source--__codelineno-0-157" name="config.paths.load_project_paths--source--__codelineno-0-157"></a>        <span class="n">gold_unb_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"gold_unb"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-158"><a id="config.paths.load_project_paths--source--__codelineno-0-158" name="config.paths.load_project_paths--source--__codelineno-0-158"></a>        <span class="n">labeling_checkpoints_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"labeling"</span><span class="p">][</span><span class="s2">"checkpoints"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-159"><a id="config.paths.load_project_paths--source--__codelineno-0-159" name="config.paths.load_project_paths--source--__codelineno-0-159"></a>        <span class="n">training_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_treino"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-160"><a id="config.paths.load_project_paths--source--__codelineno-0-160" name="config.paths.load_project_paths--source--__codelineno-0-160"></a>        <span class="n">validation_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_validacao"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-161"><a id="config.paths.load_project_paths--source--__codelineno-0-161" name="config.paths.load_project_paths--source--__codelineno-0-161"></a>        <span class="n">test_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_teste"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-162"><a id="config.paths.load_project_paths--source--__codelineno-0-162" name="config.paths.load_project_paths--source--__codelineno-0-162"></a>        <span class="n">models_checkpoints_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"models"</span><span class="p">][</span><span class="s2">"checkpoints"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-163"><a id="config.paths.load_project_paths--source--__codelineno-0-163" name="config.paths.load_project_paths--source--__codelineno-0-163"></a>        <span class="n">models_artifacts_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"models"</span><span class="p">][</span><span class="s2">"artifacts"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-164"><a id="config.paths.load_project_paths--source--__codelineno-0-164" name="config.paths.load_project_paths--source--__codelineno-0-164"></a>        <span class="n">models_registry_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"models"</span><span class="p">][</span><span class="s2">"registry"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-165"><a id="config.paths.load_project_paths--source--__codelineno-0-165" name="config.paths.load_project_paths--source--__codelineno-0-165"></a>        <span class="n">mlflow_tracking_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"mlflow"</span><span class="p">][</span><span class="s2">"tracking_dir"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-166"><a id="config.paths.load_project_paths--source--__codelineno-0-166" name="config.paths.load_project_paths--source--__codelineno-0-166"></a>        <span class="n">logs_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"logs"</span><span class="p">][</span><span class="s2">"dir"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-167"><a id="config.paths.load_project_paths--source--__codelineno-0-167" name="config.paths.load_project_paths--source--__codelineno-0-167"></a>        <span class="n">reports_figures_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"figures"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-168"><a id="config.paths.load_project_paths--source--__codelineno-0-168" name="config.paths.load_project_paths--source--__codelineno-0-168"></a>        <span class="n">reports_tables_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"tables"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-169"><a id="config.paths.load_project_paths--source--__codelineno-0-169" name="config.paths.load_project_paths--source--__codelineno-0-169"></a>        <span class="n">reports_metrics_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"metrics"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-170"><a id="config.paths.load_project_paths--source--__codelineno-0-170" name="config.paths.load_project_paths--source--__codelineno-0-170"></a>        <span class="n">reports_statistics_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"statistics"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-171"><a id="config.paths.load_project_paths--source--__codelineno-0-171" name="config.paths.load_project_paths--source--__codelineno-0-171"></a>        <span class="n">reports_ablation_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"ablation"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-172"><a id="config.paths.load_project_paths--source--__codelineno-0-172" name="config.paths.load_project_paths--source--__codelineno-0-172"></a>        <span class="n">reports_interpretability_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"interpretability"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-173"><a id="config.paths.load_project_paths--source--__codelineno-0-173" name="config.paths.load_project_paths--source--__codelineno-0-173"></a>        <span class="n">reports_model_cards_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"model_cards"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-174"><a id="config.paths.load_project_paths--source--__codelineno-0-174" name="config.paths.load_project_paths--source--__codelineno-0-174"></a>        <span class="n">reports_datasheets_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"datasheets"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-175"><a id="config.paths.load_project_paths--source--__codelineno-0-175" name="config.paths.load_project_paths--source--__codelineno-0-175"></a>        <span class="n">docs_root_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"docs"</span><span class="p">][</span><span class="s2">"root"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-176"><a id="config.paths.load_project_paths--source--__codelineno-0-176" name="config.paths.load_project_paths--source--__codelineno-0-176"></a>        <span class="n">docs_guides_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"docs"</span><span class="p">][</span><span class="s2">"guides"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-177"><a id="config.paths.load_project_paths--source--__codelineno-0-177" name="config.paths.load_project_paths--source--__codelineno-0-177"></a>        <span class="n">docs_assets_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"docs"</span><span class="p">][</span><span class="s2">"assets"</span><span class="p">]),</span>
-</span><span id="config.paths.load_project_paths--source--__span-0-178"><a id="config.paths.load_project_paths--source--__codelineno-0-178" name="config.paths.load_project_paths--source--__codelineno-0-178"></a>    <span class="p">)</span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-178">178</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-179">179</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-180">180</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-181">181</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-182">182</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-183">183</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-184">184</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-185">185</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-186">186</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-187">187</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-188">188</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-189">189</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-190">190</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-191">191</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-192">192</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-198">198</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-199">199</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-200">200</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-202">202</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-203">203</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#config.paths.load_project_paths--source--__codelineno-0-211">211</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="config.paths.load_project_paths--source--__span-0-150"><a id="config.paths.load_project_paths--source--__codelineno-0-150" name="config.paths.load_project_paths--source--__codelineno-0-150"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_project_paths</span><span class="p">(</span><span class="n">config_file_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DEFAULT_PATHS_CONFIG_FILE</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProjectPaths</span><span class="p">:</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-151"><a id="config.paths.load_project_paths--source--__codelineno-0-151" name="config.paths.load_project_paths--source--__codelineno-0-151"></a><span class="w">    </span><span class="sd">"""Carrega ``configs/paths.yaml`` e resolve todos os caminhos para absolutos.</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-152"><a id="config.paths.load_project_paths--source--__codelineno-0-152" name="config.paths.load_project_paths--source--__codelineno-0-152"></a>
+</span><span id="config.paths.load_project_paths--source--__span-0-153"><a id="config.paths.load_project_paths--source--__codelineno-0-153" name="config.paths.load_project_paths--source--__codelineno-0-153"></a><span class="sd">    Parameters</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-154"><a id="config.paths.load_project_paths--source--__codelineno-0-154" name="config.paths.load_project_paths--source--__codelineno-0-154"></a><span class="sd">    ----------</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-155"><a id="config.paths.load_project_paths--source--__codelineno-0-155" name="config.paths.load_project_paths--source--__codelineno-0-155"></a><span class="sd">    config_file_path : Path, optional</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-156"><a id="config.paths.load_project_paths--source--__codelineno-0-156" name="config.paths.load_project_paths--source--__codelineno-0-156"></a><span class="sd">        Caminho do arquivo YAML de caminhos, by default :data:`DEFAULT_PATHS_CONFIG_FILE`.</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-157"><a id="config.paths.load_project_paths--source--__codelineno-0-157" name="config.paths.load_project_paths--source--__codelineno-0-157"></a>
+</span><span id="config.paths.load_project_paths--source--__span-0-158"><a id="config.paths.load_project_paths--source--__codelineno-0-158" name="config.paths.load_project_paths--source--__codelineno-0-158"></a><span class="sd">    Returns</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-159"><a id="config.paths.load_project_paths--source--__codelineno-0-159" name="config.paths.load_project_paths--source--__codelineno-0-159"></a><span class="sd">    -------</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-160"><a id="config.paths.load_project_paths--source--__codelineno-0-160" name="config.paths.load_project_paths--source--__codelineno-0-160"></a><span class="sd">    ProjectPaths</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-161"><a id="config.paths.load_project_paths--source--__codelineno-0-161" name="config.paths.load_project_paths--source--__codelineno-0-161"></a><span class="sd">        Estrutura imutável com todos os caminhos absolutos do projeto.</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-162"><a id="config.paths.load_project_paths--source--__codelineno-0-162" name="config.paths.load_project_paths--source--__codelineno-0-162"></a>
+</span><span id="config.paths.load_project_paths--source--__span-0-163"><a id="config.paths.load_project_paths--source--__codelineno-0-163" name="config.paths.load_project_paths--source--__codelineno-0-163"></a><span class="sd">    Raises</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-164"><a id="config.paths.load_project_paths--source--__codelineno-0-164" name="config.paths.load_project_paths--source--__codelineno-0-164"></a><span class="sd">    ------</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-165"><a id="config.paths.load_project_paths--source--__codelineno-0-165" name="config.paths.load_project_paths--source--__codelineno-0-165"></a><span class="sd">    DataNotFoundError</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-166"><a id="config.paths.load_project_paths--source--__codelineno-0-166" name="config.paths.load_project_paths--source--__codelineno-0-166"></a><span class="sd">        Se o arquivo de configuração não existir.</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-167"><a id="config.paths.load_project_paths--source--__codelineno-0-167" name="config.paths.load_project_paths--source--__codelineno-0-167"></a>
+</span><span id="config.paths.load_project_paths--source--__span-0-168"><a id="config.paths.load_project_paths--source--__codelineno-0-168" name="config.paths.load_project_paths--source--__codelineno-0-168"></a><span class="sd">    Examples</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-169"><a id="config.paths.load_project_paths--source--__codelineno-0-169" name="config.paths.load_project_paths--source--__codelineno-0-169"></a><span class="sd">    --------</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-170"><a id="config.paths.load_project_paths--source--__codelineno-0-170" name="config.paths.load_project_paths--source--__codelineno-0-170"></a><span class="sd">    &gt;&gt;&gt; load_project_paths().data_bronze_dir.name</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-171"><a id="config.paths.load_project_paths--source--__codelineno-0-171" name="config.paths.load_project_paths--source--__codelineno-0-171"></a><span class="sd">    'raw'</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-172"><a id="config.paths.load_project_paths--source--__codelineno-0-172" name="config.paths.load_project_paths--source--__codelineno-0-172"></a><span class="sd">    """</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-173"><a id="config.paths.load_project_paths--source--__codelineno-0-173" name="config.paths.load_project_paths--source--__codelineno-0-173"></a>    <span class="n">dados</span> <span class="o">=</span> <span class="n">read_yaml</span><span class="p">(</span><span class="n">config_file_path</span><span class="p">)</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-174"><a id="config.paths.load_project_paths--source--__codelineno-0-174" name="config.paths.load_project_paths--source--__codelineno-0-174"></a>
+</span><span id="config.paths.load_project_paths--source--__span-0-175"><a id="config.paths.load_project_paths--source--__codelineno-0-175" name="config.paths.load_project_paths--source--__codelineno-0-175"></a>    <span class="k">return</span> <span class="n">ProjectPaths</span><span class="p">(</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-176"><a id="config.paths.load_project_paths--source--__codelineno-0-176" name="config.paths.load_project_paths--source--__codelineno-0-176"></a>        <span class="n">data_bronze_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"bronze"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-177"><a id="config.paths.load_project_paths--source--__codelineno-0-177" name="config.paths.load_project_paths--source--__codelineno-0-177"></a>        <span class="n">data_external_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"external"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-178"><a id="config.paths.load_project_paths--source--__codelineno-0-178" name="config.paths.load_project_paths--source--__codelineno-0-178"></a>        <span class="n">data_silver_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"silver"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-179"><a id="config.paths.load_project_paths--source--__codelineno-0-179" name="config.paths.load_project_paths--source--__codelineno-0-179"></a>        <span class="n">data_gold_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data"</span><span class="p">][</span><span class="s2">"gold"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-180"><a id="config.paths.load_project_paths--source--__codelineno-0-180" name="config.paths.load_project_paths--source--__codelineno-0-180"></a>        <span class="n">raw_tweets_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"raw_tweets"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-181"><a id="config.paths.load_project_paths--source--__codelineno-0-181" name="config.paths.load_project_paths--source--__codelineno-0-181"></a>        <span class="n">normalized_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_normalizado"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-182"><a id="config.paths.load_project_paths--source--__codelineno-0-182" name="config.paths.load_project_paths--source--__codelineno-0-182"></a>        <span class="n">labeled_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_rotulado"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-183"><a id="config.paths.load_project_paths--source--__codelineno-0-183" name="config.paths.load_project_paths--source--__codelineno-0-183"></a>        <span class="n">huggingface_labeled_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-184"><a id="config.paths.load_project_paths--source--__codelineno-0-184" name="config.paths.load_project_paths--source--__codelineno-0-184"></a>            <span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"tweets_data_huggingface"</span><span class="p">]</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-185"><a id="config.paths.load_project_paths--source--__codelineno-0-185" name="config.paths.load_project_paths--source--__codelineno-0-185"></a>        <span class="p">),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-186"><a id="config.paths.load_project_paths--source--__codelineno-0-186" name="config.paths.load_project_paths--source--__codelineno-0-186"></a>        <span class="n">huggingface_secondary_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-187"><a id="config.paths.load_project_paths--source--__codelineno-0-187" name="config.paths.load_project_paths--source--__codelineno-0-187"></a>            <span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"tweets_data_huggingface_secondary"</span><span class="p">]</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-188"><a id="config.paths.load_project_paths--source--__codelineno-0-188" name="config.paths.load_project_paths--source--__codelineno-0-188"></a>        <span class="p">),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-189"><a id="config.paths.load_project_paths--source--__codelineno-0-189" name="config.paths.load_project_paths--source--__codelineno-0-189"></a>        <span class="n">gold_openai_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"gold_openai"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-190"><a id="config.paths.load_project_paths--source--__codelineno-0-190" name="config.paths.load_project_paths--source--__codelineno-0-190"></a>        <span class="n">gold_unb_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"gold_unb"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-191"><a id="config.paths.load_project_paths--source--__codelineno-0-191" name="config.paths.load_project_paths--source--__codelineno-0-191"></a>        <span class="n">labeling_checkpoints_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"labeling"</span><span class="p">][</span><span class="s2">"checkpoints"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-192"><a id="config.paths.load_project_paths--source--__codelineno-0-192" name="config.paths.load_project_paths--source--__codelineno-0-192"></a>        <span class="n">training_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_treino"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-193"><a id="config.paths.load_project_paths--source--__codelineno-0-193" name="config.paths.load_project_paths--source--__codelineno-0-193"></a>        <span class="n">validation_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_validacao"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-194"><a id="config.paths.load_project_paths--source--__codelineno-0-194" name="config.paths.load_project_paths--source--__codelineno-0-194"></a>        <span class="n">test_corpus_file</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"data_files"</span><span class="p">][</span><span class="s2">"corpus_teste"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-195"><a id="config.paths.load_project_paths--source--__codelineno-0-195" name="config.paths.load_project_paths--source--__codelineno-0-195"></a>        <span class="n">models_checkpoints_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"models"</span><span class="p">][</span><span class="s2">"checkpoints"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-196"><a id="config.paths.load_project_paths--source--__codelineno-0-196" name="config.paths.load_project_paths--source--__codelineno-0-196"></a>        <span class="n">models_artifacts_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"models"</span><span class="p">][</span><span class="s2">"artifacts"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-197"><a id="config.paths.load_project_paths--source--__codelineno-0-197" name="config.paths.load_project_paths--source--__codelineno-0-197"></a>        <span class="n">models_registry_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"models"</span><span class="p">][</span><span class="s2">"registry"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-198"><a id="config.paths.load_project_paths--source--__codelineno-0-198" name="config.paths.load_project_paths--source--__codelineno-0-198"></a>        <span class="n">mlflow_tracking_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"mlflow"</span><span class="p">][</span><span class="s2">"tracking_dir"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-199"><a id="config.paths.load_project_paths--source--__codelineno-0-199" name="config.paths.load_project_paths--source--__codelineno-0-199"></a>        <span class="n">logs_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"logs"</span><span class="p">][</span><span class="s2">"dir"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-200"><a id="config.paths.load_project_paths--source--__codelineno-0-200" name="config.paths.load_project_paths--source--__codelineno-0-200"></a>        <span class="n">reports_figures_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"figures"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-201"><a id="config.paths.load_project_paths--source--__codelineno-0-201" name="config.paths.load_project_paths--source--__codelineno-0-201"></a>        <span class="n">reports_tables_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"tables"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-202"><a id="config.paths.load_project_paths--source--__codelineno-0-202" name="config.paths.load_project_paths--source--__codelineno-0-202"></a>        <span class="n">reports_metrics_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"metrics"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-203"><a id="config.paths.load_project_paths--source--__codelineno-0-203" name="config.paths.load_project_paths--source--__codelineno-0-203"></a>        <span class="n">reports_statistics_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"statistics"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-204"><a id="config.paths.load_project_paths--source--__codelineno-0-204" name="config.paths.load_project_paths--source--__codelineno-0-204"></a>        <span class="n">reports_ablation_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"ablation"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-205"><a id="config.paths.load_project_paths--source--__codelineno-0-205" name="config.paths.load_project_paths--source--__codelineno-0-205"></a>        <span class="n">reports_interpretability_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"interpretability"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-206"><a id="config.paths.load_project_paths--source--__codelineno-0-206" name="config.paths.load_project_paths--source--__codelineno-0-206"></a>        <span class="n">reports_model_cards_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"model_cards"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-207"><a id="config.paths.load_project_paths--source--__codelineno-0-207" name="config.paths.load_project_paths--source--__codelineno-0-207"></a>        <span class="n">reports_datasheets_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"reports"</span><span class="p">][</span><span class="s2">"datasheets"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-208"><a id="config.paths.load_project_paths--source--__codelineno-0-208" name="config.paths.load_project_paths--source--__codelineno-0-208"></a>        <span class="n">docs_root_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"docs"</span><span class="p">][</span><span class="s2">"root"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-209"><a id="config.paths.load_project_paths--source--__codelineno-0-209" name="config.paths.load_project_paths--source--__codelineno-0-209"></a>        <span class="n">docs_guides_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"docs"</span><span class="p">][</span><span class="s2">"guides"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-210"><a id="config.paths.load_project_paths--source--__codelineno-0-210" name="config.paths.load_project_paths--source--__codelineno-0-210"></a>        <span class="n">docs_assets_dir</span><span class="o">=</span><span class="n">resolve_project_path</span><span class="p">(</span><span class="n">dados</span><span class="p">[</span><span class="s2">"docs"</span><span class="p">][</span><span class="s2">"assets"</span><span class="p">]),</span>
+</span><span id="config.paths.load_project_paths--source--__span-0-211"><a id="config.paths.load_project_paths--source--__codelineno-0-211" name="config.paths.load_project_paths--source--__codelineno-0-211"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
