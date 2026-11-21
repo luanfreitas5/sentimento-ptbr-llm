@@ -126,11 +126,11 @@ reports/interpretability/*
 reports/interpretability/diagnostics/*
 !reports/interpretability/diagnostics/resumo_hipoteses_*.txt
 !reports/interpretability/diagnostics/resumo_validacao_*.txt
-reports/interpretability/diagnostics/*_11_11.txt
 # figuras: só avaliação, consenso e 2 comparativos representativos
 reports/figures/reconstrucao/umap_espaco_latente.*
 reports/figures/comparativo_*/
 !reports/figures/comparativo_XLM-R_vs_GPT-6/
 !reports/figures/comparativo_XLM-R_vs_UnB-Llama/
+
 Monografia/
 scripts/
