@@ -3,13 +3,13 @@ RESUMO das hipóteses do alvo 'disagreement'
 Gate de sanidade: APROVADO — IC inferior acima do acaso e permutação significativa
   métrica=roc_auc holdout=0.6601 IC=[0.6051; 0.7129] p_perm=0.000999 n_descoberta=1354 n_holdout=387
 Hipóteses geradas: 20 (tabela: reports/interpretability/diagnostics/disagreement.parquet)
-   1. -"menção a filha ou desejo de ter um lugar tranquilo para ela [separation_score=0.4221, regression_pval=0.003233, feature_prevalence=0.01773]
-   2. -"menção ao amor ou carinho constante entre duas pessoas [separation_score=0.3226, regression_pval=0.009588, feature_prevalence=0.01403]
-   3. -"menção a forças positivas ou fé em Deus [separation_score=0.2752, regression_pval=0.01273, feature_prevalence=0.02363]
-   4. -"contém menção a dança ou música"[EMOJI_POSITIVO] [separation_score=0.216, regression_pval=0.005072, feature_prevalence=0.03176]
-   5. -"menção explícita a uma pessoa específica ou ameaça de vingança [separation_score=0.197, regression_pval=0.01895, feature_prevalence=0.03028]
-   6. -"contém a expressão 'afim de' [separation_score=0.1779, regression_pval=0.1284, feature_prevalence=0.0325]
-   7. -" nota mental: [separation_score=0.1761, regression_pval=0.09263, feature_prevalence=0.03767]
-   8. -" menção a violência ou perigo [separation_score=0.1711, regression_pval=0.4264, feature_prevalence=0.02142]
-   9. -"contém expressões de desafio ou confronto verbalizado de forma irônica ou grossa", [separation_score=0.1507, regression_pval=0.01106, feature_prevalence=0.06869]
-  10. -"contém expressões de desafio ou questionamento direto à autoridade ou status quo [separation_score=0.1008, regression_pval=0.1023, feature_prevalence=0.1433]
+   1. menção a filha ou desejo de ter um lugar tranquilo para ela [separation_score=0.4221, regression_pval=0.003233, feature_prevalence=0.01773]
+   2. menção ao amor ou carinho constante entre duas pessoas [separation_score=0.3226, regression_pval=0.009588, feature_prevalence=0.01403]
+   3. menção a forças positivas ou fé em Deus [separation_score=0.2752, regression_pval=0.01273, feature_prevalence=0.02363]
+   4. contém menção a dança ou música"[EMOJI_POSITIVO] [separation_score=0.216, regression_pval=0.005072, feature_prevalence=0.03176]
+   5. menção explícita a uma pessoa específica ou ameaça de vingança [separation_score=0.197, regression_pval=0.01895, feature_prevalence=0.03028]
+   6. contém a expressão 'afim de [separation_score=0.1779, regression_pval=0.1284, feature_prevalence=0.0325]
+   7. nota mental: [separation_score=0.1761, regression_pval=0.09263, feature_prevalence=0.03767]
+   8. menção a violência ou perigo [separation_score=0.1711, regression_pval=0.4264, feature_prevalence=0.02142]
+   9. contém expressões de desafio ou confronto verbalizado de forma irônica ou grossa [separation_score=0.1507, regression_pval=0.01106, feature_prevalence=0.06869]
+  10. contém expressões de desafio ou questionamento direto à autoridade ou status quo [separation_score=0.1008, regression_pval=0.1023, feature_prevalence=0.1433]
