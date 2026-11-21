@@ -1,0 +1,167 @@
+{
+  "primary_metric": "f1_macro",
+  "n_test": 12817,
+  "n_models": 8,
+  "classes": [
+    "negativo",
+    "neutro",
+    "positivo"
+  ],
+  "best_model": {
+    "model": "lstm",
+    "category": "deep_learning",
+    "f1_macro": 0.6711394647428701,
+    "ci": [
+      0.6633218019976146,
+      0.6787796667857318
+    ]
+  },
+  "best_by_category": {
+    "deep_learning": "lstm",
+    "classical": "naive_bayes"
+  },
+  "bootstrap": {
+    "n_bootstrap": 1000,
+    "confidence_level": 0.95
+  },
+  "significance": {
+    "test": "mcnemar",
+    "correction": "holm",
+    "alpha": 0.05
+  },
+  "most_impactful_ablation": {
+    "component": "sem_tf_sublinear",
+    "baseline_value": 0.6303395970001674,
+    "ablated_value": 0.630145224258693,
+    "impact": 0.0001943727414743801,
+    "impact_ci_low": -0.0032896293520705885,
+    "impact_ci_high": 0.0036781039463653093
+  },
+  "gold_reference": {
+    "references": [
+      "gold_openai",
+      "gold_unb",
+      "consenso_gold"
+    ],
+    "training_label_noise": [
+      {
+        "reference": "gold_openai",
+        "n": 1934,
+        "f1_macro": 0.6729130272972261,
+        "f1_macro_ci_low": 0.6531053180991215,
+        "f1_macro_ci_high": 0.6936398520215441,
+        "accuracy": 0.6783867631851086,
+        "accuracy_ci_low": 0.6587383660806618,
+        "accuracy_ci_high": 0.6990692864529473,
+        "cohen_kappa": 0.5245011097430101,
+        "mcc": 0.5423602275808311,
+        "krippendorff_alpha": 0.5166829863860787
+      },
+      {
+        "reference": "gold_unb",
+        "n": 1926,
+        "f1_macro": 0.6028111036462986,
+        "f1_macro_ci_low": 0.5813618996201847,
+        "f1_macro_ci_high": 0.6256241900973097,
+        "accuracy": 0.6292834890965732,
+        "accuracy_ci_low": 0.6079958463136034,
+        "accuracy_ci_high": 0.652128764278297,
+        "cohen_kappa": 0.4587579444858144,
+        "mcc": 0.5006676487566407,
+        "krippendorff_alpha": 0.43564425326176714
+      },
+      {
+        "reference": "consenso_gold",
+        "n": 1602,
+        "f1_macro": 0.6685675660695537,
+        "f1_macro_ci_low": 0.6451277390578729,
+        "f1_macro_ci_high": 0.6913493818977329,
+        "accuracy": 0.6991260923845194,
+        "accuracy_ci_low": 0.6754057428214731,
+        "accuracy_ci_high": 0.7247191011235955,
+        "cohen_kappa": 0.5510515198504133,
+        "mcc": 0.5830413722130324,
+        "krippendorff_alpha": 0.5388212900610554
+      }
+    ],
+    "best_model_on_gold_consensus": {
+      "model": "cnn",
+      "n": 335,
+      "f1_macro": 0.5798040005031119,
+      "ci": [
+        0.523905086489399,
+        0.6317383234553288
+      ]
+    }
+  },
+  "calibration_abstention": {
+    "n_models": 8,
+    "temperature_scaling": true,
+    "target_coverage": 0.8,
+    "human_review": {
+      "model": "lstm",
+      "threshold": 0.5063387111046566,
+      "n_to_review": 2634,
+      "test_coverage": 0.7944916907232582
+    }
+  },
+  "slice_error_analysis": {
+    "dimensions": [
+      "comprimento_texto",
+      "emoji",
+      "hashtag",
+      "negacao",
+      "ironia_aparente",
+      "giria"
+    ],
+    "min_slice_size": 30,
+    "best_model_by_category": {
+      "deep_learning": "lstm",
+      "classical": "naive_bayes"
+    },
+    "worst_slices": [
+      {
+        "dimension": "negacao",
+        "slice": "com_negacao",
+        "n_models_worse": 7,
+        "worst_difference": -0.09811733149899338
+      },
+      {
+        "dimension": "emoji",
+        "slice": "sem_emoji",
+        "n_models_worse": 7,
+        "worst_difference": -0.04124790546658863
+      },
+      {
+        "dimension": "comprimento_texto",
+        "slice": "3_longo",
+        "n_models_worse": 3,
+        "worst_difference": -0.0628951093175345
+      },
+      {
+        "dimension": "comprimento_texto",
+        "slice": "2_medio",
+        "n_models_worse": 3,
+        "worst_difference": -0.04044013480885478
+      },
+      {
+        "dimension": "comprimento_texto",
+        "slice": "1_curto",
+        "n_models_worse": 2,
+        "worst_difference": -0.07088762296864504
+      },
+      {
+        "dimension": "ironia_aparente",
+        "slice": "com_ironia_aparente",
+        "n_models_worse": 2,
+        "worst_difference": -0.05523927627624026
+      },
+      {
+        "dimension": "giria",
+        "slice": "sem_giria",
+        "n_models_worse": 1,
+        "worst_difference": -0.026795889907269
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+label_XLM-R,Tabularisai_negativo,Tabularisai_neutro,Tabularisai_positivo
+negativo,412,118,99
+neutro,254,317,175
+positivo,107,106,346

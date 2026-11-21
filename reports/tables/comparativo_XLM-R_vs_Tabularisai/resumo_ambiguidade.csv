@@ -1,0 +1,5 @@
+ambiguity_type,n_tweets,proportion
+divergente_alta_confianca,503,0.26008273009307137
+divergente_baixa_confianca,356,0.18407445708376424
+concordante_baixa_confianca_um,307,0.15873836608066186
+concordante_baixa_confianca_ambos,1,0.000517063081695967

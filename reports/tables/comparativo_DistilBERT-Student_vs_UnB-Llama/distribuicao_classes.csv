@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+DistilBERT-Student,negativo,887,0.46053997923156803
+DistilBERT-Student,neutro,96,0.04984423676012461
+DistilBERT-Student,positivo,943,0.48961578400830735
+UnB-Llama,negativo,774,0.40186915887850466
+UnB-Llama,neutro,230,0.11941848390446522
+UnB-Llama,positivo,922,0.4787123572170301

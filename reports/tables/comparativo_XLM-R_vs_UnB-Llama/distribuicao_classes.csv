@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+XLM-R,negativo,623,0.32346832814122534
+XLM-R,neutro,744,0.3862928348909657
+XLM-R,positivo,559,0.29023883696780894
+UnB-Llama,negativo,774,0.40186915887850466
+UnB-Llama,neutro,230,0.11941848390446522
+UnB-Llama,positivo,922,0.4787123572170301

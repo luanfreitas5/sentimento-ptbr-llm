@@ -1,0 +1,5 @@
+consensus_label,n_tweets,n_unanimidade,n_maioria,n_pluralidade,n_empate,unanimity_rate
+negativo,702,110,453,139,0,0.15669515669515668
+neutro,417,1,263,153,0,0.002398081534772182
+positivo,636,13,494,129,0,0.020440251572327043
+sem_consenso,171,0,0,0,171,0.0

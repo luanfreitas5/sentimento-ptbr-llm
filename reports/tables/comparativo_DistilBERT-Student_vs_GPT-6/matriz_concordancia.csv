@@ -1,0 +1,4 @@
+label_DistilBERT-Student,GPT-6_negativo,GPT-6_neutro,GPT-6_positivo
+negativo,480,171,242
+neutro,48,26,22
+positivo,185,228,532

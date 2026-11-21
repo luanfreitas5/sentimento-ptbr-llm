@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+CitizenLab-XLM-R,negativo,415,0.21547248182762202
+CitizenLab-XLM-R,neutro,1060,0.5503634475597092
+CitizenLab-XLM-R,positivo,451,0.23416407061266875
+UnB-Llama,negativo,774,0.40186915887850466
+UnB-Llama,neutro,230,0.11941848390446522
+UnB-Llama,positivo,922,0.4787123572170301

@@ -1,0 +1,28 @@
+{
+  "author_source": "memoria_chave_descartavel",
+  "n_rows": 64086,
+  "n_authors": 9948,
+  "pairs": {
+    "treino->teste": {
+      "n_target": 12817,
+      "duplicate_text_count": 69,
+      "duplicate_text_share": 0.005383475072169775,
+      "author_overlap_count": 12352,
+      "author_overlap_share": 0.9637200592962472
+    },
+    "treino->validacao": {
+      "n_target": 6409,
+      "duplicate_text_count": 32,
+      "duplicate_text_share": 0.004992978623810267,
+      "author_overlap_count": 6171,
+      "author_overlap_share": 0.9628647214854111
+    },
+    "validacao->teste": {
+      "n_target": 12817,
+      "duplicate_text_count": 11,
+      "duplicate_text_share": 0.0008582351564328626,
+      "author_overlap_count": 7022,
+      "author_overlap_share": 0.5478661153155965
+    }
+  }
+}

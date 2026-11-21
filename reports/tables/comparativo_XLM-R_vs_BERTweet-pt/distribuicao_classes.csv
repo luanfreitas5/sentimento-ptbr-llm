@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+XLM-R,negativo,629,0.3252326783867632
+XLM-R,neutro,746,0.3857290589451913
+XLM-R,positivo,559,0.2890382626680455
+BERTweet-pt,negativo,401,0.20734229576008273
+BERTweet-pt,neutro,1070,0.5532574974146846
+BERTweet-pt,positivo,463,0.2394002068252327

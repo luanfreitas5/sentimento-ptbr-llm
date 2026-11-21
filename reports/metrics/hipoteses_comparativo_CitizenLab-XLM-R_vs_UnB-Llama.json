@@ -1,0 +1,22 @@
+[
+  {
+    "model": "huggingface_extra:twitter-xlm-roberta-base-sentiment-finetunned",
+    "gold": "gold_unb",
+    "target": "disagreement",
+    "status": "concluido",
+    "detail": "20 hipótese(s) gerada(s)",
+    "n_hypotheses": 20,
+    "hypotheses_path": "reports/interpretability/diagnostics/comparativo_CitizenLab-XLM-R_vs_UnB-Llama/disagreement.parquet",
+    "evidence_path": "reports/tables/comparativo_CitizenLab-XLM-R_vs_UnB-Llama/hipoteses_disagreement_evidencias.csv"
+  },
+  {
+    "model": "huggingface_extra:twitter-xlm-roberta-base-sentiment-finetunned",
+    "gold": "gold_unb",
+    "target": "uncertainty",
+    "status": "concluido",
+    "detail": "20 hipótese(s) gerada(s)",
+    "n_hypotheses": 20,
+    "hypotheses_path": "reports/interpretability/diagnostics/comparativo_CitizenLab-XLM-R_vs_UnB-Llama/uncertainty.parquet",
+    "evidence_path": "reports/tables/comparativo_CitizenLab-XLM-R_vs_UnB-Llama/hipoteses_uncertainty_evidencias.csv"
+  }
+]

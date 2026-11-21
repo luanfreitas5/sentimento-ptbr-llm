@@ -1,0 +1,4 @@
+label_BERTweet-pt,UnB-Llama_negativo,UnB-Llama_neutro,UnB-Llama_positivo
+negativo,361,15,19
+neutro,365,206,497
+positivo,48,9,406

@@ -1,0 +1,15 @@
+# Gerado em 2026-11-16T12:19:25-03:00
+RESUMO das hipóteses do alvo 'uncertainty'
+Gate de sanidade: APROVADO — IC inferior acima do acaso e permutação significativa
+  métrica=spearman holdout=0.5214 IC=[0.5075; 0.5348] p_perm=0.000999 n_descoberta=44860 n_holdout=12817
+Hipóteses geradas: 20 (tabela: reports/interpretability/diagnostics/uncertainty.parquet)
+   1. -"menção a princípios ou virtudes morais"- [separation_score=0.07656, regression_pval=1.73e-23, feature_prevalence=0.01175]
+   2. -"querer algo específico [separation_score=0.0687, regression_pval=4.87e-51, feature_prevalence=0.03284]
+   3. -"tô bem" ou "estou bem [separation_score=0.04928, regression_pval=8.662e-13, feature_prevalence=0.02176]
+   4. -"fala de precaução ou cautela sobre não revelar informações [separation_score=0.0445, regression_pval=4.191e-11, feature_prevalence=0.03074]
+   5. -"não fazer algo [separation_score=0.04329, regression_pval=4.069e-40, feature_prevalence=0.07247]
+   6. -"menção ao conceito de superação ou perseverança [separation_score=0.03709, regression_pval=2.317e-33, feature_prevalence=0.1053]
+   7. -"menção à importância de erros como oportunidades de aprendizado ou crescimento [separation_score=0.03483, regression_pval=3.277e-50, feature_prevalence=0.2323]
+   8. -" expressa dúvida sobre a identidade pessoal ou autoconhecimento [separation_score=0.02685, regression_pval=4.683e-12, feature_prevalence=0.2951]
+   9. -" menciona rejeição ou desapontamento em relação a alguém ou algo [separation_score=0.02503, regression_pval=2.04e-20, feature_prevalence=0.1582]
+  10. -"espera por um ano futuro positivamente"[+] [separation_score=0.0237, regression_pval=3.079e-13, feature_prevalence=0.117]

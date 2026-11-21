@@ -1,0 +1,4 @@
+label_DistilBERT-Philschmid,UnB-Llama_negativo,UnB-Llama_neutro,UnB-Llama_positivo
+negativo,496,112,329
+neutro,37,10,32
+positivo,241,108,561

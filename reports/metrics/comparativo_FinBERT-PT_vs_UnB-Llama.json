@@ -1,0 +1,106 @@
+{
+  "models": {
+    "primary": "FinBERT-PT",
+    "reference": "UnB-Llama"
+  },
+  "agreement": {
+    "n_tweets": 1926,
+    "n_agree": 725,
+    "n_diverge": 1201,
+    "agreement_rate": 0.37642782969885774,
+    "agreement_rate_ci": [
+      0.3572040498442368,
+      0.39720924195223256
+    ],
+    "divergence_rate": 0.6235721703011423,
+    "divergence_rate_ci": [
+      0.6027907580477674,
+      0.6427959501557632
+    ],
+    "cohen_kappa": 0.18940530190467111,
+    "cohen_kappa_ci": [
+      0.1706056884454637,
+      0.20861939617415787
+    ],
+    "weighted_kappa_quadratic": 0.36288442175368685,
+    "weighted_kappa_quadratic_ci": [
+      0.33471304966464904,
+      0.39102751435584554
+    ],
+    "opposite_polarity_rate": 0.11656952539550375,
+    "confidence_level": 0.95,
+    "n_bootstrap": 1000,
+    "marginal_homogeneity": {
+      "statistic": 971.8676155339147,
+      "df": 2.0,
+      "p_value": 0.0
+    }
+  },
+  "confidence": {
+    "spearman_rho": 0.018768949036747522,
+    "spearman_p_value": 0.4103738448586808,
+    "wilcoxon_paired": {
+      "statistic": 14.0,
+      "p_value": 0.0
+    },
+    "mean_absolute_difference": 0.3011357217030114,
+    "mean_difference_FinBERT-PT_minus_UnB-Llama": -0.3010923156801661
+  },
+  "confidence_by_agreement": {
+    "FinBERT-PT": {
+      "median_when_agree": 0.6264,
+      "median_when_diverge": 0.5556,
+      "mannwhitney_p_value": 1.511525916173737e-42,
+      "rank_biserial": 0.37131585747509255
+    },
+    "UnB-Llama": {
+      "median_when_agree": 0.87,
+      "median_when_diverge": 0.87,
+      "mannwhitney_p_value": 0.6523781583031321,
+      "rank_biserial": 0.012134715323437462
+    }
+  },
+  "per_class_f1": {
+    "negativo": {
+      "f1": 0.6905890318212594,
+      "f1_ci_lower": 0.6643320307048152,
+      "f1_ci_upper": 0.7173065742615802
+    },
+    "neutro": {
+      "f1": 0.24698367636621715,
+      "f1_ci_lower": 0.2171714510064479,
+      "f1_ci_upper": 0.2770633940755456
+    },
+    "positivo": {
+      "f1": 0.08488612836438925,
+      "f1_ci_lower": 0.062374245472837035,
+      "f1_ci_upper": 0.11067452403982025
+    },
+    "macro": {
+      "f1": 0.3408196121839553,
+      "f1_ci_lower": 0.3243609929472404,
+      "f1_ci_upper": 0.3576278403880072
+    }
+  },
+  "thresholds": {
+    "high_confidence": 0.8,
+    "low_confidence": 0.5
+  },
+  "ambiguity": [
+    {
+      "ambiguity_type": "divergente_alta_confianca",
+      "n_tweets": 947,
+      "proportion": 0.49169262720664586
+    },
+    {
+      "ambiguity_type": "divergente_baixa_confianca",
+      "n_tweets": 254,
+      "proportion": 0.13187954309449637
+    },
+    {
+      "ambiguity_type": "concordante_baixa_confianca_um",
+      "n_tweets": 76,
+      "proportion": 0.03946002076843198
+    }
+  ]
+}

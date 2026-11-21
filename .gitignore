@@ -104,6 +104,33 @@ CLAUDE.local.md
 # *.xlsx
 # *.feather
 
-reports/
+# --- Relatórios: versiona só agregados; ignora texto por tweet (LGPD) -------
+reports/tables/**/corpus_diagnostico.parquet
+reports/tables/**/casos_ambiguos.csv
+reports/tables/**/conflitos_de_confianca.csv
+reports/tables/**/exemplos_transicoes.csv
+reports/tables/**/maiores_divergencias.csv
+reports/tables/**/hipoteses_*_evidencias.csv
+reports/tables/consenso_rotulagem/consenso_por_tweet.csv
+reports/tables/consenso_rotulagem/tweets_em_disputa.csv
+reports/tables/avaliacao/predicoes_teste.parquet
+reports/tables/avaliacao/revisao_humana.csv
+reports/tables/avaliacao/erros_maiores_por_paradigma.csv
+reports/tables/diagnostics/
+reports/tables/validacao_humana/para_rotular_500.csv
+reports/tables/reconstrucao/erro_reconstrucao.parquet
+reports/tables/reconstrucao/posts_mais_atipicos.csv
+# interpretabilidade: só os resumos finais de hipóteses e validação
+reports/interpretability/*
+!reports/interpretability/diagnostics/
+reports/interpretability/diagnostics/*
+!reports/interpretability/diagnostics/resumo_hipoteses_*.txt
+!reports/interpretability/diagnostics/resumo_validacao_*.txt
+reports/interpretability/diagnostics/*_11_11.txt
+# figuras: só avaliação, consenso e 2 comparativos representativos
+reports/figures/reconstrucao/umap_espaco_latente.*
+reports/figures/comparativo_*/
+!reports/figures/comparativo_XLM-R_vs_GPT-6/
+!reports/figures/comparativo_XLM-R_vs_UnB-Llama/
 Monografia/
 scripts/

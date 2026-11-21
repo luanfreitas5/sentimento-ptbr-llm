@@ -1,0 +1,4 @@
+label_BERTweet-pt,GPT-6_negativo,GPT-6_neutro,GPT-6_positivo
+negativo,351,34,16
+neutro,313,375,382
+positivo,49,16,398

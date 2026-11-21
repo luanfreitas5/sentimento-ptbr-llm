@@ -1,0 +1,4 @@
+label_NLPTown-BERT,UnB-Llama_negativo,UnB-Llama_neutro,UnB-Llama_positivo
+negativo,536,106,232
+neutro,70,45,92
+positivo,168,79,598

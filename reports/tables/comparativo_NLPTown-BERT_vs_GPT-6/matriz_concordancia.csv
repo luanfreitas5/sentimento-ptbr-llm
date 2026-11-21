@@ -1,0 +1,4 @@
+label_NLPTown-BERT,GPT-6_negativo,GPT-6_neutro,GPT-6_positivo
+negativo,477,211,194
+neutro,68,66,73
+positivo,168,148,529

@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+FinBERT-PT,negativo,703,0.36500519210799587
+FinBERT-PT,neutro,1179,0.6121495327102804
+FinBERT-PT,positivo,44,0.02284527518172378
+UnB-Llama,negativo,774,0.40186915887850466
+UnB-Llama,neutro,230,0.11941848390446522
+UnB-Llama,positivo,922,0.4787123572170301

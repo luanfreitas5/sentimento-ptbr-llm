@@ -1,0 +1,4 @@
+label_XLM-R,CitizenLab-XLM-R_negativo,CitizenLab-XLM-R_neutro,CitizenLab-XLM-R_positivo
+negativo,387,228,14
+neutro,25,675,46
+positivo,7,161,391

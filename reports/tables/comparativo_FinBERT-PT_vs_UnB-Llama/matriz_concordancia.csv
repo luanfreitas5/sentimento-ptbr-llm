@@ -1,0 +1,4 @@
+label_FinBERT-PT,UnB-Llama_negativo,UnB-Llama_neutro,UnB-Llama_positivo
+negativo,510,56,137
+neutro,261,174,744
+positivo,3,0,41

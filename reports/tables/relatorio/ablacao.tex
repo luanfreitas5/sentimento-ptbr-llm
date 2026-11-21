@@ -1,0 +1,16 @@
+\begin{table}[ht]
+\centering
+\caption{Ablação do pipeline clássico no conjunto de validação}
+\label{tab:ablacao}
+\begin{tabular}{llllll}
+\toprule
+component & baseline\_value & ablated\_value & impact & impact\_ci\_low & impact\_ci\_high \\
+\midrule
+sem\_tf\_sublinear & 0.6303 & 0.6301 & 0.0002 & -0.0033 & 0.0037 \\
+sem\_filtro\_frequencia\_minima & 0.6303 & 0.6303 & 0.0 & 0.0 & 0.0 \\
+sem\_class\_weight & 0.6303 & 0.6314 & -0.0011 & -0.004 & 0.002 \\
+sem\_bigramas & 0.6303 & 0.6373 & -0.0069 & -0.0189 & 0.0051 \\
+sem\_limite\_vocabulario & 0.6303 & 0.653 & -0.0227 & -0.0339 & -0.0126 \\
+\bottomrule
+\end{tabular}
+\end{table}

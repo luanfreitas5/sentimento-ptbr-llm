@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+DistilBERT-Student,negativo,893,0.46173733195449845
+DistilBERT-Student,neutro,96,0.04963805584281282
+DistilBERT-Student,positivo,945,0.4886246122026887
+GPT-6,negativo,713,0.3686659772492244
+GPT-6,neutro,425,0.21975180972078592
+GPT-6,positivo,796,0.41158221302998965

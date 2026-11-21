@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+XLM-R,negativo,629,0.3252326783867632
+XLM-R,neutro,746,0.3857290589451913
+XLM-R,positivo,559,0.2890382626680455
+DistilBERT-Philschmid,negativo,944,0.48810754912099275
+DistilBERT-Philschmid,neutro,80,0.04136504653567735
+DistilBERT-Philschmid,positivo,910,0.4705274043433299

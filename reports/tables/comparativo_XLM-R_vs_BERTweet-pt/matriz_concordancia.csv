@@ -1,0 +1,4 @@
+label_XLM-R,BERTweet-pt_negativo,BERTweet-pt_neutro,BERTweet-pt_positivo
+negativo,342,244,43
+neutro,56,634,56
+positivo,3,192,364

@@ -1,0 +1,13 @@
+category,model,suggested_category,n_errors,share
+classical,naive_bayes,outro,2781,0.5933432899509281
+classical,naive_bayes,negacao,951,0.20290164284190312
+classical,naive_bayes,contexto_ausente,730,0.15574994666097716
+classical,naive_bayes,ironia_aparente,160,0.034136974610625134
+classical,naive_bayes,ruido_de_rotulo,37,0.007894175378707062
+classical,naive_bayes,neutro_ambiguo,28,0.005973970556859398
+deep_learning,lstm,outro,2200,0.5188679245283019
+deep_learning,lstm,negacao,899,0.21202830188679245
+deep_learning,lstm,contexto_ausente,553,0.1304245283018868
+deep_learning,lstm,neutro_ambiguo,411,0.09693396226415095
+deep_learning,lstm,ironia_aparente,158,0.037264150943396225
+deep_learning,lstm,ruido_de_rotulo,19,0.004481132075471698

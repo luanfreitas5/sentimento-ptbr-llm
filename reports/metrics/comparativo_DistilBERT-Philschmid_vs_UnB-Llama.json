@@ -1,0 +1,106 @@
+{
+  "models": {
+    "primary": "DistilBERT-Philschmid",
+    "reference": "UnB-Llama"
+  },
+  "agreement": {
+    "n_tweets": 1926,
+    "n_agree": 1067,
+    "n_diverge": 859,
+    "agreement_rate": 0.5539979231568016,
+    "agreement_rate_ci": [
+      0.5306334371754933,
+      0.5768431983385255
+    ],
+    "divergence_rate": 0.4460020768431983,
+    "divergence_rate_ci": [
+      0.4231568016614745,
+      0.46936656282450673
+    ],
+    "cohen_kappa": 0.22219244699696478,
+    "cohen_kappa_ci": [
+      0.1854659118232803,
+      0.2579787237391827
+    ],
+    "weighted_kappa_quadratic": 0.27575649791197365,
+    "weighted_kappa_quadratic_ci": [
+      0.23137186539204047,
+      0.31931887456432784
+    ],
+    "opposite_polarity_rate": 0.6635622817229336,
+    "confidence_level": 0.95,
+    "n_bootstrap": 1000,
+    "marginal_homogeneity": {
+      "statistic": 90.18635702354655,
+      "df": 2.0,
+      "p_value": 0.0
+    }
+  },
+  "confidence": {
+    "spearman_rho": 0.20564148607839847,
+    "spearman_p_value": 7.753964269818548e-20,
+    "wilcoxon_paired": {
+      "statistic": 247650.5,
+      "p_value": 6.904328474985735e-171
+    },
+    "mean_absolute_difference": 0.18478312564901347,
+    "mean_difference_DistilBERT-Philschmid_minus_UnB-Llama": -0.15271344755970928
+  },
+  "confidence_by_agreement": {
+    "DistilBERT-Philschmid": {
+      "median_when_agree": 0.8209,
+      "median_when_diverge": 0.6991,
+      "mannwhitney_p_value": 4.2087909180927676e-23,
+      "rank_biserial": 0.2620535855536996
+    },
+    "UnB-Llama": {
+      "median_when_agree": 0.92,
+      "median_when_diverge": 0.87,
+      "mannwhitney_p_value": 8.039584785300918e-17,
+      "rank_biserial": 0.21871293858620278
+    }
+  },
+  "per_class_f1": {
+    "negativo": {
+      "f1": 0.5797779076563412,
+      "f1_ci_lower": 0.5510685965655072,
+      "f1_ci_upper": 0.6084422418459761
+    },
+    "neutro": {
+      "f1": 0.06472491909385113,
+      "f1_ci_lower": 0.02693376720222358,
+      "f1_ci_upper": 0.10170845291601233
+    },
+    "positivo": {
+      "f1": 0.6124454148471616,
+      "f1_ci_lower": 0.5853311311146834,
+      "f1_ci_upper": 0.6393618214655098
+    },
+    "macro": {
+      "f1": 0.41898274719911804,
+      "f1_ci_lower": 0.4001685687373217,
+      "f1_ci_upper": 0.43812549685899005
+    }
+  },
+  "thresholds": {
+    "high_confidence": 0.8,
+    "low_confidence": 0.5
+  },
+  "ambiguity": [
+    {
+      "ambiguity_type": "divergente_alta_confianca",
+      "n_tweets": 667,
+      "proportion": 0.3463136033229491
+    },
+    {
+      "ambiguity_type": "divergente_baixa_confianca",
+      "n_tweets": 192,
+      "proportion": 0.09968847352024922
+    },
+    {
+      "ambiguity_type": "concordante_baixa_confianca_um",
+      "n_tweets": 102,
+      "proportion": 0.0529595015576324
+    }
+  ]
+}

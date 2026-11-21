@@ -1,0 +1,592 @@
+{
+  "sources": [
+    "XLM-R",
+    "BERTweet-pt",
+    "FinBERT-PT",
+    "NLPTown-BERT",
+    "DistilBERT-Philschmid",
+    "DistilBERT-Student",
+    "Tabularisai",
+    "CitizenLab-XLM-R",
+    "GPT-6",
+    "UnB-Llama"
+  ],
+  "multi_rater": {
+    "n_tweets": 1926,
+    "n_raters": 10,
+    "fleiss_kappa": 0.27877273173936157,
+    "fleiss_kappa_ci": [
+      0.2659187244830628,
+      0.2902869667936952
+    ],
+    "krippendorff_alpha": 0.2788101786380225,
+    "unanimity_rate": 0.06438213914849429,
+    "confidence_level": 0.95
+  },
+  "levels": [
+    {
+      "consensus_level": "unanimidade",
+      "n_tweets": 124,
+      "proportion": 0.06438213914849429,
+      "ci_lower": 0.05426485307822759,
+      "ci_upper": 0.0762336693105451
+    },
+    {
+      "consensus_level": "maioria",
+      "n_tweets": 1210,
+      "proportion": 0.6282450674974039,
+      "ci_lower": 0.6064267168228288,
+      "ci_upper": 0.6495528600186171
+    },
+    {
+      "consensus_level": "pluralidade",
+      "n_tweets": 421,
+      "proportion": 0.2185877466251298,
+      "ci_lower": 0.20070028267917694,
+      "ci_upper": 0.23759554465659755
+    },
+    {
+      "consensus_level": "empate",
+      "n_tweets": 171,
+      "proportion": 0.08878504672897196,
+      "ci_lower": 0.0768870467938949,
+      "ci_upper": 0.1023201400141003
+    }
+  ],
+  "by_class": [
+    {
+      "consensus_label": "negativo",
+      "n_tweets": 702,
+      "n_unanimidade": 110,
+      "n_maioria": 453,
+      "n_pluralidade": 139,
+      "n_empate": 0,
+      "unanimity_rate": 0.15669515669515668
+    },
+    {
+      "consensus_label": "neutro",
+      "n_tweets": 417,
+      "n_unanimidade": 1,
+      "n_maioria": 263,
+      "n_pluralidade": 153,
+      "n_empate": 0,
+      "unanimity_rate": 0.002398081534772182
+    },
+    {
+      "consensus_label": "positivo",
+      "n_tweets": 636,
+      "n_unanimidade": 13,
+      "n_maioria": 494,
+      "n_pluralidade": 129,
+      "n_empate": 0,
+      "unanimity_rate": 0.020440251572327043
+    },
+    {
+      "consensus_label": "sem_consenso",
+      "n_tweets": 171,
+      "n_unanimidade": 0,
+      "n_maioria": 0,
+      "n_pluralidade": 0,
+      "n_empate": 171,
+      "unanimity_rate": 0.0
+    }
+  ],
+  "pairwise": [
+    {
+      "source_a": "XLM-R",
+      "source_b": "BERTweet-pt",
+      "n_tweets": 1926,
+      "agreement_rate": 0.6915887850467289,
+      "agreement_ci_lower": 0.6713395638629284,
+      "agreement_ci_upper": 0.7108125649013499,
+      "cohen_kappa": 0.5252894005017466,
+      "kappa_ci_lower": 0.49455716908432906,
+      "kappa_ci_upper": 0.5547663627942059
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "FinBERT-PT",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5290758047767393,
+      "agreement_ci_lower": 0.5082943925233645,
+      "agreement_ci_upper": 0.5524402907580478,
+      "cohen_kappa": 0.26283656189405147,
+      "kappa_ci_lower": 0.23469055633198663,
+      "kappa_ci_upper": 0.29436698206314776
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "NLPTown-BERT",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5150571131879543,
+      "agreement_ci_lower": 0.49428868120456904,
+      "agreement_ci_upper": 0.5358385254413291,
+      "cohen_kappa": 0.29139044934414926,
+      "kappa_ci_lower": 0.264839368149374,
+      "kappa_ci_upper": 0.31848344520991867
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "DistilBERT-Philschmid",
+      "n_tweets": 1926,
+      "agreement_rate": 0.4174454828660436,
+      "agreement_ci_lower": 0.3951064382139149,
+      "agreement_ci_upper": 0.4392523364485981,
+      "cohen_kappa": 0.15529584768391314,
+      "kappa_ci_lower": 0.1283809902905449,
+      "kappa_ci_upper": 0.1829449482828743
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "DistilBERT-Student",
+      "n_tweets": 1926,
+      "agreement_rate": 0.4781931464174455,
+      "agreement_ci_lower": 0.45584112149532713,
+      "agreement_ci_upper": 0.5,
+      "cohen_kappa": 0.24339623674029076,
+      "kappa_ci_lower": 0.21680997269342037,
+      "kappa_ci_upper": 0.26967684757470384
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "Tabularisai",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5545171339563862,
+      "agreement_ci_lower": 0.5311396677050882,
+      "agreement_ci_upper": 0.5752855659397715,
+      "cohen_kappa": 0.3347324349077586,
+      "kappa_ci_lower": 0.30002951818710044,
+      "kappa_ci_upper": 0.364876313363053
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "CitizenLab-XLM-R",
+      "n_tweets": 1926,
+      "agreement_rate": 0.7512980269989615,
+      "agreement_ci_lower": 0.731048805815161,
+      "agreement_ci_upper": 0.7710280373831776,
+      "cohen_kappa": 0.6172264169261906,
+      "kappa_ci_lower": 0.5872501153876832,
+      "kappa_ci_upper": 0.6474346922230827
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.6770508826583593,
+      "agreement_ci_lower": 0.6557632398753894,
+      "agreement_ci_upper": 0.6978322949117342,
+      "cohen_kappa": 0.5225945956285699,
+      "kappa_ci_lower": 0.4928435541255767,
+      "kappa_ci_upper": 0.5531425648003804
+    },
+    {
+      "source_a": "XLM-R",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.6292834890965732,
+      "agreement_ci_lower": 0.6079958463136034,
+      "agreement_ci_upper": 0.652128764278297,
+      "cohen_kappa": 0.4587579444858144,
+      "kappa_ci_lower": 0.4311856388965963,
+      "kappa_ci_upper": 0.4884912505069221
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "FinBERT-PT",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5482866043613707,
+      "agreement_ci_lower": 0.5259475597092419,
+      "agreement_ci_upper": 0.5716640706126688,
+      "cohen_kappa": 0.22145552996472995,
+      "kappa_ci_lower": 0.1882422350206024,
+      "kappa_ci_upper": 0.2551336205500813
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "NLPTown-BERT",
+      "n_tweets": 1926,
+      "agreement_rate": 0.40134994807892005,
+      "agreement_ci_lower": 0.37953011422637595,
+      "agreement_ci_upper": 0.42315680166147457,
+      "cohen_kappa": 0.19304852767234681,
+      "kappa_ci_lower": 0.1680137183775878,
+      "kappa_ci_upper": 0.2174434274459592
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "DistilBERT-Philschmid",
+      "n_tweets": 1926,
+      "agreement_rate": 0.3161993769470405,
+      "agreement_ci_lower": 0.29439252336448596,
+      "agreement_ci_upper": 0.3364615784008307,
+      "cohen_kappa": 0.10485277162848461,
+      "kappa_ci_lower": 0.08334126396663354,
+      "kappa_ci_upper": 0.12639295813264528
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "DistilBERT-Student",
+      "n_tweets": 1926,
+      "agreement_rate": 0.3556593977154725,
+      "agreement_ci_lower": 0.334358774662513,
+      "agreement_ci_upper": 0.37694704049844235,
+      "cohen_kappa": 0.15241558964728052,
+      "kappa_ci_lower": 0.1305864264991984,
+      "kappa_ci_upper": 0.17437960703635386
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "Tabularisai",
+      "n_tweets": 1926,
+      "agreement_rate": 0.4797507788161994,
+      "agreement_ci_lower": 0.4569055036344756,
+      "agreement_ci_upper": 0.49949376947040497,
+      "cohen_kappa": 0.24137071631496454,
+      "kappa_ci_lower": 0.2098538189437472,
+      "kappa_ci_upper": 0.2694079704637773
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "CitizenLab-XLM-R",
+      "n_tweets": 1926,
+      "agreement_rate": 0.7289719626168224,
+      "agreement_ci_lower": 0.7097481827622014,
+      "agreement_ci_upper": 0.7492211838006231,
+      "cohen_kappa": 0.5439782496877067,
+      "kappa_ci_lower": 0.5105626554852134,
+      "kappa_ci_upper": 0.5766757538144713
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5794392523364486,
+      "agreement_ci_lower": 0.557632398753894,
+      "agreement_ci_upper": 0.6002076843198338,
+      "cohen_kappa": 0.4022527308528031,
+      "kappa_ci_lower": 0.3741847217133707,
+      "kappa_ci_upper": 0.42836385075271094
+    },
+    {
+      "source_a": "BERTweet-pt",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5051921079958464,
+      "agreement_ci_lower": 0.4833722741433022,
+      "agreement_ci_upper": 0.5264927310488058,
+      "cohen_kappa": 0.3279640600171353,
+      "kappa_ci_lower": 0.30343828666853856,
+      "kappa_ci_upper": 0.3517638089479265
+    },
+    {
+      "source_a": "FinBERT-PT",
+      "source_b": "NLPTown-BERT",
+      "n_tweets": 1926,
+      "agreement_rate": 0.34215991692627207,
+      "agreement_ci_lower": 0.32346832814122534,
+      "agreement_ci_upper": 0.36346053997923156,
+      "cohen_kappa": 0.13276573030054128,
+      "kappa_ci_lower": 0.11395034485301418,
+      "kappa_ci_upper": 0.15355109654564733
+    },
+    {
+      "source_a": "FinBERT-PT",
+      "source_b": "DistilBERT-Philschmid",
+      "n_tweets": 1926,
+      "agreement_rate": 0.27466251298027,
+      "agreement_ci_lower": 0.2559579439252337,
+      "agreement_ci_upper": 0.29698857736240913,
+      "cohen_kappa": 0.07779107645229755,
+      "kappa_ci_lower": 0.06151245838658524,
+      "kappa_ci_upper": 0.0950244182727159
+    },
+    {
+      "source_a": "FinBERT-PT",
+      "source_b": "DistilBERT-Student",
+      "n_tweets": 1926,
+      "agreement_rate": 0.3052959501557632,
+      "agreement_ci_lower": 0.2865913811007269,
+      "agreement_ci_upper": 0.3255581516095534,
+      "cohen_kappa": 0.12085367313958362,
+      "kappa_ci_lower": 0.10420345730043412,
+      "kappa_ci_upper": 0.13702550208069955
+    },
+    {
+      "source_a": "FinBERT-PT",
+      "source_b": "Tabularisai",
+      "n_tweets": 1926,
+      "agreement_rate": 0.446521287642783,
+      "agreement_ci_lower": 0.4252336448598131,
+      "agreement_ci_upper": 0.4688473520249221,
+      "cohen_kappa": 0.1809992999196205,
+      "kappa_ci_lower": 0.15377310942900155,
+      "kappa_ci_upper": 0.20874676177494267
+    },
+    {
+      "source_a": "FinBERT-PT",
+      "source_b": "CitizenLab-XLM-R",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5612668743509865,
+      "agreement_ci_lower": 0.5389408099688473,
+      "agreement_ci_upper": 0.5841121495327103,
+      "cohen_kappa": 0.24238425023985788,
+      "kappa_ci_lower": 0.2097812377076505,
+      "kappa_ci_upper": 0.27525001704469787
+    },
+    {
+      "source_a": "FinBERT-PT",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.43042575285565937,
+      "agreement_ci_lower": 0.4091381100726895,
+      "agreement_ci_upper": 0.4543354101765317,
+      "cohen_kappa": 0.21125510226175703,
+      "kappa_ci_lower": 0.1878787446279098,
+      "kappa_ci_upper": 0.23490311626240767
+    },
+    {
+      "source_a": "FinBERT-PT",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.37642782969885774,
+      "agreement_ci_lower": 0.3572040498442368,
+      "agreement_ci_upper": 0.39720924195223256,
+      "cohen_kappa": 0.1894053019046712,
+      "kappa_ci_lower": 0.17060568844546373,
+      "kappa_ci_upper": 0.20861939617415798
+    },
+    {
+      "source_a": "NLPTown-BERT",
+      "source_b": "DistilBERT-Philschmid",
+      "n_tweets": 1926,
+      "agreement_rate": 0.656282450674974,
+      "agreement_ci_lower": 0.6344626168224299,
+      "agreement_ci_upper": 0.6765446521287642,
+      "cohen_kappa": 0.39436119958104443,
+      "kappa_ci_lower": 0.35788647250527106,
+      "kappa_ci_upper": 0.42835556076688
+    },
+    {
+      "source_a": "NLPTown-BERT",
+      "source_b": "DistilBERT-Student",
+      "n_tweets": 1926,
+      "agreement_rate": 0.6334371754932503,
+      "agreement_ci_lower": 0.61317497403946,
+      "agreement_ci_upper": 0.652128764278297,
+      "cohen_kappa": 0.3578578070403692,
+      "kappa_ci_lower": 0.32606361102011533,
+      "kappa_ci_upper": 0.38848213993491754
+    },
+    {
+      "source_a": "NLPTown-BERT",
+      "source_b": "Tabularisai",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5597092419522326,
+      "agreement_ci_lower": 0.5378894080996884,
+      "agreement_ci_upper": 0.5809968847352025,
+      "cohen_kappa": 0.32050377431336796,
+      "kappa_ci_lower": 0.28970746142659554,
+      "kappa_ci_upper": 0.35100513841900416
+    },
+    {
+      "source_a": "NLPTown-BERT",
+      "source_b": "CitizenLab-XLM-R",
+      "n_tweets": 1926,
+      "agreement_rate": 0.411214953271028,
+      "agreement_ci_lower": 0.3914719626168225,
+      "agreement_ci_upper": 0.4325155763239875,
+      "cohen_kappa": 0.20470343023998905,
+      "kappa_ci_lower": 0.1817548651740832,
+      "kappa_ci_upper": 0.2279101767991456
+    },
+    {
+      "source_a": "NLPTown-BERT",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.553478712357217,
+      "agreement_ci_lower": 0.5306334371754933,
+      "agreement_ci_upper": 0.5752855659397715,
+      "cohen_kappa": 0.2895357550494836,
+      "kappa_ci_lower": 0.2558536472285689,
+      "kappa_ci_upper": 0.32155598061227003
+    },
+    {
+      "source_a": "NLPTown-BERT",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.6121495327102804,
+      "agreement_ci_lower": 0.5903426791277259,
+      "agreement_ci_upper": 0.632398753894081,
+      "cohen_kappa": 0.34790282373204007,
+      "kappa_ci_lower": 0.31281042251802965,
+      "kappa_ci_upper": 0.3803647199156485
+    },
+    {
+      "source_a": "DistilBERT-Philschmid",
+      "source_b": "DistilBERT-Student",
+      "n_tweets": 1926,
+      "agreement_rate": 0.6266874350986501,
+      "agreement_ci_lower": 0.6053997923156802,
+      "agreement_ci_upper": 0.6474688473520249,
+      "cohen_kappa": 0.3119524923198004,
+      "kappa_ci_lower": 0.27424808289648,
+      "kappa_ci_upper": 0.34857278730541474
+    },
+    {
+      "source_a": "DistilBERT-Philschmid",
+      "source_b": "Tabularisai",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5083073727933541,
+      "agreement_ci_lower": 0.48546209761163034,
+      "agreement_ci_upper": 0.5306464174454829,
+      "cohen_kappa": 0.23492851686815674,
+      "kappa_ci_lower": 0.20481878062142828,
+      "kappa_ci_upper": 0.2642860797254297
+    },
+    {
+      "source_a": "DistilBERT-Philschmid",
+      "source_b": "CitizenLab-XLM-R",
+      "n_tweets": 1926,
+      "agreement_rate": 0.3302180685358255,
+      "agreement_ci_lower": 0.3094366562824507,
+      "agreement_ci_upper": 0.34994807892004154,
+      "cohen_kappa": 0.12097452972275313,
+      "kappa_ci_lower": 0.09950035049036743,
+      "kappa_ci_upper": 0.1430959833751226
+    },
+    {
+      "source_a": "DistilBERT-Philschmid",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.48805815160955346,
+      "agreement_ci_lower": 0.46571910695742474,
+      "agreement_ci_upper": 0.5114356178608516,
+      "cohen_kappa": 0.17045132882528702,
+      "kappa_ci_lower": 0.13735980562337127,
+      "kappa_ci_upper": 0.20471709341894134
+    },
+    {
+      "source_a": "DistilBERT-Philschmid",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5539979231568016,
+      "agreement_ci_lower": 0.5306334371754933,
+      "agreement_ci_upper": 0.5768431983385255,
+      "cohen_kappa": 0.22219244699696472,
+      "kappa_ci_lower": 0.1854659118232802,
+      "kappa_ci_upper": 0.25797872373918285
+    },
+    {
+      "source_a": "DistilBERT-Student",
+      "source_b": "Tabularisai",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5353063343717549,
+      "agreement_ci_lower": 0.5124610591900312,
+      "agreement_ci_upper": 0.557632398753894,
+      "cohen_kappa": 0.27960100284227807,
+      "kappa_ci_lower": 0.25149525756666513,
+      "kappa_ci_upper": 0.30859194413894453
+    },
+    {
+      "source_a": "DistilBERT-Student",
+      "source_b": "CitizenLab-XLM-R",
+      "n_tweets": 1926,
+      "agreement_rate": 0.37331256490134995,
+      "agreement_ci_lower": 0.3509865005192108,
+      "agreement_ci_upper": 0.3940939771547248,
+      "cohen_kappa": 0.17398033910879995,
+      "kappa_ci_lower": 0.15109830641305694,
+      "kappa_ci_upper": 0.1953259489926221
+    },
+    {
+      "source_a": "DistilBERT-Student",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5363447559709242,
+      "agreement_ci_lower": 0.514018691588785,
+      "agreement_ci_upper": 0.557632398753894,
+      "cohen_kappa": 0.24931485803299758,
+      "kappa_ci_lower": 0.21752591844022506,
+      "kappa_ci_upper": 0.2806420567660328
+    },
+    {
+      "source_a": "DistilBERT-Student",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.6095534787123572,
+      "agreement_ci_lower": 0.5887850467289719,
+      "agreement_ci_upper": 0.6313603322949117,
+      "cohen_kappa": 0.32047300099652254,
+      "kappa_ci_lower": 0.2874761986960902,
+      "kappa_ci_upper": 0.35554425672095863
+    },
+    {
+      "source_a": "Tabularisai",
+      "source_b": "CitizenLab-XLM-R",
+      "n_tweets": 1926,
+      "agreement_rate": 0.505711318795431,
+      "agreement_ci_lower": 0.48286604361370716,
+      "agreement_ci_upper": 0.5275311526479751,
+      "cohen_kappa": 0.27819932471133724,
+      "kappa_ci_lower": 0.24596161521635537,
+      "kappa_ci_upper": 0.3067269182635312
+    },
+    {
+      "source_a": "Tabularisai",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5654205607476636,
+      "agreement_ci_lower": 0.5425752855659398,
+      "agreement_ci_upper": 0.5856697819314641,
+      "cohen_kappa": 0.34087994050157433,
+      "kappa_ci_lower": 0.3072595735794383,
+      "kappa_ci_upper": 0.37108803354400394
+    },
+    {
+      "source_a": "Tabularisai",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5674974039460021,
+      "agreement_ci_lower": 0.5446521287642783,
+      "agreement_ci_upper": 0.5893042575285566,
+      "cohen_kappa": 0.337139660446645,
+      "kappa_ci_lower": 0.3049418515194602,
+      "kappa_ci_upper": 0.36887803737989067
+    },
+    {
+      "source_a": "CitizenLab-XLM-R",
+      "source_b": "GPT-6",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5903426791277259,
+      "agreement_ci_lower": 0.5680166147455867,
+      "agreement_ci_upper": 0.6116303219106958,
+      "cohen_kappa": 0.41748115437028865,
+      "kappa_ci_lower": 0.3872005069204641,
+      "kappa_ci_upper": 0.44476118906009104
+    },
+    {
+      "source_a": "CitizenLab-XLM-R",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.5145379023883697,
+      "agreement_ci_lower": 0.49273104880581514,
+      "agreement_ci_upper": 0.5368769470404985,
+      "cohen_kappa": 0.34003483048723104,
+      "kappa_ci_lower": 0.3156096279821621,
+      "kappa_ci_upper": 0.36540792773225056
+    },
+    {
+      "source_a": "GPT-6",
+      "source_b": "UnB-Llama",
+      "n_tweets": 1926,
+      "agreement_rate": 0.8317757009345794,
+      "agreement_ci_lower": 0.8146417445482866,
+      "agreement_ci_upper": 0.847871235721703,
+      "cohen_kappa": 0.73229986752785,
+      "kappa_ci_lower": 0.7060445983568134,
+      "kappa_ci_upper": 0.7563599703881437
+    }
+  ],
+  "polarity_conflict_rate": 0.5747663551401869
+}

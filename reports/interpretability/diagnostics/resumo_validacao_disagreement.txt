@@ -1,0 +1,14 @@
+# Gerado em 2026-11-16T19:31:05-03:00
+RESUMO da validação do alvo 'disagreement'
+0/10 hipóteses sobrevivem à correção 'fdr_bh'.
+Amostra para rotulagem humana: reports/tables/diagnostics/para_rotular.csv
+   1. [descartada] -" nota mental: (p_ajustado=0.318)
+   2. [descartada] -"contém menção a dança ou música"[EMOJI_POSITIVO] (p_ajustado=0.318)
+   3. [descartada] -"contém expressões de desafio ou confronto verbalizado de forma irônica ou grossa", (p_ajustado=0.318)
+   4. [descartada] -"menção ao amor ou carinho constante entre duas pessoas (p_ajustado=0.318)
+   5. [descartada] -"menção a forças positivas ou fé em Deus (p_ajustado=0.318)
+   6. [descartada] -"contém expressões de desafio ou questionamento direto à autoridade ou status quo (p_ajustado=0.33)
+   7. [descartada] -"menção a filha ou desejo de ter um lugar tranquilo para ela (p_ajustado=0.3924)
+   8. [descartada] -"menção explícita a uma pessoa específica ou ameaça de vingança (p_ajustado=0.5592)
+   9. [descartada] -"contém a expressão 'afim de' (p_ajustado=0.7102)
+  10. [descartada] -" menção a violência ou perigo (p_ajustado=0.7102)

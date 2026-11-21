@@ -1,0 +1,4 @@
+label_XLM-R,NLPTown-BERT_negativo,NLPTown-BERT_neutro,NLPTown-BERT_positivo
+negativo,448,50,131
+neutro,346,118,282
+positivo,88,39,432

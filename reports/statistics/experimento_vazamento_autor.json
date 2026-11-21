@@ -1,0 +1,19 @@
+{
+  "baseline": "tfidf(1-2gram, 20k) + regressao_logistica",
+  "metric": "f1_macro no teste, contra o rotulo de treino (Hugging Face)",
+  "split_por_tweet": 0.7243239587845883,
+  "split_por_autor": {
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "scores": [
+      0.7287778894480265,
+      0.7194644045059166,
+      0.721797463869077
+    ],
+    "mean": 0.7233465859410066
+  },
+  "inflation_absolute": 0.0009773728435816809
+}

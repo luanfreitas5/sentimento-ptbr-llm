@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+XLM-R,negativo,629,0.3252326783867632
+XLM-R,neutro,746,0.3857290589451913
+XLM-R,positivo,559,0.2890382626680455
+Tabularisai,negativo,773,0.3996897621509824
+Tabularisai,neutro,541,0.2797311271975181
+Tabularisai,positivo,620,0.32057911065149947

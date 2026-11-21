@@ -1,0 +1,4 @@
+label_XLM-R,FinBERT-PT_negativo,FinBERT-PT_neutro,FinBERT-PT_positivo
+negativo,451,177,1
+neutro,203,538,5
+positivo,55,466,38

@@ -1,0 +1,4 @@
+label_CitizenLab-XLM-R,UnB-Llama_negativo,UnB-Llama_neutro,UnB-Llama_positivo
+negativo,360,16,39
+neutro,390,209,461
+positivo,24,5,422

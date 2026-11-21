@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+BERTweet-pt,negativo,401,0.20734229576008273
+BERTweet-pt,neutro,1070,0.5532574974146846
+BERTweet-pt,positivo,463,0.2394002068252327
+GPT-6,negativo,713,0.3686659772492244
+GPT-6,neutro,425,0.21975180972078592
+GPT-6,positivo,796,0.41158221302998965

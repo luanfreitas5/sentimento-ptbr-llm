@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+XLM-R,negativo,629,0.3252326783867632
+XLM-R,neutro,746,0.3857290589451913
+XLM-R,positivo,559,0.2890382626680455
+DistilBERT-Student,negativo,893,0.46173733195449845
+DistilBERT-Student,neutro,96,0.04963805584281282
+DistilBERT-Student,positivo,945,0.4886246122026887

@@ -1,0 +1,4 @@
+label_XLM-R,DistilBERT-Philschmid_negativo,DistilBERT-Philschmid_neutro,DistilBERT-Philschmid_positivo
+negativo,403,29,197
+neutro,375,32,339
+positivo,166,19,374

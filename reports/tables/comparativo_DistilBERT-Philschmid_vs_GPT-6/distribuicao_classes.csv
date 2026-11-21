@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+DistilBERT-Philschmid,negativo,944,0.48810754912099275
+DistilBERT-Philschmid,neutro,80,0.04136504653567735
+DistilBERT-Philschmid,positivo,910,0.4705274043433299
+GPT-6,negativo,713,0.3686659772492244
+GPT-6,neutro,425,0.21975180972078592
+GPT-6,positivo,796,0.41158221302998965

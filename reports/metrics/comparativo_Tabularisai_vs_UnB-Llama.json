@@ -1,0 +1,106 @@
+{
+  "models": {
+    "primary": "Tabularisai",
+    "reference": "UnB-Llama"
+  },
+  "agreement": {
+    "n_tweets": 1926,
+    "n_agree": 1093,
+    "n_diverge": 833,
+    "agreement_rate": 0.5674974039460021,
+    "agreement_rate_ci": [
+      0.5446521287642783,
+      0.5893042575285566
+    ],
+    "divergence_rate": 0.43250259605399793,
+    "divergence_rate_ci": [
+      0.41069574247144336,
+      0.45534787123572174
+    ],
+    "cohen_kappa": 0.33713966044664506,
+    "cohen_kappa_ci": [
+      0.30494185151946007,
+      0.36887803737989056
+    ],
+    "weighted_kappa_quadratic": 0.39566617106561364,
+    "weighted_kappa_quadratic_ci": [
+      0.3560749097533053,
+      0.43525215043033266
+    ],
+    "opposite_polarity_rate": 0.4177671068427371,
+    "confidence_level": 0.95,
+    "n_bootstrap": 1000,
+    "marginal_homogeneity": {
+      "statistic": 231.83321414382192,
+      "df": 2.0,
+      "p_value": 0.0
+    }
+  },
+  "confidence": {
+    "spearman_rho": -0.008536451777546352,
+    "spearman_p_value": 0.7081095861557974,
+    "wilcoxon_paired": {
+      "statistic": 26413.5,
+      "p_value": 1.5585142914350232e-298
+    },
+    "mean_absolute_difference": 0.297793769470405,
+    "mean_difference_Tabularisai_minus_UnB-Llama": -0.2901696780893043
+  },
+  "confidence_by_agreement": {
+    "Tabularisai": {
+      "median_when_agree": 0.599,
+      "median_when_diverge": 0.5585,
+      "mannwhitney_p_value": 0.0013430724092400863,
+      "rank_biserial": 0.08517258687555529
+    },
+    "UnB-Llama": {
+      "median_when_agree": 0.92,
+      "median_when_diverge": 0.87,
+      "mannwhitney_p_value": 5.858785244100734e-17,
+      "rank_biserial": 0.22042705462788947
+    }
+  },
+  "per_class_f1": {
+    "negativo": {
+      "f1": 0.6381322957198443,
+      "f1_ci_lower": 0.6099222303741746,
+      "f1_ci_upper": 0.6653773284965236
+    },
+    "neutro": {
+      "f1": 0.3693107932379714,
+      "f1_ci_lower": 0.32594230553372994,
+      "f1_ci_upper": 0.4115764000150595
+    },
+    "positivo": {
+      "f1": 0.5957170668397145,
+      "f1_ci_lower": 0.5666360566818451,
+      "f1_ci_upper": 0.6234338003778337
+    },
+    "macro": {
+      "f1": 0.5343867185991767,
+      "f1_ci_lower": 0.5116316258653029,
+      "f1_ci_upper": 0.5575373878438411
+    }
+  },
+  "thresholds": {
+    "high_confidence": 0.8,
+    "low_confidence": 0.5
+  },
+  "ambiguity": [
+    {
+      "ambiguity_type": "divergente_alta_confianca",
+      "n_tweets": 530,
+      "proportion": 0.2751817237798546
+    },
+    {
+      "ambiguity_type": "concordante_baixa_confianca_um",
+      "n_tweets": 333,
+      "proportion": 0.17289719626168223
+    },
+    {
+      "ambiguity_type": "divergente_baixa_confianca",
+      "n_tweets": 303,
+      "proportion": 0.1573208722741433
+    }
+  ]
+}

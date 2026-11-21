@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+Tabularisai,negativo,773,0.3996897621509824
+Tabularisai,neutro,541,0.2797311271975181
+Tabularisai,positivo,620,0.32057911065149947
+GPT-6,negativo,713,0.3686659772492244
+GPT-6,neutro,425,0.21975180972078592
+GPT-6,positivo,796,0.41158221302998965

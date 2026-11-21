@@ -1,0 +1,57 @@
+{
+  "references": [
+    "gold_openai",
+    "gold_unb",
+    "consenso_gold"
+  ],
+  "training_label_noise": [
+    {
+      "reference": "gold_openai",
+      "n": 1934,
+      "f1_macro": 0.6729130272972261,
+      "f1_macro_ci_low": 0.6531053180991215,
+      "f1_macro_ci_high": 0.6936398520215441,
+      "accuracy": 0.6783867631851086,
+      "accuracy_ci_low": 0.6587383660806618,
+      "accuracy_ci_high": 0.6990692864529473,
+      "cohen_kappa": 0.5245011097430101,
+      "mcc": 0.5423602275808311,
+      "krippendorff_alpha": 0.5166829863860787
+    },
+    {
+      "reference": "gold_unb",
+      "n": 1926,
+      "f1_macro": 0.6028111036462986,
+      "f1_macro_ci_low": 0.5813618996201847,
+      "f1_macro_ci_high": 0.6256241900973097,
+      "accuracy": 0.6292834890965732,
+      "accuracy_ci_low": 0.6079958463136034,
+      "accuracy_ci_high": 0.652128764278297,
+      "cohen_kappa": 0.4587579444858144,
+      "mcc": 0.5006676487566407,
+      "krippendorff_alpha": 0.43564425326176714
+    },
+    {
+      "reference": "consenso_gold",
+      "n": 1602,
+      "f1_macro": 0.6685675660695537,
+      "f1_macro_ci_low": 0.6451277390578729,
+      "f1_macro_ci_high": 0.6913493818977329,
+      "accuracy": 0.6991260923845194,
+      "accuracy_ci_low": 0.6754057428214731,
+      "accuracy_ci_high": 0.7247191011235955,
+      "cohen_kappa": 0.5510515198504133,
+      "mcc": 0.5830413722130324,
+      "krippendorff_alpha": 0.5388212900610554
+    }
+  ],
+  "best_model_on_gold_consensus": {
+    "model": "naive_bayes",
+    "n": 335,
+    "f1_macro": 0.5724940147542076,
+    "ci": [
+      0.5178248976565702,
+      0.6219314024531306
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+label_DistilBERT-Student,UnB-Llama_negativo,UnB-Llama_neutro,UnB-Llama_positivo
+negativo,529,92,266
+neutro,53,16,27
+positivo,192,122,629

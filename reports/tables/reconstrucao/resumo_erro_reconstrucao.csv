@@ -1,0 +1,6 @@
+grupo,valor,n,erro_medio,taxa_anomalia
+classe_primario,negativo,20699,0.0018309611,0.03710324170249771
+classe_primario,neutro,25701,0.0018980195,0.06567837827321894
+classe_primario,positivo,17686,0.0017491892,0.04234988126201515
+confianca_primario,"alta (>=0,5)",63039,0.0018334447,0.04981043481019686
+confianca_primario,"baixa (<0,5)",1047,0.0019462273,0.06208213944603629

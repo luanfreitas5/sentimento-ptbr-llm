@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+Tabularisai,negativo,768,0.3987538940809969
+Tabularisai,neutro,539,0.2798546209761163
+Tabularisai,positivo,619,0.32139148494288683
+UnB-Llama,negativo,774,0.40186915887850466
+UnB-Llama,neutro,230,0.11941848390446522
+UnB-Llama,positivo,922,0.4787123572170301

@@ -1,0 +1,4 @@
+rotulador_a,rotulador_b,so_a_acerta,so_b_acerta,estatistica,p_valor
+huggingface_primario,gold_openai,55,96,55.0,0.0010647254407627992
+huggingface_primario,gold_unb,76,91,76.0,0.2786120692135602
+gold_openai,gold_unb,41,15,15.0,0.0006855641563783821

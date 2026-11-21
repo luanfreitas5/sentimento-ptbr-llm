@@ -1,0 +1,14 @@
+# Gerado em 2026-11-16T16:45:58-03:00
+RESUMO da validação do alvo 'uncertainty'
+5/10 hipóteses sobrevivem à correção 'fdr_bh'.
+Amostra para rotulagem humana: reports/tables/diagnostics/para_rotular.csv
+   1. [SOBREVIVE] -" expressa dúvida sobre a identidade pessoal ou autoconhecimento (p_ajustado=0.00399)
+   2. [SOBREVIVE] -"querer algo específico (p_ajustado=0.00399)
+   3. [SOBREVIVE] -"menção à importância de erros como oportunidades de aprendizado ou crescimento (p_ajustado=0.06677)
+   4. [SOBREVIVE] -"menção ao conceito de superação ou perseverança (p_ajustado=0.06677)
+   5. [SOBREVIVE] -" menciona rejeição ou desapontamento em relação a alguém ou algo (p_ajustado=0.06677)
+   6. [descartada] -" menciona uma ação emocional direta do outro (p_ajustado=0.1707)
+   7. [descartada] -"menção a princípios ou virtudes morais"- (p_ajustado=0.3472)
+   8. [descartada] -"tô bem" ou "estou bem (p_ajustado=0.3472)
+   9. [descartada] -"fala de precaução ou cautela sobre não revelar informações (p_ajustado=0.7555)
+  10. [descartada] -"não fazer algo (p_ajustado=0.8122)

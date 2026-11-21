@@ -1,0 +1,4 @@
+label_DistilBERT-Philschmid,GPT-6_negativo,GPT-6_neutro,GPT-6_positivo
+negativo,443,212,289
+neutro,31,22,27
+positivo,239,191,480

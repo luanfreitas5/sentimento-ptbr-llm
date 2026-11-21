@@ -1,0 +1,429 @@
+{
+  "files_with_personal_data": {
+    "reports\\datasheets\\datasheet_corpus_tweets_estatisticas.md": {
+      "mencao": 1,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 0,
+      "total": 38
+    },
+    "reports\\tables\\comparativo_NLPTown-BERT_vs_GPT-6\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_NLPTown-BERT_vs_UnB-Llama\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_DistilBERT-Student_vs_GPT-6\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_DistilBERT-Student_vs_UnB-Llama\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_DistilBERT-Philschmid_vs_GPT-6\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_DistilBERT-Philschmid_vs_UnB-Llama\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_Tabularisai_vs_GPT-6\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 2,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_Tabularisai_vs_UnB-Llama\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_XLM-R_vs_NLPTown-BERT\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_XLM-R_vs_DistilBERT-Student\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_XLM-R_vs_DistilBERT-Philschmid\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_XLM-R_vs_Tabularisai\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 2,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_XLM-R_vs_CitizenLab-XLM-R\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_CitizenLab-XLM-R_vs_GPT-6\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\comparativo_CitizenLab-XLM-R_vs_UnB-Llama\\concordancia_por_tamanho.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 6
+    },
+    "reports\\tables\\diagnostics\\para_rotular.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 132
+    },
+    "reports\\tables\\diagnostics\\para_rotular_uncertainty.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 1,
+      "total": 164
+    },
+    "reports\\tables\\reconstrucao\\posts_mais_atipicos.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 26,
+      "total": 51
+    },
+    "reports\\tables\\reconstrucao\\resumo_erro_reconstrucao.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 5,
+      "total": 6
+    },
+    "reports\\tables\\validacao_humana\\para_rotular_500.csv": {
+      "mencao": 0,
+      "url": 0,
+      "email": 0,
+      "cpf": 0,
+      "telefone": 4,
+      "total": 501
+    },
+    "data\\silver\\corpus_normalizado.parquet": {
+      "text:mencao": 23380,
+      "text:url": 13273,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 154,
+      "text:total": 64086,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 130,
+      "text_normalized:total": 64086
+    },
+    "data\\gold\\corpus_rotulado.parquet": {
+      "text:mencao": 23380,
+      "text:url": 13273,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 154,
+      "text:total": 64086,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 130,
+      "text_normalized:total": 64086
+    },
+    "data\\gold\\dataset_labeled_bert-base-multilingual-uncased-sentiment.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\dataset_labeled_distilbert-base-multilingual-cased-sentiment.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\dataset_labeled_distilbert-base-multilingual-cased-sentiments-student.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\dataset_labeled_FinBERT-PT-BR.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\dataset_labeled_gpt-6-luna_effort-low.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\dataset_labeled_multilingual-sentiment-analysis.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\dataset_labeled_twitter-xlm-roberta-base-sentiment-finetunned.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\dataset_labeled_UnB-Llama-3.3-70B-Instruct.parquet": {
+      "text:mencao": 0,
+      "text:url": 0,
+      "text:email": 0,
+      "text:cpf": 4,
+      "text:telefone": 145,
+      "text:total": 63825
+    },
+    "data\\gold\\gold_gpt-6-luna.parquet": {
+      "text:mencao": 668,
+      "text:url": 397,
+      "text:email": 0,
+      "text:cpf": 0,
+      "text:telefone": 2,
+      "text:total": 1934,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 0,
+      "text_normalized:telefone": 2,
+      "text_normalized:total": 1934
+    },
+    "data\\gold\\gold_UnB-Llama-3.3-70B-Instruct.parquet": {
+      "text:mencao": 668,
+      "text:url": 397,
+      "text:email": 0,
+      "text:cpf": 0,
+      "text:telefone": 2,
+      "text:total": 1934,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 0,
+      "text_normalized:telefone": 2,
+      "text_normalized:total": 1934
+    },
+    "data\\gold\\teste.parquet": {
+      "text:mencao": 4661,
+      "text:url": 2670,
+      "text:email": 8,
+      "text:cpf": 0,
+      "text:telefone": 35,
+      "text:total": 12817
+    },
+    "data\\gold\\treino.parquet": {
+      "text:mencao": 16404,
+      "text:url": 9280,
+      "text:email": 24,
+      "text:cpf": 3,
+      "text:telefone": 102,
+      "text:total": 44860
+    },
+    "data\\gold\\tweets_data_bert-base-multilingual-uncased-sentiment.parquet": {
+      "text:mencao": 21769,
+      "text:url": 12645,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 147,
+      "text:total": 61891,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 124,
+      "text_normalized:total": 61891
+    },
+    "data\\gold\\tweets_data_bertweet-pt-sentiment.parquet": {
+      "text:mencao": 23380,
+      "text:url": 13273,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 154,
+      "text:total": 64086,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 130,
+      "text_normalized:total": 64086
+    },
+    "data\\gold\\tweets_data_distilbert-base-multilingual-cased-sentiment.parquet": {
+      "text:mencao": 21769,
+      "text:url": 12645,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 147,
+      "text:total": 61891,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 124,
+      "text_normalized:total": 61891
+    },
+    "data\\gold\\tweets_data_distilbert-base-multilingual-cased-sentiments-student.parquet": {
+      "text:mencao": 21769,
+      "text:url": 12645,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 147,
+      "text:total": 61891,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 124,
+      "text_normalized:total": 61891
+    },
+    "data\\gold\\tweets_data_FinBERT-PT-BR.parquet": {
+      "text:mencao": 21769,
+      "text:url": 12645,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 147,
+      "text:total": 61891,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 124,
+      "text_normalized:total": 61891
+    },
+    "data\\gold\\tweets_data_multilingual-sentiment-analysis.parquet": {
+      "text:mencao": 21769,
+      "text:url": 12645,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 147,
+      "text:total": 61891,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 124,
+      "text_normalized:total": 61891
+    },
+    "data\\gold\\tweets_data_twitter-xlm-roberta-base-sentiment-finetunned.parquet": {
+      "text:mencao": 21769,
+      "text:url": 12645,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 147,
+      "text:total": 61891,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 124,
+      "text_normalized:total": 61891
+    },
+    "data\\gold\\tweets_data_twitter-xlm-roberta-base-sentiment-multilingual.parquet": {
+      "text:mencao": 23380,
+      "text:url": 13273,
+      "text:email": 39,
+      "text:cpf": 4,
+      "text:telefone": 154,
+      "text:total": 64086,
+      "text_normalized:mencao": 0,
+      "text_normalized:url": 0,
+      "text_normalized:email": 0,
+      "text_normalized:cpf": 4,
+      "text_normalized:telefone": 130,
+      "text_normalized:total": 64086
+    },
+    "data\\gold\\validacao.parquet": {
+      "text:mencao": 2315,
+      "text:url": 1323,
+      "text:email": 7,
+      "text:cpf": 1,
+      "text:telefone": 17,
+      "text:total": 6409
+    }
+  },
+  "n_files": 44
+}

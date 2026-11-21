@@ -1,0 +1,7 @@
+model,sentiment_label,count,proportion
+CitizenLab-XLM-R,negativo,419,0.21664943123061015
+CitizenLab-XLM-R,neutro,1064,0.5501551189245087
+CitizenLab-XLM-R,positivo,451,0.23319544984488108
+GPT-6,negativo,713,0.3686659772492244
+GPT-6,neutro,425,0.21975180972078592
+GPT-6,positivo,796,0.41158221302998965
