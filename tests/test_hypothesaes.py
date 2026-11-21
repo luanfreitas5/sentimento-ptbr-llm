@@ -941,6 +941,22 @@ class TestNeuronInterpreterParseInterpretation:
             == "menciona atendimento rápido"
         )
 
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ('-"menção a Deus"', "menção a Deus"),
+            ('-" menciona emojis positivos', "menciona emojis positivos"),
+            ('"-menção a canais"', "menção a canais"),
+            ('menção a animes"-', "menção a animes"),
+            ("- 'texto entre apóstrofos'", "texto entre apóstrofos"),
+            ("texto limpo", "texto limpo"),
+            ('contém "amo" e "te amo"', 'contém "amo" e "te amo"'),
+        ],
+    )
+    def test_strips_dash_quote_variants(self, raw: str, expected: str) -> None:
+        """Deve remover as variantes de marcador/aspas observadas nas saídas reais."""
+        assert NeuronInterpreter()._parse_interpretation(raw) == expected
+
     def test_returns_none_for_incomplete_thinking_block(self) -> None:
         """Um bloco ``<think>`` sem fechamento deve retornar ``None`` (resposta incompleta)."""
         interpreter = NeuronInterpreter()

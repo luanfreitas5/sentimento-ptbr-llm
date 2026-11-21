@@ -11,6 +11,7 @@ interpretação: o quanto ela, quando usada como critério de anotação
 import concurrent.futures
 import json
 import logging
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -29,11 +30,50 @@ DEFAULT_TASK_SPECIFIC_INSTRUCTIONS = """An example feature could be:
 - "describes a patient experiencing seizures or epilepsy"
 - "contains multiple single-digit numbers\""""
 
+# Marcadores que o LLM costuma deixar nas pontas da hipótese em texto livre
+# (travessão de lista, aspas retas/tipográficas, apóstrofo, vírgula e espaços).
+_LEADING_NOISE = re.compile(r"^[\s\-–—•*\"'“”‘’]+")
+_TRAILING_NOISE = re.compile(r"[\s\-–—,;]+$")
+_QUOTE_CHARS = "\"'“”‘’"
+
 # Barra de qualidade aplicada às respostas do interpretador estruturado (JSON)
 # antes de chegarem à etapa custosa score_interpretations()/annotate().
 # Consulte filter_by_quality().
 DEFAULT_MIN_COVERAGE = 0.8
 DEFAULT_MIN_SPECIFICITY = 0.6
+
+
+def clean_interpretation(text: str) -> str:
+    """Remove marcadores de lista e aspas das pontas de uma hipótese em texto livre.
+
+    Cobre combinações como ``- "texto"``, ``-"texto"``, ``"-texto"`` e ``texto"-``,
+    que o LLM devolve quando segue o formato de exemplo do prompt.
+
+    Parameters
+    ----------
+    text : str
+        Linha bruta devolvida pelo LLM.
+
+    Returns
+    -------
+    str
+        Texto sem prefixos/sufixos de formatação (aspas internas são preservadas).
+
+    Examples
+    --------
+    >>> clean_interpretation('-"menção a Deus"-')
+    'menção a Deus'
+    """
+    lead = _LEADING_NOISE.match(text)
+    body = text[lead.end() :] if lead else text
+    had_opening_quote = bool(lead) and any(c in _QUOTE_CHARS for c in lead.group())
+    body = _TRAILING_NOISE.sub("", body)
+    # Aspas finais só são ruído se abriram o texto ou ficaram desbalanceadas.
+    quote_count = sum(body.count(c) for c in _QUOTE_CHARS)
+    if had_opening_quote or quote_count % 2 == 1:
+        body = body.rstrip(_QUOTE_CHARS)
+        body = _TRAILING_NOISE.sub("", body)
+    return body
 
 
 def extract_concept(raw: str) -> dict[str, Any] | None:
@@ -441,10 +481,7 @@ class NeuronInterpreter:
             response = response.split("</think>")[1].strip()
 
         response = response.split("\n", 1)[0]
-        for prefix in ("- ", '"-', '" -'):
-            response = response.removeprefix(prefix)
-
-        return response.strip('"').strip()
+        return clean_interpretation(response)
 
     def _parse_response(self, response: str) -> tuple[str | None, dict[str, Any] | None]:
         """Analisar uma resposta bruta do interpretador em (conceito, metadados)."""
