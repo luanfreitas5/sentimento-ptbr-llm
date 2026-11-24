@@ -71,7 +71,7 @@ cachetools==7.3.0
     # via
     #   mlflow-skinny
     #   mlflow-tracing
-certifi==2026.10.23
+certifi==2026.11.20
     # via
     #   databricks-sdk
     #   httpcore
