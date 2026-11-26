@@ -1,6 +1,8 @@
-# 🇧🇷 Análise de Sentimentos em Textos do Twitter/X em Português Brasileiro
+# 🇧🇷 Interpretabilidade de Modelos BERT com Autoencoders Esparsos na Análise de Sentimentos de Publicações do X em Português Brasileiro
 
-### Um Estudo Comparativo entre Algoritmos Clássicos de Machine Learning, Deep Learning e LLMs Locais
+### Qualidade de rótulos automáticos, consenso entre rotuladores e hipóteses interpretáveis (HypotheSAEs)
+
+> Dissertação de mestrado (PPCA/UnB) — texto de qualificação em [`Monografia/`](Monografia/). Autor: Luan Mendes Gonçalves Freitas. Orientador: Prof. Dr. Marcos Fagundes Caetano; coorientador: Prof. Dr. Thiago Paulo Faleiros.
 
 **Repositório GitHub**: [`luanfreitas5/sentimento-ptbr-llm`](https://github.com/luanfreitas5/sentimento-ptbr-llm)
 
@@ -16,18 +18,48 @@
 
 ## 🎯 Sobre o projeto
 
-Redes sociais como o Twitter/X constituem uma das principais fontes de dados textuais em português brasileiro para estudos de opinião pública, monitoramento de marcas, análise de crises e pesquisa sociolinguística computacional. Apesar do volume expressivo de dados disponíveis, o português brasileiro permanece uma língua de recursos limitados no que diz respeito a corpora rotulados de sentimento provenientes de mídias sociais — domínio caracterizado por ruído ortográfico, gírias, ironia, emojis e construções sintáticas informais que desafiam tanto abordagens clássicas de NLP quanto modelos de linguagem de propósito geral.
+Redes sociais como o X (antigo Twitter) concentram grande volume de opinião em português brasileiro, mas o português é uma língua de recursos limitados quando se trata de corpora de sentimento de mídias sociais — domínio com ruído ortográfico, gírias, ironia, emojis e construções informais. Modelos da família BERT e LLMs são as principais ferramentas para classificar sentimento, porém pouco transparentes, e o corpus disponível (**64.086 posts** de 2020–2021) **não possui rótulos humanos**.
 
-Este projeto desenvolve e avalia comparativamente um pipeline de análise de sentimentos (positivo/negativo/neutro) para tweets em português brasileiro, contrastando **quatro paradigmas** de classificação sob o mesmo protocolo experimental — mesmo split, mesmas métricas, mesmos testes estatísticos:
+O projeto investiga a relação entre a **interpretabilidade das representações internas de modelos BERT** e a **concordância de suas predições de sentimento** (positivo/negativo/neutro) com rótulos de referência, usando **autoencoders esparsos (SAEs)** para identificar padrões latentes associados às decisões dos modelos. O problema tem duas partes que se alimentam:
 
-| Paradigma | Exemplos de modelo | Representação |
+1. **Rótulos:** como obter rótulos em larga escala, a baixo custo e com qualidade quantificada, sem anotação humana em escala?
+2. **Interpretabilidade:** como decompor as representações de modelos BERT em padrões latentes interpretáveis e relacioná-los às divergências e à incerteza dos rotuladores?
+
+### Desenho experimental
+
+| Fonte | Papel | Cobertura |
 |---|---|---|
-| ML clássico | Naive Bayes, Regressão Logística, SVM, Random Forest, Gradient Boosting | TF-IDF, FastText, embeddings contextuais + autoencoder |
-| Deep Learning | BiLSTM, CNN para texto | Embeddings estáticos (FastText) |
-| Transformers (fine-tuning) | BERTimbau, RoBERTa pt-BR, DistilBERT pt-BR | Embeddings contextuais |
-| LLMs locais | Llama 3.1, Gemma 2 via Ollama/Hugging Face | Prompting zero-shot / few-shot / chain-of-thought |
+| 8 classificadores BERT do Hugging Face (primário: `cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual`; secundário: `pysentimiento/bertweet-pt-sentiment`; + 6 adicionais), revisões fixadas, executados localmente | Rotuladores do corpus | Todo o corpus |
+| `gold_openai` (`gpt-6-luna`, *reasoning effort low*) | Referência primária (*gold set* de LLM) | Amostra comum de 2.000 posts |
+| `gold_unb` (`UnB-Llama-3.3-70B-Instruct`) | Referência secundária | Mesma amostra |
+| Validação humana estratificada por confiança | Estimativa do acerto real | n = 500 |
 
-A rotulagem usa um classificador do Hugging Face (`cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual`, revisão fixada, executado localmente em CPU ou GPU) sobre **todo** o corpus; esse rótulo é a única fonte que alimenta `features` e o treino. Um segundo classificador (`pysentimiento/bertweet-pt-sentiment`) rotula o mesmo corpus para a análise de consenso (`label_consensus`). Dois LLMs via API OpenAI-compatível (`gpt-6-luna` e `UnB-Llama-3.3-70B-Instruct`) rotulam apenas uma amostra de 1.000 tweets, formando os *gold sets* de referência. A etapa `comparative_evaluation` compara o Hugging Face com cada gold set (concordância, Kappa e divergências), e a etapa `hypotheses` gera hipóteses do HypotheSAEs sobre essas divergências. Os gold sets são rótulos de LLM, não de humanos: medem concordância, não acerto absoluto. O texto enviado à API é sanitizado (sem @menções e URLs, conforme a LGPD), e o rótulo de todo o corpus não depende de API proprietária. A métrica principal é o **F1-macro** (robusto ao desbalanceamento entre classes), complementado pelo **MCC**, testes de significância (McNemar, Wilcoxon, Friedman + post-hoc de Nemenyi), calibração de probabilidades e avaliação por slice — com ênfase em rigor metodológico, escalabilidade computacional e reprodutibilidade.
+O texto enviado a APIs externas é sanitizado (sem @menções e URLs, conforme a LGPD). Os *gold sets* são rótulos de LLM, não de humanos: medem concordância, não acerto absoluto — por isso a validação humana. A qualidade dos rótulos é medida por **Kappa de Cohen** (simples e ponderado), **Kappa de Fleiss**, **Alpha de Krippendorff**, Macro F1, MCC e McNemar, sempre com **IC de 95% por *bootstrap*** (1.000 reamostragens). As hipóteses interpretáveis são geradas pelo **HypotheSAEs** (SAE com 256 neurônios, 8 ativos, sobre embeddings `paraphrase-multilingual-mpnet-base-v2`) para dois alvos — *divergência* e *incerteza* — em 16 pares modelo × *gold* (32 alvos), com *gate* de sanidade estatístico, validação em *holdout* e correção para comparações múltiplas (FDR de Benjamini–Hochberg).
+
+### Perguntas de pesquisa
+
+| # | Pergunta | Hipótese |
+|---|---|---|
+| PQ1 | Os rótulos dos BERTs concordam entre si e com os *gold sets* a ponto de serem indício de qualidade? | **H1.** κ ≥ 0,6 com os *gold sets*, com discordância concentrada no neutro |
+| PQ2 | Onde e por que os rotuladores divergem? | **H2.** Divergência e baixa confiança associam-se a padrões linguísticos recuperáveis como hipóteses |
+| PQ3 | Os padrões latentes se relacionam com as decisões e a concordância dos modelos? | **H3.** Atributos interpretáveis associam-se à divergência e à incerteza |
+| PQ4 | As hipóteses são estáveis entre *gold sets* diferentes? | **H4.** As de incerteza são consistentes; as de divergência dependem do rotulador de referência |
+
+### Resultados preliminares (qualificação)
+
+Todos os números vêm de artefatos gerados pelo pipeline em `reports/` (IC de 95% entre colchetes):
+
+| Achado | Resultado |
+|---|---|
+| Corpus | 71.995 posts na bronze → **64.086** na silver (89,0%); neutro 40,1%, negativo 32,3%, positivo 27,6% |
+| Rotulador primário × *gold sets* | κ = 0,46–0,53 (ponderado quadrático 0,64–0,66); divergência concentrada na fronteira com o neutro |
+| Acerto contra o humano (n = 500) | primário **71,6%** [68,0; 75,2]; `gold_unb` 74,6%; `gold_openai` **79,8%** (McNemar: significativamente melhor que o primário) |
+| Consenso entre 10 rotuladores | κ de Fleiss = **0,28**; unanimidade em apenas 6,4% dos posts; o neutro é a classe de menor acordo |
+| HypotheSAEs | 32/32 alvos aprovados no *gate* de sanidade; no *holdout*, 0/10 hipóteses de divergência e 5/10 de incerteza sobreviveram ao FDR (2 ao Bonferroni), com efeitos pequenos |
+
+**Leitura:** o rotulador primário é um sinal razoável, porém ruidoso (H1 parcial: κ abaixo do limiar, neutro confirmado); sua confiança é informativa (concordância com o humano sobe de 0,52 na faixa baixa a 0,89 na alta); as hipóteses são **exploratórias**. Ficam como próximos passos um segundo anotador humano, a repetição da interpretação com um LLM maior e a análise da relação entre interpretabilidade e concordância.
+
+> **Nota de escopo:** a versão inicial do projeto previa comparar famílias de classificadores (ML clássico, *deep learning*, *transformers* e LLMs locais) e usar TweetSentBR/RePro como *gold sets*. Isso saiu do escopo da dissertação — sem rótulos humanos em escala não há treino/avaliação supervisionados confiáveis — e o foco passou a ser a qualidade dos rótulos e a interpretabilidade. Os estágios supervisionados (`features`, `training_*`, `evaluate`) continuam no código como trabalho exploratório e não fazem parte dos resultados da monografia.
 
 ---
 
@@ -61,6 +93,7 @@ sentimento-ptbr-llm/
 │   ├── config.yaml
 │   ├── deploy.yaml
 │   ├── evaluation.yaml
+│   ├── diagnostics.yaml
 │   ├── hypothesaes.yaml
 │   ├── labeling.yaml
 │   ├── llm.yaml
@@ -74,12 +107,17 @@ sentimento-ptbr-llm/
 ├── docs/                       # Documentação técnica (MkDocs Material + mkdocstrings)
 │   ├── assets/
 │   ├── guides/
+│   │   ├── diagnostico-hypothesaes.md
 │   │   ├── metodologia.md
 │   │   ├── pipeline.md
 │   │   ├── reprodutibilidade.md
-│   │   └── setup.md
+│   │   ├── setup.md
+│   │   └── validade-e-privacidade.md
 │   ├── index.md
 │   └── reference.md
+├── Monografia/                 # Texto de qualificação (LaTeX, modelo UnB-CIC), bibliografia e apresentação
+│   ├── tex/                    # Capítulos: introdução, fundamentação, metodologia, resultados, ameaças, cronograma
+│   └── monografia.tex
 ├── logs/                       # Logs diários (rich + logging, fora do Git)
 ├── models/                     # Checkpoints, artefatos e registry (fora do Git; ver dvc.yaml)
 │   ├── artifacts/
@@ -92,7 +130,8 @@ sentimento-ptbr-llm/
 │   ├── 04_ml_classico.ipynb
 │   ├── 05_deep_learning_transformers.ipynb
 │   ├── 06_llm_prompting.ipynb
-│   └── 07_avaliacao_comparativa.ipynb
+│   ├── 07_avaliacao_comparativa.ipynb
+│   └── 08–10_cloud_gpu_*.ipynb   # execução em GPU na nuvem
 ├── reports/                    # Figuras, métricas, tabelas, model cards e datasheets
 │   ├── ablation/
 │   ├── datasheets/
@@ -111,6 +150,7 @@ sentimento-ptbr-llm/
 │   ├── config/                 # Configuração validada, ambiente, logging, caminhos
 │   ├── constants/               # Constantes, enums e valores padrão
 │   ├── data/                     # Ingestão e carregamento
+│   ├── diagnostics/                # Diagnóstico: comparação, validação humana, hipóteses, reconstrução do SAE
 │   ├── evaluation/                # Métricas, significância, calibração, slices, ablation
 │   ├── exceptions/                 # Hierarquia de exceções customizadas
 │   ├── experiment/                  # Rastreamento de experimentos (MLflow)
@@ -185,17 +225,22 @@ Guia detalhado: [`docs/guides/setup.md`](docs/guides/setup.md).
 
 ## ▶️ Uso
 
-O pipeline é orquestrado por estágios via `src/main.py --stage <nome>` (ver `configs/config.yaml -> stages`), com atalhos no `Makefile`:
+O pipeline é orquestrado por estágios via `src/main.py --stage <nome>` (ver `configs/config.yaml -> stages`; os estágios da monografia vão de `ingestion` a `hypotheses`), com atalhos no `Makefile`:
 
 ```bash
 make ingest SCRAPE_FUNC=parallel.scraping:collect_tweets QUERIES="palavra1 palavra2"
 make preprocess
-make label               # as três bases: tweets_data_huggingface + gold sets (gpt-6-luna e UnB-Llama)
+make label               # HF (todo o corpus) + gold sets (gpt-6-luna e UnB-Llama)
+make label-hf-extra      # modelos adicionais do Hugging Face (todo o corpus)
 make label-hf            # só o modelo do Hugging Face (todos os tweets)
 make label-gold-openai   # só o gold set gpt-6-luna (API; OPENAI_KEY no .env)
 make label-gold-unb      # só o gold set UnB-Llama-3.3-70B-Instruct (API)
+make consensus           # consenso entre rotuladores: votos, Kappa de Fleiss, Alpha de Krippendorff
 make compare             # compara o Hugging Face com cada gold set: concordância, Kappa, divergências
 make hypotheses          # hipóteses do HypotheSAEs (MODE=disagreement|patterns|diagnostics)
+make diagnostics         # camada de diagnóstico (STEP=hypotheses|validation|comparison)
+
+# Estágios supervisionados exploratórios (fora do escopo da monografia):
 make features            # split + TF-IDF
 make classical           # Baseline (dummy) + ML tradicional
 make deep                # Deep Learning (LSTM, CNN)
