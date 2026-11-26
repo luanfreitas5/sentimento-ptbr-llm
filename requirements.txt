@@ -737,7 +737,7 @@ pycparser==3.11 ; python_full_version < '3.11' and implementation_name != 'PyPy'
     # via cffi
 pycparser==3.12 ; python_full_version >= '3.11' and implementation_name != 'PyPy'
     # via cffi
-pydantic==2.14.3
+pydantic==2.14.4
     # via
     #   fastapi
     #   mlflow-skinny
