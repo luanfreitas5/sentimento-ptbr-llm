@@ -226,7 +226,7 @@ griffelib==2.3.0 ; python_full_version < '3.11'
     # via mkdocstrings-python
 griffelib==2.4.1 ; python_full_version >= '3.11'
     # via mkdocstrings-python
-gunicorn==26.2.0 ; sys_platform != 'win32'
+gunicorn==27.0.1 ; sys_platform != 'win32'
     # via mlflow
 h11==0.16.0
     # via
